@@ -1,0 +1,40 @@
+# Prerequisites
+*.d
+ardupilot_gazebo
+ardupilot
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+/app
+/iq_sim
+detection/datasets
+detection/runs
+detection/yolo11n-pose.pt
+detection/**/*.pt #weights
+

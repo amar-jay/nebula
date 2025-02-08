@@ -9,7 +9,7 @@ sudo apt upgrade -y
 
 # Install Gazebo 11 (Garden) and dependencies
 sudo apt-get install -y xauth x11-apps x11-common
-# curl -sSL http://get.gazebosim.org | sh
+curl -sSL http://get.gazebosim.org | sh
 sudo apt install -y libgz-sim7-dev rapidjson-dev libopencv-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \
@@ -51,8 +51,9 @@ export MESA_GL_VERSION_OVERRIDE=3.3
 export LIBGL_ALWAYS_SOFTWARE=1
 
 # Optional: Source your environment to make the changes active
-source ~/.bashrc
+echo "source $MYHOME/.devcontainer/env.sh">> ~/.zshrc
 
+zsh
 glxinfo | grep "OpenGL version"
 echo "Setup complete! Gazebo and ArduPilot-Gazebo integration are ready."
 

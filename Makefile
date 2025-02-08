@@ -10,4 +10,4 @@ ardupilot_gz:
 
 
 create:
-	bash -c 'source ./.devcontainer/setup.sh' >> ./.devcontainer/postCreate.log 2>&1
+	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1

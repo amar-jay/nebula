@@ -1,4 +1,6 @@
-MYHOME=/workspaces/nebula
+# MYHOME=/workspaces/nebula
+MYHOME=/teamspace/studios/this_studio/nebula
+
 WORLD=our_runway.sdf
 #WORLD=gimbal.sdf
 MODEL=gazebo-iris

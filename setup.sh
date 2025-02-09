@@ -1,15 +1,17 @@
 #!/bin/bash
 
 # Set the base directory for the workspace
-export MYHOME="/workspaces/robotics_template"
+export MYHOME=/workspaces/nebula
 
 # Update package list and install essential dependencies
-sudo apt update
+# https://gazebosim.org/api/sim/7/install.html
+sudo sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
+wget http://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
+sudo apt-get update
 sudo apt upgrade -y
 
 # Install Gazebo 11 (Garden) and dependencies
-sudo apt-get install -y xauth x11-apps x11-common
-curl -sSL http://get.gazebosim.org | sh
+sudo apt-get install -y xauth x11-apps x11-common build-essential cmake git lsb-release wget
 sudo apt install -y libgz-sim7-dev rapidjson-dev libopencv-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \

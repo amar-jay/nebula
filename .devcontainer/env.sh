@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # Set the base directory for the workspace
-export MYHOME="/workspaces/robotics_template"
+export MYHOME=/workspaces/nebula
+echo "MYHOME:"
+cd $MYHOME
+pwd
+ls
 
 # ArduPilot-Gazebo plugin version
 export GZ_VERSION="garden"

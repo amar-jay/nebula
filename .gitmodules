@@ -1,0 +1,13 @@
+[submodule "gz_ws/src/ardupilot_sitl_models"]
+	path = gz_ws/src/ardupilot_sitl_models
+	url = https://github.com/ArduPilot/SITL_Models
+[submodule "gz_ws/src/controls"]
+	path = gz_ws/src/controls
+	url = https://github.com/amar-jay/controls
+[submodule "gz_ws/src/control_station"]
+	path = gz_ws/src/control_station
+	url = https://github.com/amar-jay/matek-gcs
+
+[submodule "gz_ws/src/ardupilot_gazebo"]
+	path = gz_ws/src/ardupilot_gazebo
+	url = https://github.com/amar-jay/gazebo_sitl

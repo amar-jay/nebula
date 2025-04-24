@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>HomePage</class>
+ <widget class="QWidget" name="HomePage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1097</width>
+    <height>620</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <item row="0" column="1">
+    <widget class="QFrame" name="frame_right">
+     <property name="styleSheet">
+      <string notr="true">QFrame{border: None;}</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout" stretch="1,1">
+      <item>
+       <widget class="QWidget" name="cameraFrame" native="true">
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_3"/>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="frame_2">
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Raised</enum>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QTabWidget" name="tabWidget">
+           <property name="currentIndex">
+            <number>1</number>
+           </property>
+           <widget class="QWidget" name="mission">
+            <attribute name="title">
+             <string>Mission</string>
+            </attribute>
+            <layout class="QVBoxLayout" name="verticalLayout_3">
+             <item>
+              <widget class="QFrame" name="frame">
+               <property name="frameShape">
+                <enum>QFrame::StyledPanel</enum>
+               </property>
+               <property name="frameShadow">
+                <enum>QFrame::Raised</enum>
+               </property>
+               <layout class="QVBoxLayout" name="verticalLayout_4">
+                <item>
+                 <widget class="QWidget" name="widget" native="true">
+                  <layout class="QHBoxLayout" name="horizontalLayout" stretch="3,1">
+                   <item>
+                    <widget class="QComboBox" name="modes_comboBox">
+                     <item>
+                      <property name="text">
+                       <string>Harita Modu Seç</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>İşaretçi Modu</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Alan Seçimi Modu</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Waypoint Modu</string>
+                      </property>
+                     </item>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="btn_chooseMode">
+                     <property name="text">
+                      <string>Modu Seç</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_setMission">
+                  <property name="text">
+                   <string>Görevi Tanımla</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_undo">
+                  <property name="text">
+                   <string>Geri Al</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_clearAll">
+                  <property name="text">
+                   <string>Hepsini Temizle</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_antenna">
+               <property name="styleSheet">
+                <string notr="true">QPushButton{
+	border-radius: 4px;
+	
+	background-color: qlineargradient(spread:pad, x1:0.139, y1:0.862773, x2:1, y2:0.017, stop:0.159204 rgba(99, 18, 24, 255), stop:1 rgba(165, 29, 45, 252));
+}
+QPushButton:hover{ 
+	background-color:qlineargradient(spread:pad, x1:0.139, y1:0.862773, x2:1, y2:0.017, stop:0.0646766 rgba(89, 22, 27, 255), stop:0.527363 rgba(165, 29, 45, 252))
+}
+QPushButton:pressed{
+  padding-left: 5px;
+	padding-top: 5px;
+	background-color: qlineargradient(spread:pad, x1:0.139, y1:0.862773, x2:1, y2:0.017, stop:0.159204 rgba(99, 18, 24, 200), stop:1 rgba(165, 29, 45, 200));
+}
+QPushButton:disabled{ 
+	background-color: qlineargradient(spread:pad, x1:0.139, y1:0.862773, x2:1, y2:0.017, stop:0.159204 rgba(14, 74, 89, 255), stop:1 rgba(77, 149, 47, 255));
+}</string>
+               </property>
+               <property name="text">
+                <string>Anten Takibi</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QFrame" name="frame_3">
+               <property name="frameShape">
+                <enum>QFrame::StyledPanel</enum>
+               </property>
+               <property name="frameShadow">
+                <enum>QFrame::Raised</enum>
+               </property>
+               <layout class="QVBoxLayout" name="verticalLayout_5">
+                <item>
+                 <widget class="QPushButton" name="btn_startMission">
+                  <property name="text">
+                   <string>Göreve Başla</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_abort">
+                  <property name="text">
+                   <string>Takibi Bırak</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_rtl">
+                  <property name="text">
+                   <string>Eve Dön</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="guided">
+            <attribute name="title">
+             <string>Guided</string>
+            </attribute>
+            <layout class="QVBoxLayout" name="verticalLayout_6">
+             <item>
+              <widget class="QWidget" name="widget_3" native="true">
+               <layout class="QVBoxLayout" name="verticalLayout_9">
+                <item>
+                 <widget class="QPushButton" name="btn_takeoff">
+                  <property name="text">
+                   <string>Kalk</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_move">
+                  <property name="text">
+                   <string>Noktaya Git</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_track_all">
+                  <property name="text">
+                   <string>Gördüğünü Takip Et</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_land">
+                  <property name="text">
+                   <string>İniş Yap</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_rtl_2">
+                  <property name="text">
+                   <string>Eve Dön</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QWidget" name="widget_2" native="true">
+               <layout class="QVBoxLayout" name="verticalLayout_8">
+                <item>
+                 <widget class="QPushButton" name="btn_set_roi">
+                  <property name="text">
+                   <string>ROI ayarla</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_cancel_roi">
+                  <property name="text">
+                   <string>ROI iptal</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="Console">
+            <attribute name="title">
+             <string>Konsol</string>
+            </attribute>
+            <layout class="QVBoxLayout" name="verticalLayout_7">
+             <item>
+              <widget class="QTextBrowser" name="textBrowser"/>
+             </item>
+            </layout>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QWidget" name="mapFrame" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>650</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_2"/>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

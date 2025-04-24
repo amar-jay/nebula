@@ -38,3 +38,19 @@ detection/runs
 detection/yolo11n-pose.pt
 detection/**/*.pt #weights
 
+logs
+terrain
+mav.*
+eeprom.bin 
+install
+log
+logs
+build
+build/*
+
+
+gz_ws/src/ardupilot_gz
+gz_ws/src/micro_ros_agent
+gz_ws/src/ros_gz
+gz_ws/src/sdformat_urdf
+

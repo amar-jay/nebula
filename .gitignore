@@ -1,6 +1,5 @@
 # Prerequisites
 *.d
-ardupilot_gazebo
 ardupilot
 # Compiled Object files
 *.slo

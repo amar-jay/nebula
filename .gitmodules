@@ -1,6 +1,9 @@
 [submodule "gz_ws/src/controls"]
 	path = gz_ws/src/controls
 	url = https://github.com/amar-jay/controls
+[submodule "gz_ws/src/orthomosaic_mapping"]
+	path = gz_ws/src/orthomosaic_mapping
+	url = https://github.com/amar-jay/orthomosaic_mapping
 [submodule "gz_ws/src/control_station"]
 	path = gz_ws/src/control_station
 	url = https://github.com/amar-jay/matek-gcs

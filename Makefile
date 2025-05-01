@@ -10,16 +10,17 @@ MODEL=gazebo-iris
 GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
 GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
+RE_SOURCE_FLAG := /tmp/re_source_needed.flag
 define set_env_var_fn
-	@if [ -z "$$$(grep -E "^export $(1)=" ~/.bashrc)" ]; then \
-		echo "$(1) is not set in .bashrc."; \
-		echo "Adding $(1) to .bashrc..."; \
-		echo "export $(1)=\"$(2)\"" >> ~/.bashrc; \
+	@if ! grep -qE "^export $(1)" $(HOME)/.bashrc; then \
+		echo 'export $(1)="$(2)"' >> $(HOME)/.bashrc; \
 		echo "$(1) added to .bashrc."; \
+		touch $(RE_SOURCE_FLAG); \
 	else \
-		echo "$(1) is already defined in .bashrc."; \
+		echo "$(1) already set in .bashrc."; \
 	fi
 endef
+
 
 gz:
 	gz sim -v4 -r ${WORLD} 
@@ -36,8 +37,12 @@ camera_feed:
 
 # Check if the variable is defined and add it to .bashrc if it's not
 set_env_vars:
+	@rm -f $(RE_SOURCE_FLAG)
+	$(call set_env_var_fn,GZ_VERSION,harmonic)
 	$(call set_env_var_fn,GZ_SIM_SYSTEM_PLUGIN_PATH,$(GZ_SIM_SYSTEM_PLUGIN_PATH))
 	$(call set_env_var_fn,GZ_SIM_RESOURCE_PATH,$(GZ_SIM_RESOURCE_PATH))
+	@bash -c 'if [ -f "$(RE_SOURCE_FLAG)" ]; then source $(HOME)/.bashrc; fi'
+
 
 setup:
 	./scripts/setup.sh

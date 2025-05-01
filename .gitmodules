@@ -10,3 +10,7 @@
 [submodule "gz_ws/src/ardupilot_gazebo"]
 	path = gz_ws/src/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl
+
+[submodule "orthomosaic_mapping"]
+	path = orthomosaic_mapping
+	url = https://github.com/amar-jay/orthomosaic_mapping

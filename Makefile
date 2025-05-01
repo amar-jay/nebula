@@ -6,10 +6,9 @@ WORLD=our_runway.sdf
 MODEL=gazebo-iris
 #MODEL=iris_with_gimbal
 
-
 # Define the variable name and value
-GZ_SIM_SYSTEM_PLUGIN_PATH := $$HOME/Desktop/code/matek/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
-GZ_SIM_RESOURCE_PATH := $$HOME/Desktop/code/matek/src/ardupilot_gazebo/models:$$HOME/Desktop/code/matek/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
+GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
+GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
 define set_env_var_fn
 	@if [ -z "$$$(grep -E "^export $(1)=" ~/.bashrc)" ]; then \

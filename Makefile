@@ -39,3 +39,6 @@ camera_feed:
 set_env_vars:
 	$(call set_env_var_fn,GZ_SIM_SYSTEM_PLUGIN_PATH,$(GZ_SIM_SYSTEM_PLUGIN_PATH))
 	$(call set_env_var_fn,GZ_SIM_RESOURCE_PATH,$(GZ_SIM_RESOURCE_PATH))
+
+setup:
+	./scripts/setup.sh

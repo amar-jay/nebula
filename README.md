@@ -2,11 +2,13 @@
 
 ### Features
 
-- **Advanced Simulation**: Nebula leverages Gazebo and ArduPilot to provide realistic simulation environments for autonomous vehicles.
-- **Control Station**: A user-friendly control station interface built with PyQt5 for monitoring and controlling the autonomous vehicles.
-- **Machine Learning Integration**: Integration with PyTorch and YOLO for advanced machine learning capabilities, including object detection and tracking.
-- **Modular Architecture**: The project is designed with a modular architecture, allowing for easy extension and customization.
-
+- **Control Station**: built for monitoring and controlling the drone.
+- **Gazebo Simulation**: Gazebo and ArduPilot
+- **Controls**: built for monitoring and controlling the drone.
+   - **Machine Learning Integration**: For object detection and monitoring.
+   - **GPS Coordinate estimation**
+   - **Orthomosaic SLAM**: #not certain
+  
 ## Comprehensive Setup Instructions
 
 ### Prerequisites
@@ -34,18 +36,16 @@ git submodule update --remote --merge
    ./run_sim.sh -w <world_file.sdf>
    ```
 
-### Using the Control Station
-
-1. **Launch the Control Station**: Use the provided script to launch the control station interface.
+2. **Launch the Control Station**: Use the provided script to launch the control station interface.
    ```bash
    python src/control_station
    ```
 
-
-1. **Launch Controls**: Use the provided script to launch the control software
+3. **Launch Controls**: Use the provided script to launch the control software
    ```bash
    python src/controls
    ```
+
 
 ## Technologies and Frameworks Used
 

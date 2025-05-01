@@ -1,8 +1,10 @@
 import torch
 
+
 def status(name, result, info=""):
     check = "✅" if result else "❌"
     print(f"{check} {name.ljust(35)} {info}")
+
 
 def main():
     print("🔍 PyTorch Environment Diagnostic\n")
@@ -10,6 +12,7 @@ def main():
     # PyTorch installation
     try:
         import torch
+
         status("PyTorch Installed", True, f"Version: {torch.__version__}")
     except ImportError:
         status("PyTorch Installed", False)
@@ -65,6 +68,7 @@ def main():
     status("MPS Available (Apple Silicon)", mps_available)
 
     print("\n✅ Done.")
+
 
 if __name__ == "__main__":
     main()

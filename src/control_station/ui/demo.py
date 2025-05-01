@@ -46,7 +46,6 @@ class InitialWindow(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
 
-
 # SPLASH SCREEN
 class SplashScreen(QMainWindow):
     def __init__(self):
@@ -129,9 +128,9 @@ if __name__ == "__main__":
     initial.show()
 
     def launch_splash():
-         initial.close()
-         splash = SplashScreen()
-         splash.show()
+        initial.close()
+        splash = SplashScreen()
+        splash.show()
 
     #   splash.raise_()
 

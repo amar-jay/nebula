@@ -1,16 +1,12 @@
-[submodule "gz_ws/src/controls"]
-	path = gz_ws/src/controls
+[submodule "src/controls"]
+	path = src/controls
 	url = https://github.com/amar-jay/controls
-[submodule "gz_ws/src/orthomosaic_mapping"]
-	path = gz_ws/src/orthomosaic_mapping
+[submodule "src/orthomosaic_mapping"]
+	path = src/orthomosaic_mapping
 	url = https://github.com/amar-jay/orthomosaic_mapping
-[submodule "gz_ws/src/control_station"]
-	path = gz_ws/src/control_station
+[submodule "src/control_station"]
+	path = src/control_station
 	url = https://github.com/amar-jay/matek-gcs
-[submodule "gz_ws/src/ardupilot_gazebo"]
-	path = gz_ws/src/ardupilot_gazebo
+[submodule "src/ardupilot_gazebo"]
+	path = src/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl
-
-[submodule "orthomosaic_mapping"]
-	path = orthomosaic_mapping
-	url = https://github.com/amar-jay/orthomosaic_mapping

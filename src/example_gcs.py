@@ -752,7 +752,7 @@ class DroneControlApp(QMainWindow):
     def _on_load_mission_clicked(self):
         """Handle load mission button click."""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Mission", "", "Mission Files (*.json);;All Files (*)"
+            self, "Load Mission", "", "Mission Files (*.mission);;All Files (*)"
         )
         
         if not file_path:
@@ -783,7 +783,7 @@ class DroneControlApp(QMainWindow):
             return
         
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Mission", "", "Mission Files (*.json);;All Files (*)"
+            self, "Save Mission", "", "Mission Files (*.mission);;All Files (*)"
         )
         
         if not file_path:
@@ -793,6 +793,9 @@ class DroneControlApp(QMainWindow):
             mission_data = {
                 "waypoints": self.waypoint_table.get_waypoints()
             }
+
+            if not file_path.endswith(".mission"):
+                file_path += ".mission"
             
             with open(file_path, 'w') as file:
                 json.dump(mission_data, file, indent=2)

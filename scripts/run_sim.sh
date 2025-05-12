@@ -9,8 +9,6 @@ usage() {
   echo "  $0 -v -w iris_runway.sdf"
   exit 1
 }
-# Commands
-GAZEBO_CMD="gz sim -v4 -r delivery_runway.sdf"
 
 # Default: no verbose flag
 VERBOSE=0
@@ -25,8 +23,6 @@ while getopts ":vw:" opt; do
   esac
 done
 
-# Commands
-GAZEBO_CMD="gz sim -v4 -r delivery_runway.sdf"
 ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --map --console"
 
 # Name of the tmux session
@@ -43,7 +39,7 @@ cleanup() {
   echo "Cleaning up temporary files..."
   # Add file cleanup commands here, for example:
   rm mav.tlog* mav.tlog.raw mav.parm eeprom.bin
-  run -rf terrain/
+  rm -rf terrain/
   echo "Cleanup done."
 }
 

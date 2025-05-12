@@ -10,6 +10,8 @@ MODEL=gazebo-iris
 GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
 GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
+HERE=$(pwd -P) # Absolute path of current directory
+
 RE_SOURCE_FLAG := /tmp/re_source_needed.flag
 define set_env_var_fn
 	@if ! grep -qE "^export $(1)" $(HOME)/.bashrc; then \
@@ -42,6 +44,14 @@ set_env_vars:
 	$(call set_env_var_fn,GZ_SIM_SYSTEM_PLUGIN_PATH,$(GZ_SIM_SYSTEM_PLUGIN_PATH))
 	$(call set_env_var_fn,GZ_SIM_RESOURCE_PATH,$(GZ_SIM_RESOURCE_PATH))
 	@bash -c 'if [ -f "$(RE_SOURCE_FLAG)" ]; then source $(HOME)/.bashrc; fi'
+
+
+run-dev:
+	docker run -it --rm \
+	--env="DISPLAY=$DISPLAY" \
+	--volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+	--volume="$(pwd):/home/developer/matek" \
+	ardupilot-gazebo-dev
 
 
 setup:

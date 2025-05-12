@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Set the base directory for the workspace
-# export MYHOME=/workspaces/nebula
-export MYHOME=/teamspace/studios/this_studio/nebula
+export MYHOME=$HOME
 # Update package list and install essential dependencies
 # https://gazebosim.org/api/sim/7/install.html
 sudo sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
@@ -31,28 +30,26 @@ git submodule update --init --recursive
 # Install ArduPilot prerequisites
 $MYHOME/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
 
-# Set up the Gazebo workspace for ArduPilot-Gazebo integration
-# mkdir -p $MYHOME/gz_ws/src
-cd $MYHOME
-git clone https://github.com/ArduPilot/ardupilot_gazebo
+# Set up the current repository as workspace matek
+# link current path to container path
+cd $MYHOME/matek
 
 # Build the ArduPilot-Gazebo plugin
 export GZ_VERSION="garden"
-cd $MYHOME/ardupilot_gazebo
+cd $MYHOME/matek/src/ardupilot_gazebo
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make -j4
 
 # Set environment variables for Gazebo and ArduPilot integration
-export GZ_SIM_SYSTEM_PLUGIN_PATH="$MYHOME/ardupilot_gazebo/build:$GZ_SIM_SYSTEM_PLUGIN_PATH"
-export GZ_SIM_RESOURCE_PATH="$MYHOME/ardupilot_gazebo/models:$MYHOME/ardupilot_gazebo/worlds:$GZ_SIM_RESOURCE_PATH"
-export GZ_SIM_RESOURCE_PATH="$MYHOME/gz_ws/src/sim/models:$MYHOME/gz_ws/src/sim/worlds:$GZ_SIM_RESOURCE_PATH"
+cd $MYHOME.matek # go to currrent repo
+make set_env_vars
 
-export MESA_GL_VERSION_OVERRIDE=3.3
-export LIBGL_ALWAYS_SOFTWARE=1
+# export MESA_GL_VERSION_OVERRIDE=3.3
+# export LIBGL_ALWAYS_SOFTWARE=1
 
 # Optional: Source your environment to make the changes active
-echo "source $MYHOME/.devcontainer/env.sh">> ~/.zshrc
+# echo "source $MYHOME/.devcontainer/env.sh">> ~/.bashrc
 
 # zsh
 glxinfo | grep "OpenGL version"

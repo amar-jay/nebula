@@ -22,6 +22,7 @@ cd ${HOME}/src/ardupilot_gazebo && \
 	cd build && \
 	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
+. ~/.profile
 source $HOME/.bashrc
 
 cd ${HOME}

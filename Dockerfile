@@ -1,7 +1,14 @@
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
 # Set noninteractive installation
 ENV DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG SKIP_AP_EXT_ENV=1
+ARG SKIP_AP_GRAPHIC_ENV=1
+ARG SKIP_AP_COV_ENV=1
+ARG SKIP_AP_GIT_CHECK=1
 # Home should be current working directory. pwd
 ENV HOME=/workspace
 ENV USER=manan
@@ -12,6 +19,8 @@ RUN apt-get update && \
     useradd -m ${USER} && \
     echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER} && \
     chmod 0440 /etc/sudoers.d/${USER}
+
+ENV SKIP_AP_EXT_ENV=$SKIP_AP_EXT_ENV SKIP_AP_GRAPHIC_ENV=$SKIP_AP_GRAPHIC_ENV SKIP_AP_COV_ENV=$SKIP_AP_COV_ENV SKIP_AP_GIT_CHECK=$SKIP_AP_GIT_CHECK
 
 # Install basic packages
 RUN apt-get update && apt-get install -y \
@@ -29,8 +38,7 @@ RUN apt-get update && apt-get install -y \
     make \
     tmux \
     locales \
-	 lsb-release && \
-    rm -rf /var/lib/apt/lists/*
+	 lsb-release
 
 
 # Set the locale
@@ -47,6 +55,7 @@ RUN sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb
 # Install Gazebo and dependencies
 RUN apt-get update && \
     apt-get install -y \
+	 gnupg \
 	 libgz-sim8-dev \
 	 rapidjson-dev \
     libopencv-dev \
@@ -54,12 +63,13 @@ RUN apt-get update && \
     libgstreamer-plugins-base1.0-dev \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-libav \
-    gstreamer1.0-gl && \
-	 rm -rf /var/lib/apt/lists/*
+    gstreamer1.0-gl 
 
 # Switch to non-root user
 USER ${USER}
 WORKDIR ${HOME}
+
+
 
 # Clone ArduPilot
 RUN git clone https://github.com/ArduPilot/ardupilot && \
@@ -67,8 +77,11 @@ RUN git clone https://github.com/ArduPilot/ardupilot && \
     git checkout "Copter-4.5" && \
     git submodule update --init --recursive
 
+RUN pip3 install --upgrade pip setuptools wheel && \
+    pip3 install packaging==21.3
+
 # Install ArduPilot prerequisites
-RUN ${HOME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
+RUN bash -c "${HOME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y"
 
 # Set environment variables
 ENV GZ_VERSION="harmonic"

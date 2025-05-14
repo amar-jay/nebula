@@ -11,6 +11,7 @@ import socket
 import threading
 import time
 from pymavlink import mavutil
+from .messages import ZMQTopics
 
 logging.basicConfig(
 	level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -52,7 +53,6 @@ print(f"TCP server listening on {tcp_host}:{tcp_port}")
 
 
 def handle_client(client_socket, client_address):
-	"""Handle a client connection."""
 	print(f"New client connected: {client_address}")
 
 	try:
@@ -76,7 +76,6 @@ def handle_client(client_socket, client_address):
 
 
 def accept_clients():
-	"""Accept new client connections."""
 	while True:
 		try:
 			client_socket, client_address = tcp_server.accept()
@@ -94,7 +93,6 @@ def accept_clients():
 
 
 def forward_from_serial_to_tcp():
-	"""Read messages from serial and forward to all TCP clients."""
 	while True:
 		try:
 			# Wait for a message from the serial connection
@@ -130,9 +128,6 @@ class ZMQServer:
 		self, video_port: int = 5555, control_port: int = 5556, video_source: int = 0
 	):
 		"""
-		Initialize the ZMQ Video Server
-
-		Args:
 		    video_port: Port for video frame publishing
 		    control_port: Port for receiving control commands
 		    video_source: Camera device ID or video file path
@@ -223,36 +218,31 @@ class ZMQServer:
 		logger.info("Video publishing stopped")
 
 	def handle_command(self, command: str) -> str:
-		"""
-		Handle a control command and return a response
+		command = command.strip()
 
-		Args:
-		    command: The command string
-
-		Returns:
-		    Response message
-		"""
-		command = command.lower().strip()
-		# logger.info(f"Received command: {command}")
-
-		if command == "raise_hook":
+		if command == ZMQTopics.DROP_LOAD.name:
+			return "ACK: Load dropped"
+		elif command == ZMQTopics.PICK_LOAD.name:
+			return "ACK: Load picked"
+		elif command == ZMQTopics.RAISE_HOOK.name:
 			if self.hook_state == "raised":
 				return "ACK: Hook already raised"
 			else:
 				self.hook_state = "raised"
 				return "ACK: Hook raised"
 
-		elif command == "drop_hook":
+		elif command == ZMQTopics.DROP_HOOK.name:
 			if self.hook_state == "dropped":
 				return "ACK: Hook already dropped"
 			else:
 				self.hook_state = "dropped"
 				return "ACK: Hook dropped"
 
-		elif command == "status":
+		elif command == ZMQTopics.STATUS.name:
 			return f"ACK: Hook is {self.hook_state}"
 
 		else:
+			print(f"Unknown command: {command}")
 			return "NACK: Unknown command"
 
 	def control_receiver_loop(self):
@@ -274,7 +264,6 @@ class ZMQServer:
 				time.sleep(0.1)
 
 	def start(self):
-		"""Start the server threads"""
 		if self.running:
 			logger.warning("Server is already running")
 			return

@@ -54,3 +54,16 @@ git submodule update --remote --merge
 - **PyQt5**: We are planning to change to PySide6
 - **PyTorch**: An open-source machine learning library for Python, used for integrating machine learning capabilities.
 - **YOLO**: A state-of-the-art object detection system, used for detecting and tracking objects in the simulation.
+
+### Commands
+```
+python3 -m src.controls.mavlink.gz # test gazebo simulation and video streaming
+```
+
+```
+python -m src.mq.example_zmq_server # running an example zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
+```
+
+```
+python -m src.mq.example_zmq_reciever # the client of the zmq server.
+```

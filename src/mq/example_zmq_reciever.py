@@ -7,7 +7,7 @@ import threading
 import argparse
 import logging
 from typing import Optional
-
+from .messages import ZMQTopics
 logging.basicConfig(
 	level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -93,19 +93,10 @@ class VideoClient:
 				logger.error(f"Error in video receiver: {e}")
 				time.sleep(0.1)
 
-	def send_command(self, command: str) -> Optional[str]:
-		"""
-		Send a control command to the server
-
-		Args:
-		    command: Command to send (e.g., "raise_hook", "drop_hook", "status")
-
-		Returns:
-		    Server response or None if communication failed
-		"""
+	def send_command(self, command: ZMQTopics) -> Optional[str]:
 		try:
 			# logger.info(f"Sending command: {command}")
-			self.control_socket.send_string(command)
+			self.control_socket.send_string(command.name)
 			response = self.control_socket.recv_string()
 			# logger.info(f"Received response: {response}")
 			return response
@@ -163,7 +154,7 @@ def video_thread_func(client: VideoClient):
 		frame = client.get_current_frame()
 		if frame is not None:
 			# Add hook state text to the frame
-			response = client.send_command("status")
+			response = client.send_command(ZMQTopics.STATUS)
 			if response:
 				# Extract the hook state from response
 				hook_text = response.split(": ")[1] if ": " in response else "Unknown"
@@ -219,7 +210,7 @@ def main():
 	)
 
 	try:
-		client.start()
+		client
 		video_thread.start()
 		logger.info(
 			"Client running. Press 'q' to quit, 'r' to raise hook, 'd' to drop hook"
@@ -227,12 +218,18 @@ def main():
 
 		# Display loop for video frames and handle keyboard commands
 		while True:
-			_inp = input("Enter command (r/d/q/a/t/l): ").strip().lower()
+			_inp = input("Enter command (p/o/r/d/q/a/t/l/s): ").strip().lower()
+			if _inp == "p":
+				response = client.send_command(ZMQTopics.PICK_LOAD)
+				logger.info(f"Response: {response}")
+			elif _inp == "o":
+				response = client.send_command(ZMQTopics.DROP_LOAD)
+				logger.info(f"Response: {response}")
 			if _inp == "r":
-				response = client.send_command("raise_hook")
+				response = client.send_command(ZMQTopics.RAISE_HOOK)
 				logger.info(f"Response: {response}")
 			elif _inp == "d":
-				response = client.send_command("drop_hook")
+				response = client.send_command(ZMQTopics.DROP_HOOK)
 				logger.info(f"Response: {response}")
 			elif _inp == "q":
 				break
@@ -241,16 +238,13 @@ def main():
 			elif _inp == "t":
 				connection.takeoff(10)
 			elif _inp == "l":
+				connection.land()
+			elif _inp == "g":
 				lat, lon, alt = connection.get_current_gps_location()
 				print(f"Current GPS Location: lat={lat}, lon={lon}, alt={alt}")
 			elif _inp == "s":
-				response = client.send_command("status")
+				response = client.send_command(ZMQTopics.STATUS)
 				logger.info(f"Response: {response}")
-			else:
-				logger.warning(
-					"Unknown command. Use 'r' to raise, 'd' to drop, or 'q' to quit."
-				)
-
 			time.sleep(0.01)  # Small delay to prevent CPU usage spike
 
 	except KeyboardInterrupt:

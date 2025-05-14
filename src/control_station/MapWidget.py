@@ -14,108 +14,109 @@ import base64
 
 
 def image_to_base64(image_path, size=(100, 100)):
-    with Image.open(image_path) as img:
-        img = img.resize(size)
-        if img.mode == 'RGBA':
-            img = img.convert('RGB')
-        buffered = io.BytesIO()
-        img.save(buffered, format="JPEG")
-        return base64.b64encode(buffered.getvalue()).decode()
+	with Image.open(image_path) as img:
+		img = img.resize(size)
+		if img.mode == "RGBA":
+			img = img.convert("RGB")
+		buffered = io.BytesIO()
+		img.save(buffered, format="JPEG")
+		return base64.b64encode(buffered.getvalue()).decode()
 
 
 def icon_to_base64(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode()
+	with open(image_path, "rb") as image_file:
+		return base64.b64encode(image_file.read()).decode()
 
 
-uav_icon_base64 = icon_to_base64('uifolder/assets/icons/uav.png')
-mobileuser_marker_base64 = icon_to_base64('uifolder/assets/icons/mobileuser.png')
-target_marker_base64 = icon_to_base64('uifolder/assets/icons/target.png')
-home_icon_base64 = icon_to_base64('uifolder/assets/icons/antenna.png')
+uav_icon_base64 = icon_to_base64("uifolder/assets/icons/uav.png")
+mobileuser_marker_base64 = icon_to_base64("uifolder/assets/icons/mobileuser.png")
+target_marker_base64 = icon_to_base64("uifolder/assets/icons/target.png")
+home_icon_base64 = icon_to_base64("uifolder/assets/icons/antenna.png")
 
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
-    mission = []
+	mission = []
 
-    def __init__(self, center_coord, starting_zoom=13):
-        super().__init__()
-        MapWidget.marker_coord = center_coord
-        self.fmap = folium.Map(location=center_coord,
-                               zoom_start=starting_zoom)
+	def __init__(self, center_coord, starting_zoom=13):
+		super().__init__()
+		MapWidget.marker_coord = center_coord
+		self.fmap = folium.Map(location=center_coord, zoom_start=starting_zoom)
 
-        # Show mouse position in bottom right
-        MousePosition().add_to(self.fmap)
+		# Show mouse position in bottom right
+		MousePosition().add_to(self.fmap)
 
-        # store the map to a file
-        data = io.BytesIO()
-        self.fmap.save('map.html')
-        self.fmap.save(data, close_file=False)
+		# store the map to a file
+		data = io.BytesIO()
+		self.fmap.save("map.html")
+		self.fmap.save(data, close_file=False)
 
-        # reading the folium file
-        html = data.getvalue().decode()
+		# reading the folium file
+		html = data.getvalue().decode()
 
-        # find variable names
-        self.map_variable_name = self.find_variable_name(html, "map_")
+		# find variable names
+		self.map_variable_name = self.find_variable_name(html, "map_")
 
-        # determine scripts indices
-        endi = html.rfind("</script>")
+		# determine scripts indices
+		endi = html.rfind("</script>")
 
-        # inject code
-        html = html[:endi - 1] + self.custom_code(self.map_variable_name) + html[endi:]
-        data.seek(0)
-        data.write(html.encode())
+		# inject code
+		html = html[: endi - 1] + self.custom_code(self.map_variable_name) + html[endi:]
+		data.seek(0)
+		data.write(html.encode())
 
-        # To Get Java Script Console Messages
-        self.map_page = self.WebEnginePage()
-        self.setPage(self.map_page)
+		# To Get Java Script Console Messages
+		self.map_page = self.WebEnginePage()
+		self.setPage(self.map_page)
 
-        # To Display the Map
-        self.resize(800, 600)
-        self.setHtml(data.getvalue().decode())
+		# To Display the Map
+		self.resize(800, 600)
+		self.setHtml(data.getvalue().decode())
 
-        # Add buttons
-        self.btn_AllocateWidget = QPushButton(icon=QIcon("uifolder/assets/icons/16x16/cil-arrow-top.png"), parent=self)
-        self.btn_AllocateWidget.setCursor(Qt.PointingHandCursor)
-        self.btn_AllocateWidget.setStyleSheet("background-color: rgb(44, 49, 60);")
-        self.btn_AllocateWidget.resize(25, 25)
+		# Add buttons
+		self.btn_AllocateWidget = QPushButton(
+			icon=QIcon("uifolder/assets/icons/16x16/cil-arrow-top.png"), parent=self
+		)
+		self.btn_AllocateWidget.setCursor(Qt.PointingHandCursor)
+		self.btn_AllocateWidget.setStyleSheet("background-color: rgb(44, 49, 60);")
+		self.btn_AllocateWidget.resize(25, 25)
 
-        # A variable that holds if the widget is child of the main window or not
-        self.isAttached = True
+		# A variable that holds if the widget is child of the main window or not
+		self.isAttached = True
 
-        # self.loadFinished.connect(self.onLoadFinished)
+		# self.loadFinished.connect(self.onLoadFinished)
 
-    def resizeEvent(self, event):
-        self.btn_AllocateWidget.move(self.width() - self.btn_AllocateWidget.width(), 0)
-        super().resizeEvent(event)
+	def resizeEvent(self, event):
+		self.btn_AllocateWidget.move(self.width() - self.btn_AllocateWidget.width(), 0)
+		super().resizeEvent(event)
 
-    class WebEnginePage(QWebEnginePage):
-        def __init__(self):
-            super().__init__()
-            self.markers_pos = []
+	class WebEnginePage(QWebEnginePage):
+		def __init__(self):
+			super().__init__()
+			self.markers_pos = []
 
-        def javaScriptConsoleMessage(self, level, msg, line, sourceID):
-            if msg[0] == 'm':
-                MapWidget.mission = []
-                pairs = msg[1:].split('&')
-                for pair in pairs:
-                    MapWidget.mission.append(list(map(float, pair.split(','))))
-                print("mission: ", MapWidget.mission)
-            else:
-                self.markers_pos = msg.split(',')
-                print(msg)
+		def javaScriptConsoleMessage(self, level, msg, line, sourceID):
+			if msg[0] == "m":
+				MapWidget.mission = []
+				pairs = msg[1:].split("&")
+				for pair in pairs:
+					MapWidget.mission.append(list(map(float, pair.split(","))))
+				print("mission: ", MapWidget.mission)
+			else:
+				self.markers_pos = msg.split(",")
+				print(msg)
 
-    def find_variable_name(self, html, name_start):
-        variable_pattern = "var "
-        pattern = variable_pattern + name_start
+	def find_variable_name(self, html, name_start):
+		variable_pattern = "var "
+		pattern = variable_pattern + name_start
 
-        starting_index = html.find(pattern) + len(variable_pattern)
-        tmp_html = html[starting_index:]
-        ending_index = tmp_html.find(" =") + starting_index
+		starting_index = html.find(pattern) + len(variable_pattern)
+		tmp_html = html[starting_index:]
+		ending_index = tmp_html.find(" =") + starting_index
 
-        return html[starting_index:ending_index]
+		return html[starting_index:ending_index]
 
-    def custom_code(self, map_variable_name):
-        return '''
+	def custom_code(self, map_variable_name):
+		return """
                 // custom code
                 
                 // Rotated Marker Function
@@ -303,16 +304,22 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
                 map.on('click', moveMarkerByClick);
                 
                 // end custom code
-        ''' % (map_variable_name, uav_icon_base64, target_marker_base64, mobileuser_marker_base64, home_icon_base64)
+        """ % (
+			map_variable_name,
+			uav_icon_base64,
+			target_marker_base64,
+			mobileuser_marker_base64,
+			home_icon_base64,
+		)
 
 
 if __name__ == "__main__":
-    # create variables
-    istanbulhavalimani = [41.27442, 28.727317]
+	# create variables
+	istanbulhavalimani = [41.27442, 28.727317]
 
-    # Display the Window
-    app = QApplication([])
-    widget = MapWidget(istanbulhavalimani)
-    widget.show()
+	# Display the Window
+	app = QApplication([])
+	widget = MapWidget(istanbulhavalimani)
+	widget.show()
 
-    sys.exit(app.exec())
+	sys.exit(app.exec())

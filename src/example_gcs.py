@@ -95,7 +95,7 @@ class DroneClient(QObject):
 				camera_link="tilt_link",
 				logger=lambda *message: self.log(
 					f"[MAVLink] {' '.join(map(str, message))}",
-				)
+				),
 			)
 			self.tcp_address = address
 			self.tcp_port = port
@@ -349,10 +349,10 @@ class MissionWaypointTable(QTableWidget):
 		waypoints = []
 		for row in range(self.rowCount()):
 			waypoint = Waypoint(
-				lat= float(self.item(row, 1).text()),
-				lon= float(self.item(row, 2).text()),
-				alt= float(self.item(row, 3).text()),
-				hold= int(self.item(row, 4).text()),
+				lat=float(self.item(row, 1).text()),
+				lon=float(self.item(row, 2).text()),
+				alt=float(self.item(row, 3).text()),
+				hold=int(self.item(row, 4).text()),
 			)
 			waypoints.append(waypoint)
 		return waypoints
@@ -444,7 +444,9 @@ class DroneControlApp(QMainWindow):
 		self.connect_action = self.connect_menu.addAction("Standard Connect")
 		self.connect_action.triggered.connect(lambda: self._on_connect_clicked)
 		self.connect_action = self.connect_menu.addAction("TCP Connect")
-		self.connect_action.triggered.connect(lambda: self._on_connect_clicked(_type="tcp"))
+		self.connect_action.triggered.connect(
+			lambda: self._on_connect_clicked(_type="tcp")
+		)
 		self.connect_auto_action = self.connect_menu.addAction("Serial (/dev/ttyAMA0)")
 		self.connect_auto_action.triggered.connect(self._on_serial_connect_clicked)
 		self.connect_sitl_action = self.connect_menu.addAction("USB (/dev/ttyUSB0)")
@@ -483,7 +485,6 @@ class DroneControlApp(QMainWindow):
 		kamikaze_connection_layout.addWidget(self.k_tcp_port_input)
 		kamikaze_connection_layout.addWidget(self.k_connect_btn)
 		kamikaze_connection_layout.addWidget(self.k_disconnect_btn)
-
 
 		# Create tab widget for different control panels
 		tab_widget = QTabWidget()
@@ -751,17 +752,22 @@ class DroneControlApp(QMainWindow):
 			self.console.append_message(
 				f"Failed to connect to {address}:{port}", "error"
 			)
+
 	def _on_serial_connect_clicked(self):
 		"""Handle connect button click."""
 
 		serial_connection_string = "/dev/ttyAMA0"
-		self.console.append_message(f"Connecting to {serial_connection_string}...", "info")
+		self.console.append_message(
+			f"Connecting to {serial_connection_string}...", "info"
+		)
 		if self.drone_client.connect_to_drone(serial_connection_string):
 			self.connect_btn.setEnabled(False)
 			self.disconnect_btn.setEnabled(True)
 			self.arm_btn.setEnabled(True)
 			self.upload_mission_btn.setEnabled(True)
-			self.console.append_message(f"Connected to {serial_connection_string}", "success")
+			self.console.append_message(
+				f"Connected to {serial_connection_string}", "success"
+			)
 		else:
 			self.console.append_message(
 				f"Failed to connect to {serial_connection_string}", "error"
@@ -777,7 +783,9 @@ class DroneControlApp(QMainWindow):
 			self.disconnect_btn.setEnabled(True)
 			self.arm_btn.setEnabled(True)
 			self.upload_mission_btn.setEnabled(True)
-			self.console.append_message(f"Connected to {usb_connection_string}", "success")
+			self.console.append_message(
+				f"Connected to {usb_connection_string}", "success"
+			)
 		else:
 			self.console.append_message(
 				f"Failed to connect to {usb_connection_string}", "error"

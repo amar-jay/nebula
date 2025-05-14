@@ -1,4 +1,4 @@
-﻿from Database.users_db import FirebaseUser
+from Database.users_db import FirebaseUser
 
 # Example usage
 user = FirebaseUser()
@@ -13,7 +13,7 @@ user.update_marker_compass(185.2)
 user.update_marker_latitude(32.3)
 user.update_marker_longitude(40.5)
 user.update_mission(0)
-user.add_target(1,True, 30.5, 40.1, "Database/data/0.jpg")
+user.add_target(1, True, 30.5, 40.1, "Database/data/0.jpg")
 user.update_target_image("Database/data/0.jpg", 1)
 
 # Get values

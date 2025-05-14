@@ -1,6 +1,13 @@
 from PySide6.QtGui import QPixmap, QImage
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout, \
-    QPushButton, QSpacerItem, QSizePolicy
+from PySide6.QtWidgets import (
+	QWidget,
+	QVBoxLayout,
+	QLabel,
+	QGridLayout,
+	QPushButton,
+	QSpacerItem,
+	QSizePolicy,
+)
 from PySide6.QtCore import Qt, QEvent, QTimer, QByteArray, QBuffer, QIODevice
 
 from Database.Cloud import UpdateUserMenuThread
@@ -10,229 +17,252 @@ from MapWidget import image_to_base64
 
 
 def qimage_to_base64(qimage, image_format="PNG"):
-    byte_array = QByteArray()
-    buffer = QBuffer(byte_array)
-    buffer.open(QIODevice.WriteOnly)
-    image = qimage.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-    image.save(buffer, image_format)
-    base64_data = byte_array.toBase64().data().decode("utf-8")
-    return base64_data
+	byte_array = QByteArray()
+	buffer = QBuffer(byte_array)
+	buffer.open(QIODevice.WriteOnly)
+	image = qimage.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+	image.save(buffer, image_format)
+	base64_data = byte_array.toBase64().data().decode("utf-8")
+	return base64_data
 
 
 class TargetsPage(QWidget, Ui_TargetsPage):
-    def __init__(self, parent=None):
-        super().__init__()
-        self.setupUi(self)
-        self.parent = parent
-        # Set Layout
-        self.setLayout(QVBoxLayout())
+	def __init__(self, parent=None):
+		super().__init__()
+		self.setupUi(self)
+		self.parent = parent
+		# Set Layout
+		self.setLayout(QVBoxLayout())
 
-        # Set Widget inside Target Scroll Area
-        self.targetsWidget = QWidget()
-        self.targetsWidget.setLayout(QGridLayout())
-        self.targetsWidget.layout().setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.row = 0
-        self.column = 0
-        self.targets_scrollarea.setWidget(self.targetsWidget)
+		# Set Widget inside Target Scroll Area
+		self.targetsWidget = QWidget()
+		self.targetsWidget.setLayout(QGridLayout())
+		self.targetsWidget.layout().setAlignment(Qt.AlignLeft | Qt.AlignTop)
+		self.row = 0
+		self.column = 0
+		self.targets_scrollarea.setWidget(self.targetsWidget)
 
-        # Targets Dictionary
-        self.targets = {}
-        self.number_of_targets = 0
+		# Targets Dictionary
+		self.targets = {}
+		self.number_of_targets = 0
 
-        # Set Container stylesheet varible
-        self.containerStyleSheet = """QWidget:hover{border: 2px solid rgb(64, 71, 88);} QLabel::hover{border: 0px;}"""
+		# Set Container stylesheet varible
+		self.containerStyleSheet = """QWidget:hover{border: 2px solid rgb(64, 71, 88);} QLabel::hover{border: 0px;}"""
 
-        self.oldtarget = QWidget()
+		self.oldtarget = QWidget()
 
-        # Set Widget inside Mobile Scroll Area
-        self.usersWidget = QWidget()
-        self.usersWidget.setLayout(QVBoxLayout())
-        self.usersWidget.layout().setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.users_scrollarea.setWidget(self.usersWidget)
+		# Set Widget inside Mobile Scroll Area
+		self.usersWidget = QWidget()
+		self.usersWidget.setLayout(QVBoxLayout())
+		self.usersWidget.layout().setAlignment(Qt.AlignLeft | Qt.AlignTop)
+		self.users_scrollarea.setWidget(self.usersWidget)
 
-        # Firebase Thread
-        self.firebase = self.parent.firebase
-        if self.firebase != None:
-            QTimer.singleShot(20000, self.addUsers)
+		# Firebase Thread
+		self.firebase = self.parent.firebase
+		if self.firebase != None:
+			QTimer.singleShot(20000, self.addUsers)
 
-        # Test
-        # QTimer.singleShot(3000, lambda: self.addTarget(QImage("Database/data/deneme/1.jpg"), [1,1], [10, 100], 1))
+		# Test
+		# QTimer.singleShot(3000, lambda: self.addTarget(QImage("Database/data/deneme/1.jpg"), [1,1], [10, 100], 1))
 
-    def addTarget(self, image, position, time, no):
-        # Create a new target
-        self.number_of_targets += 1
-        self.targets[no] = {"image": image, "location": position, "time_interval": time}
+	def addTarget(self, image, position, time, no):
+		# Create a new target
+		self.number_of_targets += 1
+		self.targets[no] = {"image": image, "location": position, "time_interval": time}
 
-        # Create a container widget for the target
-        container = self.createContainer(f"target{no}", QPixmap.fromImage(image),
-                                         self.number_of_targets)
+		# Create a container widget for the target
+		container = self.createContainer(
+			f"target{no}", QPixmap.fromImage(image), self.number_of_targets
+		)
 
-        # Add the container widget to the grid layout
-        self.targetsWidget.layout().addWidget(container, self.row, self.column)
+		# Add the container widget to the grid layout
+		self.targetsWidget.layout().addWidget(container, self.row, self.column)
 
-        self.column += 1
-        if self.column > 5:  # Adjust this value to change the number of columns
-            self.column = 0
-            self.row += 1
+		self.column += 1
+		if self.column > 5:  # Adjust this value to change the number of columns
+			self.column = 0
+			self.row += 1
 
-        # Add target marker
-        image_base64 = 'data:image/png;base64,' + qimage_to_base64(image)
-        self.parent.homepage.mapwidget.page().runJavaScript(f"""
+		# Add target marker
+		image_base64 = "data:image/png;base64," + qimage_to_base64(image)
+		self.parent.homepage.mapwidget.page().runJavaScript(f"""
                     target_marker{no} = L.marker({position}, {{icon: targetIcon}}).addTo(map);
                     target_marker{no}.bindTooltip('<br>' + "<img src='{image_base64}'/>");
                 """)
 
-        # Adding target to firebase
-        self.firebase.targets.append(
-            {"id": no, "visibility": True, "longitude": position[0], "latitude": position[1], "image": image_base64})
+		# Adding target to firebase
+		self.firebase.targets.append(
+			{
+				"id": no,
+				"visibility": True,
+				"longitude": position[0],
+				"latitude": position[1],
+				"image": image_base64,
+			}
+		)
 
-    def setLeavingTime(self, no, time):
-        self.targets[no]["time_interval"][1] = time
+	def setLeavingTime(self, no, time):
+		self.targets[no]["time_interval"][1] = time
 
-    def addUsers(self):
-        for i, user in enumerate(self.firebase.users, start=1):
-            container = self.createContainer(f"user{i}", QPixmap(user["image"]), i)
-            self.usersWidget.layout().addWidget(container)
+	def addUsers(self):
+		for i, user in enumerate(self.firebase.users, start=1):
+			container = self.createContainer(f"user{i}", QPixmap(user["image"]), i)
+			self.usersWidget.layout().addWidget(container)
 
-            if user["location"] is not None and all(user["location"]):
-                # Add user marker
-                location = user["location"]
-                name = user["name"].replace("'", "\\'")
-                image = 'data:image/png;base64,' + image_to_base64(user["image"])
-                self.parent.homepage.mapwidget.page().runJavaScript(f"""
+			if user["location"] is not None and all(user["location"]):
+				# Add user marker
+				location = user["location"]
+				name = user["name"].replace("'", "\\'")
+				image = "data:image/png;base64," + image_to_base64(user["image"])
+				self.parent.homepage.mapwidget.page().runJavaScript(f"""
                     user_marker{i} = L.marker({location}, {{icon: userIcon}}).addTo(map);
                     user_marker{i}.bindTooltip('{name}' + '<br>' + "<img src='{image}'/>");
                 """)
-                print(f'User {i} added to the map with location: {location}')
-            else:
-                print(f'User {i} has invalid location data: {user["location"]}')
+				print(f"User {i} added to the map with location: {location}")
+			else:
+				print(f"User {i} has invalid location data: {user['location']}")
 
-        # Update users positions every 100ms
-        self.update_users_positions_timer = QTimer()
-        self.update_users_positions_timer.timeout.connect(self.update_users_positions)
-        self.update_users_positions_timer.start(100)
+		# Update users positions every 100ms
+		self.update_users_positions_timer = QTimer()
+		self.update_users_positions_timer.timeout.connect(self.update_users_positions)
+		self.update_users_positions_timer.start(100)
 
-    def createContainer(self, objectname, pixmap, number):
-        # Create a QWidget to hold both labels
-        container = QWidget(objectName=objectname)
-        layout = QVBoxLayout()
-        container.setLayout(layout)
-        container.setStyleSheet(self.containerStyleSheet)
-        container.setMinimumSize(80, 80)
-        container.setMaximumSize(150, 150)
+	def createContainer(self, objectname, pixmap, number):
+		# Create a QWidget to hold both labels
+		container = QWidget(objectName=objectname)
+		layout = QVBoxLayout()
+		container.setLayout(layout)
+		container.setStyleSheet(self.containerStyleSheet)
+		container.setMinimumSize(80, 80)
+		container.setMaximumSize(150, 150)
 
-        # Create the image label
-        scaled_pixmap = pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.SmoothTransformation)
-        image_label = QLabel()
-        image_label.setPixmap(scaled_pixmap)
-        image_label.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
-        layout.addWidget(image_label)
+		# Create the image label
+		scaled_pixmap = pixmap.scaled(
+			100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.SmoothTransformation
+		)
+		image_label = QLabel()
+		image_label.setPixmap(scaled_pixmap)
+		image_label.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
+		layout.addWidget(image_label)
 
-        # Create the text label
-        text_label = QLabel(str(number))
-        text_label.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
-        layout.addWidget(text_label)
+		# Create the text label
+		text_label = QLabel(str(number))
+		text_label.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
+		layout.addWidget(text_label)
 
-        # Set click event for container
-        container.installEventFilter(self)
+		# Set click event for container
+		container.installEventFilter(self)
 
-        return container
+		return container
 
-    def update_users_positions(self):
-        for i, user in enumerate(self.firebase.users):
-            i = i+1
-            if user["location"] is not None and all(user["location"]):
-                # Update user marker
-                location = user["location"]
-                self.parent.homepage.mapwidget.page().runJavaScript(f"user_marker{i}.setLatLng({location});")
-            else:
-                print(f'User {i} has invalid location data: {user["location"]}')
+	def update_users_positions(self):
+		for i, user in enumerate(self.firebase.users):
+			i = i + 1
+			if user["location"] is not None and all(user["location"]):
+				# Update user marker
+				location = user["location"]
+				self.parent.homepage.mapwidget.page().runJavaScript(
+					f"user_marker{i}.setLatLng({location});"
+				)
+			else:
+				print(f"User {i} has invalid location data: {user['location']}")
 
-    def eventFilter(self, obj, event):
-        if obj.objectName()[:6] == "target":
-            # When double clicked open a new window
-            if event.type() == QEvent.MouseButtonDblClick:
-                no = int(obj.objectName()[6:])
-                self.newWindow = MediaPlayerWindow(self,
-                                                   no,
-                                                   QPixmap.fromImage(self.targets[no]["image"]),
-                                                   self.targets[no]["location"],
-                                                   self.targets[no]["time_interval"],
-                                                   self.parent.homepage.cameraWidget.videothread.starting_time)
-                self.newWindow.show()
-        elif obj.objectName()[:4] == "user":
-            if event.type() == QEvent.MouseButtonDblClick:
-                no = int(obj.objectName()[4:])-1
-                print(no)
-                self.newWindow = UserMenu(no, self.firebase.users[no]["name"],
-                                          QPixmap(self.firebase.users[no]["image"]),
-                                          self.firebase.users[no]["location"], self)
-                self.update_user_menu = UpdateUserMenuThread(no, self.firebase, self.newWindow)
-                self.update_user_menu.start()
-                self.newWindow.show()
+	def eventFilter(self, obj, event):
+		if obj.objectName()[:6] == "target":
+			# When double clicked open a new window
+			if event.type() == QEvent.MouseButtonDblClick:
+				no = int(obj.objectName()[6:])
+				self.newWindow = MediaPlayerWindow(
+					self,
+					no,
+					QPixmap.fromImage(self.targets[no]["image"]),
+					self.targets[no]["location"],
+					self.targets[no]["time_interval"],
+					self.parent.homepage.cameraWidget.videothread.starting_time,
+				)
+				self.newWindow.show()
+		elif obj.objectName()[:4] == "user":
+			if event.type() == QEvent.MouseButtonDblClick:
+				no = int(obj.objectName()[4:]) - 1
+				print(no)
+				self.newWindow = UserMenu(
+					no,
+					self.firebase.users[no]["name"],
+					QPixmap(self.firebase.users[no]["image"]),
+					self.firebase.users[no]["location"],
+					self,
+				)
+				self.update_user_menu = UpdateUserMenuThread(
+					no, self.firebase, self.newWindow
+				)
+				self.update_user_menu.start()
+				self.newWindow.show()
 
-        # When clicked change the border color
-        if event.type() == QEvent.MouseButtonPress:
-            if event.buttons() == Qt.LeftButton:
-                self.oldtarget.setStyleSheet(self.containerStyleSheet)
-                obj.setStyleSheet("""
+		# When clicked change the border color
+		if event.type() == QEvent.MouseButtonPress:
+			if event.buttons() == Qt.LeftButton:
+				self.oldtarget.setStyleSheet(self.containerStyleSheet)
+				obj.setStyleSheet("""
                     QWidget{border: 2px solid rgb(64, 71, 88);}
                     QLabel{border: 0px;}
                             """)
-                self.oldtarget = obj
-                return True
+				self.oldtarget = obj
+				return True
 
-        return super().eventFilter(obj, event)
+		return super().eventFilter(obj, event)
 
 
 class UserMenu(QWidget):
+	def __init__(self, id, name, pixmap, location, parent=None):
+		super().__init__()
+		self.parent = parent
+		self.id = id
+		self.setMaximumWidth(200)
+		self.resize(200, self.height())
+		self.setLayout(QVBoxLayout())
+		self.layout().setSpacing(10)
 
-    def __init__(self, id, name, pixmap, location, parent=None):
-        super().__init__()
-        self.parent = parent
-        self.id = id
-        self.setMaximumWidth(200)
-        self.resize(200, self.height())
-        self.setLayout(QVBoxLayout())
-        self.layout().setSpacing(10)
+		self.isOnline = False
 
-        self.isOnline = False
+		scaled_pixmap = pixmap.scaled(
+			180, 180, Qt.AspectRatioMode.KeepAspectRatio, Qt.SmoothTransformation
+		)
+		self.image_label = QLabel(pixmap=scaled_pixmap)
+		self.image_label.setAlignment(Qt.AlignCenter)
+		self.layout().addWidget(self.image_label)
 
-        scaled_pixmap = pixmap.scaled(180, 180, Qt.AspectRatioMode.KeepAspectRatio, Qt.SmoothTransformation)
-        self.image_label = QLabel(pixmap=scaled_pixmap)
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.layout().addWidget(self.image_label)
+		self.name_label = QLabel(str(name))
+		self.name_label.setAlignment(Qt.AlignCenter)
+		self.layout().addWidget(self.name_label)
 
-        self.name_label = QLabel(str(name))
-        self.name_label.setAlignment(Qt.AlignCenter)
-        self.layout().addWidget(self.name_label)
+		self.location_label = QLabel("Location: \n" + str(location))
+		self.location_label.setAlignment(Qt.AlignTop)
+		self.layout().addWidget(self.location_label)
 
-        self.location_label = QLabel("Location: \n" + str(location))
-        self.location_label.setAlignment(Qt.AlignTop)
-        self.layout().addWidget(self.location_label)
+		self.isonline_label = QLabel("Online: \n" + str(self.isOnline))
+		self.isonline_label.setAlignment(Qt.AlignTop)
+		self.layout().addWidget(self.isonline_label)
 
-        self.isonline_label = QLabel("Online: \n" + str(self.isOnline))
-        self.isonline_label.setAlignment(Qt.AlignTop)
-        self.layout().addWidget(self.isonline_label)
+		self.authority_button = QPushButton("Yetki Ver")
+		self.layout().addWidget(self.authority_button)
 
-        self.authority_button = QPushButton("Yetki Ver")
-        self.layout().addWidget(self.authority_button)
+		self.layout().addItem(
+			QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+		)
 
-        self.layout().addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+		self.authority_button.clicked.connect(self.giveAuthority)
 
-        self.authority_button.clicked.connect(self.giveAuthority)
+	def setOnline(self, online):
+		self.isOnline = online
+		self.isonline_label.setText("Online: \n" + str(self.isOnline))
 
-    def setOnline(self, online):
-        self.isOnline = online
-        self.isonline_label.setText("Online: \n" + str(self.isOnline))
+	def setLocation(self, location):
+		self.location_label.setText("Location: \n" + str(location))
 
-    def setLocation(self, location):
-        self.location_label.setText("Location: \n" + str(location))
-
-    def giveAuthority(self):
-        if self.authority_button.text() == "Yetki Ver":
-            self.authority_button.setText("Yetkiyi Geri Al")
-            self.parent.firebase.update_user_authority(True, self.id + 1)
-        else:
-            self.authority_button.setText("Yetki Ver")
-            self.parent.firebase.update_user_authority(False, self.id + 1)
+	def giveAuthority(self):
+		if self.authority_button.text() == "Yetki Ver":
+			self.authority_button.setText("Yetkiyi Geri Al")
+			self.parent.firebase.update_user_authority(True, self.id + 1)
+		else:
+			self.authority_button.setText("Yetki Ver")
+			self.parent.firebase.update_user_authority(False, self.id + 1)

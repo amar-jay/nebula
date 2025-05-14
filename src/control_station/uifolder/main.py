@@ -5,16 +5,17 @@ from PySide6.QtCore import QThread, Signal
 
 from IndicatorsPage import IndicatorsPage
 
-class IndicatorsThread(QThread):
-    update_speed = Signal(int)
 
-    def run(self):
-        num =0
-        while True:
-            # num = int(input("enter speed \n"))
-            num += 1
-            self.update_speed.emit(num)
-            self.msleep(1)
+class IndicatorsThread(QThread):
+	update_speed = Signal(int)
+
+	def run(self):
+		num = 0
+		while True:
+			# num = int(input("enter speed \n"))
+			num += 1
+			self.update_speed.emit(num)
+			self.msleep(1)
 
 
 app = QtWidgets.QApplication(sys.argv)
@@ -31,4 +32,3 @@ thread.update_speed.connect(window.setAltitude)
 thread.start()
 
 app.exec()
-

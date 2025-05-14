@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
 	QApplication,
 	QMainWindow,
 	QWidget,
+	QStackedWidget,
+	QTableWidget,
 	QVBoxLayout,
 	QHBoxLayout,
 	QPushButton,
@@ -577,145 +579,201 @@ class DroneControlApp(QMainWindow):
 		self.drone_client.set_logger(self.console.append_message)
 
 	def _init_ui(self):
-		"""Initialize the UI components with a modern look."""
-		# Set application style
+		"""Initialize the UI components with a modern design."""
+		# Set application-wide style
 		self.setStyleSheet("""
-	        QMainWindow, QWidget {
-	            background-color: #2e2e2e;
-	            color: #e0e0e0;
-	        }
-	        QGroupBox {
-	            border: 1px solid #555555;
-	            border-radius: 5px;
-	            margin-top: 1ex;
+	        QMainWindow, QWidget { background-color: #111111; color: #FFFFFF; }
+	        QGroupBox { 
+	            border: 1px solid #333333; 
+	            border-radius: 6px; 
+	            margin-top: 12px; 
 	            font-weight: bold;
+	            padding-top: 8px;
 	        }
-	        QGroupBox::title {
-	            subcontrol-origin: margin;
-	            left: 10px;
-	            padding: 0 3px 0 3px;
+	        QGroupBox::title { 
+	            subcontrol-origin: margin; 
+	            left: 10px; 
+	            padding: 0 5px;
 	        }
-	        QPushButton {
-	            background-color: #3a3a3a;
-	            color: #e0e0e0;
-	            border: 1px solid #555555;
-	            border-radius: 4px;
-	            padding: 5px 15px;
-	            min-height: 25px;
-	        }
-	        QPushButton:hover {
-	            background-color: #4a4a4a;
-	        }
-	        QPushButton:pressed {
-	            background-color: #2a2a2a;
-	        }
-	        QPushButton:disabled {
-	            background-color: #2a2a2a;
-	            color: #707070;
-	        }
-	        QLineEdit, QSpinBox, QDoubleSpinBox {
-	            background-color: #3a3a3a;
-	            color: #e0e0e0;
-	            border: 1px solid #555555;
-	            border-radius: 4px;
-	            padding: 4px;
-	        }
-	        QTabWidget::pane {
-	            border: 1px solid #555555;
-	            border-radius: 4px;
+	        QLabel { color: #CCCCCC; }
+	        QTabWidget::pane { 
+	            border: 1px solid #333333;
+	            border-radius: 6px;
 	        }
 	        QTabBar::tab {
-	            background-color: #3a3a3a;
-	            color: #b0b0b0;
-	            border: 1px solid #555555;
-	            border-bottom-color: #555555;
+	            background-color: #222222;
+	            color: #AAAAAA;
 	            border-top-left-radius: 4px;
 	            border-top-right-radius: 4px;
-	            padding: 6px 12px;
+	            padding: 8px 16px;
 	            margin-right: 2px;
 	        }
 	        QTabBar::tab:selected {
-	            background-color: #404040;
-	            color: #e0e0e0;
+	            background-color: #1E88E5;
+	            color: white;
 	        }
-	        QTabBar::tab:hover:!selected {
-	            background-color: #454545;
+	        QPushButton {
+	            background-color: #1E88E5;
+	            color: white;
+	            border: none;
+	            border-radius: 4px;
+	            padding: 8px 16px;
+	            font-weight: bold;
+	        }
+	        QPushButton:hover {
+	            background-color: #1976D2;
+	        }
+	        QPushButton:disabled {
+	            background-color: #555555;
+	            color: #888888;
+	        }
+	        QLineEdit, QSpinBox, QDoubleSpinBox {
+	            background-color: #333333;
+	            color: white;
+	            border: 1px solid #444444;
+	            border-radius: 4px;
+	            padding: 6px;
 	        }
 	        QProgressBar {
-	            border: 1px solid #555555;
+	            border: 1px solid #444444;
 	            border-radius: 4px;
+	            background-color: #333333;
 	            text-align: center;
-	            background-color: #3a3a3a;
 	        }
 	        QProgressBar::chunk {
-	            background-color: #4a86e8;
-	        }
-	        QTableWidget {
-	            background-color: #3a3a3a;
-	            gridline-color: #555555;
-	            border: 1px solid #555555;
+	            background-color: #1E88E5;
 	            border-radius: 4px;
-	        }
-	        QHeaderView::section {
-	            background-color: #404040;
-	            color: #e0e0e0;
-	            border: 1px solid #555555;
-	            padding: 4px;
 	        }
 	    """)
 
-		# Create main widget and layout with better spacing
+		# Create main widget and layout
 		main_widget = QWidget()
 		main_layout = QVBoxLayout(main_widget)
-		main_layout.setContentsMargins(10, 10, 10, 10)
+		main_layout.setContentsMargins(15, 15, 15, 15)
 		main_layout.setSpacing(10)
 
-		# Create a splitter for more flexible UI layout
-		splitter = QSplitter(Qt.Vertical)
+		# Create navigation sidebar and content area
+		nav_content_splitter = QSplitter(Qt.Horizontal)
 
-		# ----- Connection Panel -----
-		connection_container = QWidget()
-		connection_layout = QVBoxLayout(connection_container)
-		connection_layout.setContentsMargins(0, 0, 0, 0)
+		# Navigation sidebar
+		nav_widget = QWidget()
+		nav_widget.setMaximumWidth(200)
+		nav_layout = QVBoxLayout(nav_widget)
+		nav_layout.setContentsMargins(0, 0, 0, 0)
 
-		connection_group = QGroupBox("CONNECTIONS")
-		connection_group_layout = QVBoxLayout(connection_group)
-		connection_group_layout.setSpacing(10)
+		# App title
+		app_title = QLabel("MATEK GCS")
+		app_title.setStyleSheet(
+			"font-size: 18px; font-weight: bold; color: white; margin-bottom: 20px;"
+		)
+		app_title.setAlignment(Qt.AlignCenter)
+		nav_layout.addWidget(app_title)
 
-		# Create two-panel layout for main and kamikaze drones
-		connection_panels = QHBoxLayout()
+		# Navigation buttons
+		self.nav_connection_btn = QPushButton("Connection")
+		self.nav_connection_btn.setStyleSheet("text-align: left; padding: 10px;")
+		self.nav_connection_btn.clicked.connect(
+			lambda: self.stacked_widget.setCurrentIndex(0)
+		)
+
+		self.nav_basic_control_btn = QPushButton("Basic Control")
+		self.nav_basic_control_btn.setStyleSheet("text-align: left; padding: 10px;")
+		self.nav_basic_control_btn.clicked.connect(
+			lambda: self.stacked_widget.setCurrentIndex(1)
+		)
+
+		self.nav_mission_btn = QPushButton("Mission Planning")
+		self.nav_mission_btn.setStyleSheet("text-align: left; padding: 10px;")
+		self.nav_mission_btn.clicked.connect(
+			lambda: self.stacked_widget.setCurrentIndex(2)
+		)
+
+		self.nav_console_btn = QPushButton("Console")
+		self.nav_console_btn.setStyleSheet("text-align: left; padding: 10px;")
+		self.nav_console_btn.clicked.connect(
+			lambda: self.stacked_widget.setCurrentIndex(3)
+		)
+
+		self.nav_auth_btn = QPushButton("Authentication")
+		self.nav_auth_btn.setStyleSheet("text-align: left; padding: 10px;")
+		self.nav_auth_btn.clicked.connect(
+			lambda: self.stacked_widget.setCurrentIndex(4)
+		)
+
+		nav_layout.addWidget(self.nav_connection_btn)
+		nav_layout.addWidget(self.nav_basic_control_btn)
+		nav_layout.addWidget(self.nav_mission_btn)
+		nav_layout.addWidget(self.nav_console_btn)
+		nav_layout.addWidget(self.nav_auth_btn)
+		nav_layout.addStretch()
+
+		# Status indicators in sidebar
+		status_widget = QWidget()
+		status_layout = QVBoxLayout(status_widget)
+		status_layout.setContentsMargins(5, 5, 5, 5)
+
+		# Connection status indicator
+		connection_status_layout = QHBoxLayout()
+		connection_indicator = QLabel("•")
+		connection_indicator.setStyleSheet("color: #FF5252; font-size: 24px;")
+		self.connection_status_label = QLabel("Disconnected")
+		connection_status_layout.addWidget(connection_indicator)
+		connection_status_layout.addWidget(self.connection_status_label)
+		status_layout.addLayout(connection_status_layout)
+
+		# Battery status in sidebar
+		battery_layout = QHBoxLayout()
+		battery_layout.addWidget(QLabel("Battery:"))
+		self.battery_progress = QProgressBar()
+		self.battery_progress.setRange(0, 100)
+		self.battery_progress.setValue(0)
+		battery_layout.addWidget(self.battery_progress)
+		status_layout.addLayout(battery_layout)
+
+		nav_layout.addWidget(status_widget)
+
+		# Content area with stacked widget for multiple "pages"
+		content_widget = QWidget()
+		content_layout = QVBoxLayout(content_widget)
+		content_layout.setContentsMargins(0, 0, 0, 0)
+
+		self.stacked_widget = QStackedWidget()
+
+		# 1. Connection Page
+		connection_page = QWidget()
+		connection_layout = QVBoxLayout(connection_page)
+		connection_layout.setSpacing(15)
+
+		# Page title
+		connection_title = QLabel("Connection Settings")
+		connection_title.setStyleSheet(
+			"font-size: 24px; font-weight: bold; margin-bottom: 20px;"
+		)
+		connection_layout.addWidget(connection_title)
 
 		# Main drone connection panel
-		main_connection_panel = QGroupBox("Main Drone")
-		main_connection_layout = QGridLayout(main_connection_panel)
+		main_connection_group = QGroupBox("Main Drone Connection")
+		main_connection_layout = QGridLayout(main_connection_group)
 		main_connection_layout.setColumnStretch(1, 1)
-		main_connection_layout.setVerticalSpacing(10)
-		main_connection_layout.setHorizontalSpacing(10)
 
-		# Create connection fields with icons
+		main_connection_layout.addWidget(QLabel("Drone Address:"), 0, 0)
 		self.tcp_address_input = QLineEdit("127.0.0.1")
+		main_connection_layout.addWidget(self.tcp_address_input, 0, 1)
+
+		main_connection_layout.addWidget(QLabel("Port:"), 0, 2)
 		self.tcp_port_input = QSpinBox()
 		self.tcp_port_input.setRange(1, 65535)
 		self.tcp_port_input.setValue(14550)
+		main_connection_layout.addWidget(self.tcp_port_input, 0, 3)
 
-		# Create connection buttons with dropdown
-		connection_button_layout = QHBoxLayout()
+		connection_buttons_layout = QHBoxLayout()
+
 		self.connect_btn = QPushButton("Connect")
+		self.connect_btn.setStyleSheet("background-color: #4CAF50;")
 		self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
+
 		self.connect_menu = QMenu(self)
-		self.connect_menu.setStyleSheet("""
-	        QMenu {
-	            background-color: #3a3a3a;
-	            color: #e0e0e0;
-	            border: 1px solid #555555;
-	        }
-	        QMenu::item {
-	            padding: 5px 25px 5px 20px;
-	        }
-	        QMenu::item:selected {
-	            background-color: #4a86e8;
-	        }
-	    """)
+		self.connect_menu.setStyleSheet("background-color: #222222; color: white;")
 		self.connect_action = self.connect_menu.addAction("Standard Connect")
 		self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
 		self.tcp_connect_action = self.connect_menu.addAction("TCP Connect")
@@ -729,479 +787,442 @@ class DroneControlApp(QMainWindow):
 		self.connect_btn.setMenu(self.connect_menu)
 
 		self.disconnect_btn = QPushButton("Disconnect")
+		self.disconnect_btn.setStyleSheet("background-color: #F44336;")
 		self.disconnect_btn.clicked.connect(self._on_disconnect_clicked)
 		self.disconnect_btn.setEnabled(False)
 
-		connection_button_layout.addWidget(self.connect_btn)
-		connection_button_layout.addWidget(self.disconnect_btn)
+		connection_buttons_layout.addWidget(self.connect_btn)
+		connection_buttons_layout.addWidget(self.disconnect_btn)
 
-		# Add connection components to layout
-		main_connection_layout.addWidget(QLabel("Address:"), 0, 0)
-		main_connection_layout.addWidget(self.tcp_address_input, 0, 1)
-		main_connection_layout.addWidget(QLabel("Port:"), 1, 0)
-		main_connection_layout.addWidget(self.tcp_port_input, 1, 1)
-		main_connection_layout.addLayout(connection_button_layout, 2, 0, 1, 2)
+		main_connection_layout.addLayout(connection_buttons_layout, 1, 0, 1, 4)
 
-		# Kamikaze drone connection panel
-		kamikaze_connection_panel = QGroupBox("Kamikaze Drone")
-		kamikaze_connection_layout = QGridLayout(kamikaze_connection_panel)
+		# Kamikaze drone connection
+		kamikaze_connection_group = QGroupBox("Kamikaze Drone Connection")
+		kamikaze_connection_layout = QGridLayout(kamikaze_connection_group)
 		kamikaze_connection_layout.setColumnStretch(1, 1)
-		kamikaze_connection_layout.setVerticalSpacing(10)
-		kamikaze_connection_layout.setHorizontalSpacing(10)
 
+		kamikaze_connection_layout.addWidget(QLabel("Kamikaze Address:"), 0, 0)
 		self.k_tcp_address_input = QLineEdit("127.0.0.1")
+		kamikaze_connection_layout.addWidget(self.k_tcp_address_input, 0, 1)
+
+		kamikaze_connection_layout.addWidget(QLabel("Port:"), 0, 2)
 		self.k_tcp_port_input = QSpinBox()
 		self.k_tcp_port_input.setRange(1, 65535)
 		self.k_tcp_port_input.setValue(14560)
+		kamikaze_connection_layout.addWidget(self.k_tcp_port_input, 0, 3)
 
-		kamikaze_button_layout = QHBoxLayout()
+		k_connection_buttons_layout = QHBoxLayout()
+
 		self.k_connect_btn = QPushButton("Connect")
+		self.k_connect_btn.setStyleSheet("background-color: #4CAF50;")
 		self.k_connect_btn.clicked.connect(self._on_connect_clicked)
+
 		self.k_disconnect_btn = QPushButton("Disconnect")
+		self.k_disconnect_btn.setStyleSheet("background-color: #F44336;")
 		self.k_disconnect_btn.clicked.connect(self._on_disconnect_clicked)
 		self.k_disconnect_btn.setEnabled(False)
 
-		kamikaze_button_layout.addWidget(self.k_connect_btn)
-		kamikaze_button_layout.addWidget(self.k_disconnect_btn)
+		k_connection_buttons_layout.addWidget(self.k_connect_btn)
+		k_connection_buttons_layout.addWidget(self.k_disconnect_btn)
 
-		kamikaze_connection_layout.addWidget(QLabel("Address:"), 0, 0)
-		kamikaze_connection_layout.addWidget(self.k_tcp_address_input, 0, 1)
-		kamikaze_connection_layout.addWidget(QLabel("Port:"), 1, 0)
-		kamikaze_connection_layout.addWidget(self.k_tcp_port_input, 1, 1)
-		kamikaze_connection_layout.addLayout(kamikaze_button_layout, 2, 0, 1, 2)
+		kamikaze_connection_layout.addLayout(k_connection_buttons_layout, 1, 0, 1, 4)
 
-		# Add connection panels to layout
-		connection_panels.addWidget(main_connection_panel)
-		connection_panels.addWidget(kamikaze_connection_panel)
-		connection_group_layout.addLayout(connection_panels)
+		connection_layout.addWidget(main_connection_group)
+		connection_layout.addWidget(kamikaze_connection_group)
+		connection_layout.addStretch()
 
-		# Add status display to connection section
-		status_group = QGroupBox("Status Monitor")
+		# 2. Basic Control Page
+		basic_control_page = QWidget()
+		basic_control_layout = QVBoxLayout(basic_control_page)
+		basic_control_layout.setSpacing(15)
+
+		# Page title
+		basic_control_title = QLabel("Basic Drone Control")
+		basic_control_title.setStyleSheet(
+			"font-size: 24px; font-weight: bold; margin-bottom: 20px;"
+		)
+		basic_control_layout.addWidget(basic_control_title)
+
+		# Status panel
+		status_group = QGroupBox("Drone Status")
 		status_layout = QGridLayout(status_group)
-		status_layout.setVerticalSpacing(10)
-		status_layout.setHorizontalSpacing(15)
 
-		# Style status labels to be more visible
-		self.connection_status_label = QLabel("⭘ Not Connected")
-		self.connection_status_label.setStyleSheet("color: #ff9900; font-weight: bold;")
-
-		self.armed_status_label = QLabel("⭘ Disarmed")
-		self.armed_status_label.setStyleSheet("color: #ff9900; font-weight: bold;")
-
-		self.flight_status_label = QLabel("⭘ Not Flying")
-		self.flight_status_label.setStyleSheet("color: #ff9900; font-weight: bold;")
-
+		self.armed_status_label = QLabel("Disarmed")
+		self.flight_status_label = QLabel("Not Flying")
 		self.position_label = QLabel("Position: N/A")
 		self.altitude_label = QLabel("Altitude: N/A")
-
 		self.battery_label = QLabel("Battery: N/A")
-		self.battery_progress = QProgressBar()
-		self.battery_progress.setRange(0, 100)
-		self.battery_progress.setTextVisible(True)
-		self.battery_progress.setMinimumWidth(150)
 
-		# Add status widgets to grid - first row
-		status_layout.addWidget(QLabel("Connection:"), 0, 0)
-		status_layout.addWidget(self.connection_status_label, 0, 1)
-		status_layout.addWidget(QLabel("Armed:"), 0, 2)
-		status_layout.addWidget(self.armed_status_label, 0, 3)
-
-		# Second row
-		status_layout.addWidget(QLabel("Flight:"), 1, 0)
-		status_layout.addWidget(self.flight_status_label, 1, 1)
-		status_layout.addWidget(QLabel("Position:"), 1, 2)
-		status_layout.addWidget(self.position_label, 1, 3)
-
-		# Third row
+		status_layout.addWidget(QLabel("Armed:"), 0, 0)
+		status_layout.addWidget(self.armed_status_label, 0, 1)
+		status_layout.addWidget(QLabel("Flight:"), 0, 2)
+		status_layout.addWidget(self.flight_status_label, 0, 3)
+		status_layout.addWidget(QLabel("Position:"), 1, 0)
+		status_layout.addWidget(self.position_label, 1, 1, 1, 3)
 		status_layout.addWidget(QLabel("Altitude:"), 2, 0)
 		status_layout.addWidget(self.altitude_label, 2, 1)
 		status_layout.addWidget(QLabel("Battery:"), 2, 2)
-		status_layout.addWidget(self.battery_progress, 2, 3)
+		status_layout.addWidget(self.battery_label, 2, 3)
 
-		# Add connection components to main layout
-		connection_group_layout.addWidget(status_group)
-		connection_layout.addWidget(connection_group)
-
-		# Add connection panel to splitter
-		splitter.addWidget(connection_container)
-
-		# ----- Tab Widget for Controls -----
-		tab_widget = QTabWidget()
-
-		# ----- Basic Controls Tab -----
-		basic_control_widget = QWidget()
-		basic_control_layout = QVBoxLayout(basic_control_widget)
-		basic_control_layout.setContentsMargins(5, 10, 5, 5)
-		basic_control_layout.setSpacing(10)
-
-		# Create drone control buttons
+		# Flight control buttons
 		control_group = QGroupBox("Flight Controls")
 		control_layout = QVBoxLayout(control_group)
-		control_layout.setSpacing(15)
 
-		# Primary flight controls
-		flight_controls_layout = QHBoxLayout()
-		flight_controls_layout.setSpacing(10)
+		# Arm/Disarm and takeoff/land buttons
+		flight_controls_row1 = QHBoxLayout()
 
-		# Style buttons with more distinct appearances
-		self.arm_btn = QPushButton("ARM")
-		self.arm_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #2d6e2d; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #3a8a3a; }
-	        QPushButton:pressed { background-color: #245c24; }
-	        QPushButton:disabled { background-color: #2a3a2a; color: #707070; }
-	    """)
+		self.arm_btn = QPushButton("Arm")
+		self.arm_btn.setStyleSheet("background-color: #4CAF50;")
 		self.arm_btn.clicked.connect(self._on_arm_clicked)
 		self.arm_btn.setEnabled(False)
 
-		self.disarm_btn = QPushButton("DISARM")
-		self.disarm_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #8a3a3a; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #a44646; }
-	        QPushButton:pressed { background-color: #722e2e; }
-	        QPushButton:disabled { background-color: #3a2a2a; color: #707070; }
-	    """)
+		self.disarm_btn = QPushButton("Disarm")
+		self.disarm_btn.setStyleSheet("background-color: #F44336;")
 		self.disarm_btn.clicked.connect(self._on_disarm_clicked)
 		self.disarm_btn.setEnabled(False)
 
-		self.takeoff_btn = QPushButton("TAKE OFF")
-		self.takeoff_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #2d578e; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #3a6ebd; }
-	        QPushButton:pressed { background-color: #244776; }
-	        QPushButton:disabled { background-color: #2a3a4a; color: #707070; }
-	    """)
+		self.takeoff_btn = QPushButton("Takeoff")
+		self.takeoff_btn.setStyleSheet("background-color: #2196F3;")
 		self.takeoff_btn.clicked.connect(self._on_takeoff_clicked)
 		self.takeoff_btn.setEnabled(False)
 
-		self.land_btn = QPushButton("LAND")
-		self.land_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #927200; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #b38b00; }
-	        QPushButton:pressed { background-color: #7a5f00; }
-	        QPushButton:disabled { background-color: #3a3a2a; color: #707070; }
-	    """)
+		self.land_btn = QPushButton("Land")
+		self.land_btn.setStyleSheet("background-color: #FF9800;")
 		self.land_btn.clicked.connect(self._on_land_clicked)
 		self.land_btn.setEnabled(False)
 
-		self.rtl_btn = QPushButton("RETURN HOME")
-		self.rtl_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #7d4f00; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #9a6100; }
-	        QPushButton:pressed { background-color: #693f00; }
-	        QPushButton:disabled { background-color: #3a332a; color: #707070; }
-	    """)
+		self.rtl_btn = QPushButton("Return to Home")
+		self.rtl_btn.setStyleSheet("background-color: #9C27B0;")
 		self.rtl_btn.clicked.connect(self._on_rtl_clicked)
 		self.rtl_btn.setEnabled(False)
 
-		# Add buttons to flight controls
-		flight_controls_layout.addWidget(self.arm_btn)
-		flight_controls_layout.addWidget(self.disarm_btn)
-		flight_controls_layout.addWidget(self.takeoff_btn)
-		flight_controls_layout.addWidget(self.land_btn)
-		flight_controls_layout.addWidget(self.rtl_btn)
+		flight_controls_row1.addWidget(self.arm_btn)
+		flight_controls_row1.addWidget(self.disarm_btn)
+		flight_controls_row1.addWidget(self.takeoff_btn)
+		flight_controls_row1.addWidget(self.land_btn)
+		flight_controls_row1.addWidget(self.rtl_btn)
 
-		# Takeoff settings
-		takeoff_settings = QHBoxLayout()
-		takeoff_settings.addWidget(QLabel("Takeoff Altitude (m):"))
+		# Takeoff altitude control
+		takeoff_layout = QHBoxLayout()
+		takeoff_layout.addWidget(QLabel("Takeoff Altitude (m):"))
 		self.takeoff_alt_input = QDoubleSpinBox()
 		self.takeoff_alt_input.setRange(1, 100)
 		self.takeoff_alt_input.setValue(5.0)
-		self.takeoff_alt_input.setSingleStep(0.5)
-		takeoff_settings.addWidget(self.takeoff_alt_input)
-		takeoff_settings.addStretch()
+		takeoff_layout.addWidget(self.takeoff_alt_input)
+		takeoff_layout.addStretch()
 
-		# Add flight controls to main control layout
-		control_layout.addLayout(flight_controls_layout)
-		control_layout.addLayout(takeoff_settings)
+		control_layout.addLayout(flight_controls_row1)
+		control_layout.addLayout(takeoff_layout)
 
 		# Go to position controls
-		goto_group = QGroupBox("Navigation")
+		goto_group = QGroupBox("Go to Position")
 		goto_layout = QGridLayout(goto_group)
-		goto_layout.setVerticalSpacing(10)
-		goto_layout.setHorizontalSpacing(10)
 
+		goto_layout.addWidget(QLabel("Latitude:"), 0, 0)
 		self.goto_lat_input = QDoubleSpinBox()
 		self.goto_lat_input.setRange(-90, 90)
 		self.goto_lat_input.setDecimals(7)
 		self.goto_lat_input.setSingleStep(0.0001)
+		goto_layout.addWidget(self.goto_lat_input, 0, 1)
 
+		goto_layout.addWidget(QLabel("Longitude:"), 0, 2)
 		self.goto_lon_input = QDoubleSpinBox()
 		self.goto_lon_input.setRange(-180, 180)
 		self.goto_lon_input.setDecimals(7)
 		self.goto_lon_input.setSingleStep(0.0001)
+		goto_layout.addWidget(self.goto_lon_input, 0, 3)
 
+		goto_layout.addWidget(QLabel("Altitude (m):"), 1, 0)
 		self.goto_alt_input = QDoubleSpinBox()
 		self.goto_alt_input.setRange(0, 500)
 		self.goto_alt_input.setDecimals(1)
 		self.goto_alt_input.setSingleStep(1.0)
 		self.goto_alt_input.setValue(10.0)
+		goto_layout.addWidget(self.goto_alt_input, 1, 1)
 
-		self.goto_btn = QPushButton("GO TO POSITION")
-		self.goto_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #4a86e8; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #5c97f5; }
-	        QPushButton:pressed { background-color: #3b6cc1; }
-	        QPushButton:disabled { background-color: #2a3a4a; color: #707070; }
-	    """)
+		self.goto_btn = QPushButton("Go")
+		self.goto_btn.setStyleSheet("background-color: #2196F3;")
 		self.goto_btn.clicked.connect(self._on_goto_clicked)
 		self.goto_btn.setEnabled(False)
+		goto_layout.addWidget(self.goto_btn, 1, 2, 1, 2)
 
-		goto_layout.addWidget(QLabel("Latitude:"), 0, 0)
-		goto_layout.addWidget(self.goto_lat_input, 0, 1)
-		goto_layout.addWidget(QLabel("Longitude:"), 1, 0)
-		goto_layout.addWidget(self.goto_lon_input, 1, 1)
-		goto_layout.addWidget(QLabel("Altitude (m):"), 2, 0)
-		goto_layout.addWidget(self.goto_alt_input, 2, 1)
-		goto_layout.addWidget(self.goto_btn, 3, 0, 1, 2)
-
-		# Controller controls
+		# Controller functions
 		controller_group = QGroupBox("Payload Controls")
 		controller_layout = QGridLayout(controller_group)
-		controller_layout.setVerticalSpacing(10)
-		controller_layout.setHorizontalSpacing(10)
 
-		# Style and create payload control buttons
 		self.drop_load_btn = QPushButton("Drop Load")
-		self.drop_load_btn.setStyleSheet("QPushButton { background-color: #4a6c8c; }")
+		self.drop_load_btn.setStyleSheet("background-color: #795548;")
 		self.drop_load_btn.clicked.connect(self.drone_client.drop_load)
 
 		self.pick_load_btn = QPushButton("Pick Load")
-		self.pick_load_btn.setStyleSheet("QPushButton { background-color: #4a6c8c; }")
+		self.pick_load_btn.setStyleSheet("background-color: #795548;")
 		self.pick_load_btn.clicked.connect(self.drone_client.pick_load)
 
 		self.raise_hook_btn = QPushButton("Raise Hook")
-		self.raise_hook_btn.setStyleSheet("QPushButton { background-color: #4a6c8c; }")
+		self.raise_hook_btn.setStyleSheet("background-color: #795548;")
 		self.raise_hook_btn.clicked.connect(self.drone_client.raise_hook)
 
 		self.drop_hook_btn = QPushButton("Drop Hook")
-		self.drop_hook_btn.setStyleSheet("QPushButton { background-color: #4a6c8c; }")
+		self.drop_hook_btn.setStyleSheet("background-color: #795548;")
 		self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
 
-		# Kamikaze button with warning style
-		self.kamikaze_btn = QPushButton("KAMIKAZE")
-		self.kamikaze_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #b30000; 
-	            color: white;
-	            font-weight: bold;
-	            border: 2px solid #ff0000;
-	        }
-	        QPushButton:hover { 
-	            background-color: #e60000;
-	        }
-	    """)
+		self.kamikaze_btn = QPushButton("Kamikaze")
+		self.kamikaze_btn.setStyleSheet("background-color: #F44336; font-weight: bold;")
 
-		# Add controller buttons to layout
-		controller_layout.addWidget(self.raise_hook_btn, 0, 0)
-		controller_layout.addWidget(self.drop_hook_btn, 0, 1)
-		controller_layout.addWidget(self.pick_load_btn, 1, 0)
-		controller_layout.addWidget(self.drop_load_btn, 1, 1)
-		controller_layout.addWidget(self.kamikaze_btn, 2, 0, 1, 2)
+		controller_layout.addWidget(self.drop_load_btn, 0, 0)
+		controller_layout.addWidget(self.pick_load_btn, 0, 1)
+		controller_layout.addWidget(self.raise_hook_btn, 0, 2)
+		controller_layout.addWidget(self.drop_hook_btn, 1, 0)
+		controller_layout.addWidget(self.kamikaze_btn, 1, 1, 1, 2)
 
-		# Add control groups to basic control layout
+		# Add all control groups to the layout
+		basic_control_layout.addWidget(status_group)
 		basic_control_layout.addWidget(control_group)
 		basic_control_layout.addWidget(goto_group)
 		basic_control_layout.addWidget(controller_group)
-		basic_control_layout.addStretch(1)
+		basic_control_layout.addStretch()
 
-		# ----- Mission Planning Tab -----
-		mission_widget = QWidget()
-		mission_layout = QVBoxLayout(mission_widget)
-		mission_layout.setContentsMargins(5, 10, 5, 5)
-		mission_layout.setSpacing(10)
+		# 3. Mission Planning Page
+		mission_page = QWidget()
+		mission_layout = QVBoxLayout(mission_page)
+		mission_layout.setSpacing(15)
 
-		# Mission waypoints section
-		mission_waypoints_group = QGroupBox("Mission Waypoints")
-		mission_waypoints_layout = QVBoxLayout(mission_waypoints_group)
+		# Page title
+		mission_title = QLabel("Mission Planning")
+		mission_title.setStyleSheet(
+			"font-size: 24px; font-weight: bold; margin-bottom: 20px;"
+		)
+		mission_layout.addWidget(mission_title)
 
+		# Mission waypoints table
+		mission_layout.addWidget(QLabel("Mission Waypoints:"))
 		self.waypoint_table = MissionWaypointTable()
-		mission_waypoints_layout.addWidget(self.waypoint_table)
+		self.waypoint_table.setStyleSheet("""
+	        QTableWidget {
+	            background-color: #222222;
+	            alternate-background-color: #292929;
+	            border: 1px solid #333333;
+	        }
+	        QTableWidget::item {
+	            padding: 6px;
+	        }
+	        QHeaderView::section {
+	            background-color: #333333;
+	            color: white;
+	            padding: 8px;
+	            border: none;
+	        }
+	    """)
+		mission_layout.addWidget(self.waypoint_table)
 
 		# Add waypoint controls
 		add_waypoint_group = QGroupBox("Add Waypoint")
 		add_waypoint_layout = QGridLayout(add_waypoint_group)
-		add_waypoint_layout.setVerticalSpacing(10)
-		add_waypoint_layout.setHorizontalSpacing(10)
 
+		add_waypoint_layout.addWidget(QLabel("Latitude:"), 0, 0)
 		self.waypoint_lat_input = QDoubleSpinBox()
 		self.waypoint_lat_input.setRange(-90, 90)
 		self.waypoint_lat_input.setDecimals(7)
 		self.waypoint_lat_input.setSingleStep(0.0001)
+		add_waypoint_layout.addWidget(self.waypoint_lat_input, 0, 1)
 
+		add_waypoint_layout.addWidget(QLabel("Longitude:"), 0, 2)
 		self.waypoint_lon_input = QDoubleSpinBox()
 		self.waypoint_lon_input.setRange(-180, 180)
 		self.waypoint_lon_input.setDecimals(7)
 		self.waypoint_lon_input.setSingleStep(0.0001)
+		add_waypoint_layout.addWidget(self.waypoint_lon_input, 0, 3)
 
+		add_waypoint_layout.addWidget(QLabel("Altitude (m):"), 1, 0)
 		self.waypoint_alt_input = QDoubleSpinBox()
 		self.waypoint_alt_input.setRange(0, 500)
 		self.waypoint_alt_input.setDecimals(1)
 		self.waypoint_alt_input.setSingleStep(1.0)
 		self.waypoint_alt_input.setValue(10.0)
+		add_waypoint_layout.addWidget(self.waypoint_alt_input, 1, 1)
 
+		add_waypoint_layout.addWidget(QLabel("Hold (s):"), 1, 2)
 		self.waypoint_hold_input = QDoubleSpinBox()
 		self.waypoint_hold_input.setRange(0, 60)
 		self.waypoint_hold_input.setValue(10)
 		self.waypoint_hold_input.setSingleStep(1)
+		add_waypoint_layout.addWidget(self.waypoint_hold_input, 1, 3)
 
 		self.add_waypoint_btn = QPushButton("Add Waypoint")
-		self.add_waypoint_btn.setStyleSheet("""
-	        QPushButton { background-color: #4a6c8c; font-weight: bold; }
-	        QPushButton:hover { background-color: #5a7c9c; }
-	    """)
+		self.add_waypoint_btn.setStyleSheet("background-color: #4CAF50;")
 		self.add_waypoint_btn.clicked.connect(self._on_add_waypoint_clicked)
-
-		add_waypoint_layout.addWidget(QLabel("Latitude:"), 0, 0)
-		add_waypoint_layout.addWidget(self.waypoint_lat_input, 0, 1)
-		add_waypoint_layout.addWidget(QLabel("Longitude:"), 0, 2)
-		add_waypoint_layout.addWidget(self.waypoint_lon_input, 0, 3)
-		add_waypoint_layout.addWidget(QLabel("Altitude (m):"), 1, 0)
-		add_waypoint_layout.addWidget(self.waypoint_alt_input, 1, 1)
-		add_waypoint_layout.addWidget(QLabel("Hold (s):"), 1, 2)
-		add_waypoint_layout.addWidget(self.waypoint_hold_input, 1, 3)
 		add_waypoint_layout.addWidget(self.add_waypoint_btn, 2, 0, 1, 4)
 
 		# Mission file operations
-		file_ops_layout = QHBoxLayout()
+		file_operations_group = QGroupBox("File Operations")
+		file_operations_layout = QHBoxLayout(file_operations_group)
 
 		self.load_mission_btn = QPushButton("Load Mission")
+		self.load_mission_btn.setStyleSheet("background-color: #607D8B;")
 		self.load_mission_btn.clicked.connect(self._on_load_mission_clicked)
 
 		self.save_mission_btn = QPushButton("Save Mission")
+		self.save_mission_btn.setStyleSheet("background-color: #607D8B;")
 		self.save_mission_btn.clicked.connect(self._on_save_mission_clicked)
 
 		self.clear_mission_btn = QPushButton("Clear Mission")
-		self.clear_mission_btn.setStyleSheet("QPushButton { color: #ff9900; }")
+		self.clear_mission_btn.setStyleSheet("background-color: #FF5722;")
 		self.clear_mission_btn.clicked.connect(self._on_clear_mission_clicked)
 
-		file_ops_layout.addWidget(self.load_mission_btn)
-		file_ops_layout.addWidget(self.save_mission_btn)
-		file_ops_layout.addWidget(self.clear_mission_btn)
-		file_ops_layout.addStretch()
+		file_operations_layout.addWidget(self.load_mission_btn)
+		file_operations_layout.addWidget(self.save_mission_btn)
+		file_operations_layout.addWidget(self.clear_mission_btn)
 
 		# Mission execution controls
-		mission_exec_layout = QHBoxLayout()
+		execution_group = QGroupBox("Mission Execution")
+		execution_layout = QVBoxLayout(execution_group)
+
+		buttons_layout = QHBoxLayout()
 
 		self.upload_mission_btn = QPushButton("Upload Mission")
-		self.upload_mission_btn.setStyleSheet("""
-	        QPushButton { background-color: #4a6c8c; font-weight: bold; }
-	        QPushButton:hover { background-color: #5a7c9c; }
-	        QPushButton:disabled { background-color: #3a3a3a; color: #707070; }
-	    """)
+		self.upload_mission_btn.setStyleSheet("background-color: #2196F3;")
 		self.upload_mission_btn.clicked.connect(self._on_upload_mission_clicked)
 		self.upload_mission_btn.setEnabled(False)
 
 		self.start_mission_btn = QPushButton("Start Mission")
-		self.start_mission_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #2d6e2d; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #3a8a3a; }
-	        QPushButton:disabled { background-color: #2a3a2a; color: #707070; }
-	    """)
+		self.start_mission_btn.setStyleSheet("background-color: #4CAF50;")
 		self.start_mission_btn.clicked.connect(self._on_start_mission_clicked)
 		self.start_mission_btn.setEnabled(False)
 
 		self.cancel_mission_btn = QPushButton("Cancel Mission")
-		self.cancel_mission_btn.setStyleSheet("""
-	        QPushButton { 
-	            background-color: #8a3a3a; 
-	            color: white;
-	            font-weight: bold;
-	        }
-	        QPushButton:hover { background-color: #a44646; }
-	        QPushButton:disabled { background-color: #3a2a2a; color: #707070; }
-	    """)
+		self.cancel_mission_btn.setStyleSheet("background-color: #F44336;")
 		self.cancel_mission_btn.clicked.connect(self._on_cancel_mission_clicked)
 		self.cancel_mission_btn.setEnabled(False)
 
-		mission_exec_layout.addWidget(self.upload_mission_btn)
-		mission_exec_layout.addWidget(self.start_mission_btn)
-		mission_exec_layout.addWidget(self.cancel_mission_btn)
-		mission_exec_layout.addStretch()
+		buttons_layout.addWidget(self.upload_mission_btn)
+		buttons_layout.addWidget(self.start_mission_btn)
+		buttons_layout.addWidget(self.cancel_mission_btn)
 
-		# Mission progress
-		mission_progress_group = QGroupBox("Mission Status")
-		mission_progress_layout = QVBoxLayout(mission_progress_group)
-
-		progress_display = QHBoxLayout()
-		progress_display.addWidget(QLabel("Progress:"))
+		mission_progress_layout = QHBoxLayout()
+		mission_progress_layout.addWidget(QLabel("Mission Progress:"))
 		self.mission_progress_bar = QProgressBar()
 		self.mission_progress_bar.setRange(0, 100)
-		self.mission_progress_bar.setStyleSheet("""
-	        QProgressBar::chunk { background-color: #4a86e8; }
-	    """)
-		progress_display.addWidget(self.mission_progress_bar)
-
+		mission_progress_layout.addWidget(self.mission_progress_bar)
 		self.mission_status_label = QLabel("No mission active")
-		self.mission_status_label.setAlignment(Qt.AlignCenter)
-		self.mission_status_label.setStyleSheet("font-weight: bold;")
-
-		mission_progress_layout.addLayout(progress_display)
 		mission_progress_layout.addWidget(self.mission_status_label)
 
-		# Combine mission planning components
-		mission_layout.addWidget(mission_waypoints_group)
+		execution_layout.addLayout(buttons_layout)
+		execution_layout.addLayout(mission_progress_layout)
+
+		# Add mission groups to layout
 		mission_layout.addWidget(add_waypoint_group)
-		mission_layout.addLayout(file_ops_layout)
-		mission_layout.addLayout(mission_exec_layout)
-		mission_layout.addWidget(mission_progress_group)
-		mission_layout.addStretch(1)
+		mission_layout.addWidget(file_operations_group)
+		mission_layout.addWidget(execution_group)
+		mission_layout.addStretch()
 
-		# ----- Console Output Tab -----
-		console_widget = QWidget()
-		console_layout = QVBoxLayout(console_widget)
-		console_layout.setContentsMargins(5, 10, 5, 5)
+		# 4. Console Page
+		console_page = QWidget()
+		console_layout = QVBoxLayout(console_page)
+		console_layout.setSpacing(15)
 
-		console_header = QHBoxLayout()
-		console_header.addWidget(QLabel("System Log"))
-		console_header.addStretch()
+		# Page title
+		console_title = QLabel("Console Output")
+		console_title.setStyleSheet(
+			"font-size: 24px; font-weight: bold; margin-bottom: 20px;"
+		)
+		console_layout.addWidget(console_title)
 
 		self.console = ConsoleOutput()
-
-		console_layout.addLayout(console_header)
 		console_layout.addWidget(self.console)
 
-		# Add tabs to the tab widget
-		tab_widget.addTab(basic_control_widget, "Flight Control")
-		tab_widget.addTab(mission_widget, "Mission Planning")
-		tab_widget.addTab(console_widget, "Console")
+		# 5. Authentication Page (Placeholder)
+		auth_page = QWidget()
+		auth_layout = QVBoxLayout(auth_page)
+		auth_layout.setSpacing(15)
 
-		# Add tab widget to splitter
-		splitter.addWidget(tab_widget)
+		# Page title
+		auth_title = QLabel("Authentication")
+		auth_title.setStyleSheet(
+			"font-size: 24px; font-weight: bold; margin-bottom: 20px;"
+		)
+		auth_layout.addWidget(auth_title)
 
-		# Add splitter to main layout
-		main_layout.addWidget(splitter)
+		# Login form
+		auth_form_group = QGroupBox("User Login")
+		auth_form_layout = QGridLayout(auth_form_group)
+
+		auth_form_layout.addWidget(QLabel("Username:"), 0, 0)
+		username_input = QLineEdit()
+		auth_form_layout.addWidget(username_input, 0, 1)
+
+		auth_form_layout.addWidget(QLabel("Password:"), 1, 0)
+		password_input = QLineEdit()
+		password_input.setEchoMode(QLineEdit.Password)
+		auth_form_layout.addWidget(password_input, 1, 1)
+
+		login_btn = QPushButton("Login")
+		login_btn.setStyleSheet("background-color: #4CAF50;")
+		auth_form_layout.addWidget(login_btn, 2, 0, 1, 2)
+
+		auth_layout.addWidget(auth_form_group)
+		auth_layout.addStretch()
+
+		# Add all pages to stacked widget
+		self.stacked_widget.addWidget(connection_page)
+		self.stacked_widget.addWidget(basic_control_page)
+		self.stacked_widget.addWidget(mission_page)
+		self.stacked_widget.addWidget(console_page)
+		self.stacked_widget.addWidget(auth_page)
+
+		# Add the stacked widget to content layout
+		content_layout.addWidget(self.stacked_widget)
+
+		# Add nav and content to splitter
+		nav_content_splitter.addWidget(nav_widget)
+		nav_content_splitter.addWidget(content_widget)
+
+		# Set splitter as main layout widget
+		main_layout.addWidget(nav_content_splitter)
 
 		# Set central widget
 		self.setCentralWidget(main_widget)
+
+		# Set default page
+		self.stacked_widget.setCurrentIndex(0)
+
+		# Update nav button styles to show selected state
+		self.nav_connection_btn.setStyleSheet(
+			"text-align: left; padding: 10px; background-color: #1E88E5;"
+		)
+
+		# Connect nav buttons to update selected styling
+		self.nav_connection_btn.clicked.connect(
+			lambda: self._update_nav_selection(self.nav_connection_btn)
+		)
+		self.nav_basic_control_btn.clicked.connect(
+			lambda: self._update_nav_selection(self.nav_basic_control_btn)
+		)
+		self.nav_mission_btn.clicked.connect(
+			lambda: self._update_nav_selection(self.nav_mission_btn)
+		)
+		self.nav_console_btn.clicked.connect(
+			lambda: self._update_nav_selection(self.nav_console_btn)
+		)
+		self.nav_auth_btn.clicked.connect(
+			lambda: self._update_nav_selection(self.nav_auth_btn)
+		)
+
+	def _update_nav_selection(self, selected_button):
+		"""Update the styling of navigation buttons to show which is selected."""
+		# Reset all buttons to default style
+		for btn in [
+			self.nav_connection_btn,
+			self.nav_basic_control_btn,
+			self.nav_mission_btn,
+			self.nav_console_btn,
+			self.nav_auth_btn,
+		]:
+			btn.setStyleSheet("text-align: left; padding: 10px;")
+
+		# Set selected button style
+		selected_button.setStyleSheet(
+			"text-align: left; padding: 10px; background-color: #1E88E5;"
+		)
 
 	def _init_old_ui(self):
 		"""Initialize the UI components."""
@@ -1783,17 +1804,11 @@ class DroneControlApp(QMainWindow):
 			self.console.append_message("Failed to cancel mission", "error")
 
 	def _on_connection_status_changed(self, connected, message):
-		"""Handle connection status changes with visual indicators."""
+		"""Handle connection status changes."""
 		if connected:
-			self.connection_status_label.setText("● Connected")
-			self.connection_status_label.setStyleSheet(
-				"color: #00bb00; font-weight: bold;"
-			)
+			self.connection_status_label.setText("Connected")
 		else:
-			self.connection_status_label.setText("⭘ Disconnected")
-			self.connection_status_label.setStyleSheet(
-				"color: #ff9900; font-weight: bold;"
-			)
+			self.connection_status_label.setText("Disconnected")
 			self._disable_control_buttons()
 
 	def _on_drone_status_update(self, status):

@@ -72,8 +72,9 @@ class DroneClient(QObject):
 		self.kamikaze_connection = None
 		self.log = logger
 		self.zmq_client = zmq_client
-		# self.video_stream_window = video_stream_window
-		# self.processed_stream_window = processed_stream_window
+		self.video_stream_window = video_stream_window
+		self.processed_stream_window = processed_stream_window
+
 
 		# Setup status update timer
 		self.status_timer = QTimer(self)
@@ -81,10 +82,10 @@ class DroneClient(QObject):
 		self.status_timer.setInterval(5000)  # Update every second
 
 		# Setup video stream thread
-		# self.video_running = False
-		# self.video_timer = QTimer(self)
-		# self.video_timer.timeout.connect(self._video_stream)
-		# self.video_timer.setInterval(100)  # Update every 100ms
+		self.video_running = False
+		self.video_timer = QTimer(self)
+		self.video_timer.timeout.connect(self._video_stream)
+		self.video_timer.setInterval(100)  # Update every 100ms
 
 	def drop_load(self):
 		"""Drop load command."""
@@ -151,12 +152,19 @@ class DroneClient(QObject):
 
 		# Start status updates
 		self.status_timer.start()
-		self.status_timer.start()
-		# self.video_timer.start()
-		# self.zmq_client.get_video_stream()
-		# self.zmq_client.get_processed_stream()
-		# self.processed_stream_window.start()
-		# self.video_stream_window.start()
+		print("Starting status timer")
+		self.video_timer.start()
+
+		self.video_stream_window.show()
+		self.processed_stream_window.show()
+
+		self.processed_stream_window.start()
+		self.video_stream_window.start()
+
+		# set windows frame dimensions
+		sh = self.zmq_client.get_current_frame().shape
+		self.video_stream_window.setWindowSize(sh[1], sh[0])
+		self.processed_stream_window.setWindowSize(sh[1], sh[0])
 
 		self.connection_status.emit(
 			True,
@@ -171,7 +179,6 @@ class DroneClient(QObject):
 	def disconnect(self, is_kamikaze=False):
 		"""Disconnect from the drone."""
 		if self.connected:
-			self.status_timer.stop()
 			if is_kamikaze:
 				self.kamikaze_connection.close()
 			else:
@@ -181,7 +188,13 @@ class DroneClient(QObject):
 			self.armed = False
 			self.flying = False
 			self.mission_active = False
+
 			self.status_timer.stop()
+			self.video_timer.stop()
+
+			self.video_stream_window.close()
+			self.processed_stream_window.close()
+
 			self.connection_status.emit(
 				False,
 				f"[MAVLink] Disconnecting from drone at {self.tcp_address}:{self.tcp_port}",
@@ -338,13 +351,13 @@ class DroneClient(QObject):
 		self.mission_progress.emit(0, "Mission cancelled")
 		return True
 
-	# def _video_stream(self):
-	# 	"""Thread function to handle video receiving"""
-	# 	# Display loop for video frames and handle keyboard commands
-	# 	self.zmq_client.get_video_stream(imshow_func=self.video_stream_window.imshow)
-	# 	self.zmq_client.get_processed_stream(
-	# 		imshow_func=self.processed_stream_window.imshow
-	# 	)
+	def _video_stream(self):
+		"""Thread function to handle video receiving"""
+		# Display loop for video frames and handle keyboard commands
+		self.zmq_client.get_video_stream(imshow_func=self.video_stream_window.imshow)
+		self.zmq_client.get_processed_stream(
+			imshow_func=self.processed_stream_window.imshow
+		)
 
 	def _update_status(self):
 		"""Update and emit drone status information."""
@@ -472,6 +485,15 @@ class CameraDisplay(QMainWindow):
 		self.label = QLabel(self)
 		self.label.setGeometry(0, 0, self.disp_width, self.disp_height)
 
+	def setWindowSize(self, width, height, channels=3):
+		"""Set the window size and position."""
+		self.disp_height = int(height * self.scale)
+		self.disp_width = int(width * self.scale)
+		self.setGeometry(100, 100, self.disp_width, self.disp_height)
+		self.channels = channels
+
+		# Update the label geometry to match the new window size
+		self.label.setGeometry(0, 0, self.disp_width, self.disp_height)
 
 	def _update_frame(self):
 		if self.frame is None:
@@ -479,6 +501,7 @@ class CameraDisplay(QMainWindow):
 			return
 		# First convert color space
 		frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+
 
 		# Then resize the frame
 		frame = cv2.resize(frame, (self.disp_width, self.disp_height))
@@ -512,22 +535,28 @@ class DroneControlApp(QMainWindow):
 	Main application window for drone control.
 	"""
 
-	def __init__(self, client):
+	def __init__(self, client, video_stream_window, processed_stream_window):
 		super().__init__()
 
 		# Set application properties
 		QApplication.instance().setProperty("timestamp_fn", self._get_timestamp)
 
+		# external windows
+		self.video_stream_window = video_stream_window
+		self.processed_stream_window = processed_stream_window
+
 		# Initialize UI components
-		self._init_ui()
 
 		# Initialize drone client
 		self.drone_client = DroneClient(
 			zmq_client=client,
-			# video_stream_window=self.video_stream_window,
-			# processed_stream_window=self.processed_stream_window,
-			logger=self.console.append_message,
+			video_stream_window=self.video_stream_window,
+			processed_stream_window=self.processed_stream_window,
 		)
+
+		self._init_ui()
+		self.drone_client.set_logger(self.console.append_message)
+
 		self.drone_client.connection_status.connect(self._on_connection_status_changed)
 		self.drone_client.drone_status_update.connect(self._on_drone_status_update)
 		self.drone_client.mission_progress.connect(self._on_mission_progress)
@@ -540,14 +569,12 @@ class DroneControlApp(QMainWindow):
 		self.console.append_message("Drone Control Center started", "info")
 		self.drone_client.set_logger(self.console.append_message)
 
+
 	def _init_ui(self):
 		"""Initialize the UI components."""
 		# Create main widget and layout
 		main_widget = QWidget()
 		main_layout = QVBoxLayout(main_widget)
-
-		# self.processed_stream_window = CameraDisplay(title="Processed Stream")
-		# self.video_stream_window = CameraDisplay(title="Raw Stream")
 
 		# Create connection controls
 		connection_group = QGroupBox("Connection")
@@ -616,6 +643,34 @@ class DroneControlApp(QMainWindow):
 		# Basic controls tab
 		basic_control_widget = QWidget()
 		basic_control_layout = QVBoxLayout(basic_control_widget)
+
+		controller_group = QGroupBox("Controller Controls")
+		controller_layout = QHBoxLayout(controller_group)
+
+		controller_row = QHBoxLayout()
+		# drop load
+		self.drop_load_btn = QPushButton("Drop Load")
+		self.drop_load_btn.clicked.connect(self.drone_client.drop_load)
+		# pick load
+		self.pick_load_btn = QPushButton("Pick Load")
+		self.pick_load_btn.clicked.connect(self.drone_client.pick_load)
+		# raise hook
+		self.raise_hook_btn = QPushButton("Raise Hook")
+		self.raise_hook_btn.clicked.connect(self.drone_client.raise_hook)
+		# drop hook
+		self.drop_hook_btn = QPushButton("Drop Hook")
+		self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
+		# kamikaze - red
+		self.kamikaze_btn = QPushButton("Kamikaze")
+		self.kamikaze_btn.setStyleSheet("background-color: red;color: black;")
+
+
+		controller_row.addWidget(self.drop_load_btn)
+		controller_row.addWidget(self.pick_load_btn)
+		controller_row.addWidget(self.raise_hook_btn)
+		controller_row.addWidget(self.drop_hook_btn)
+		controller_row.addWidget(self.kamikaze_btn)
+		controller_layout.addLayout(controller_row)
 
 		# Create drone control buttons
 		control_group = QGroupBox("Drone Controls")
@@ -694,6 +749,7 @@ class DroneControlApp(QMainWindow):
 		# Add all controls to the layout
 		control_layout.addLayout(controls_row1)
 		control_layout.addLayout(takeoff_layout)
+		basic_control_layout.addWidget(controller_group)
 		basic_control_layout.addWidget(control_group)
 		basic_control_layout.addWidget(goto_group)
 
@@ -1187,19 +1243,18 @@ class DroneControlApp(QMainWindow):
 
 
 def run_app(client):
-	app = QApplication(sys.argv)
-	window = DroneControlApp(client)
+	video_stream_window = CameraDisplay(title="Raw Stream")
+	processed_stream_window = CameraDisplay(title="Processed Stream")
+	window = DroneControlApp(client, video_stream_window, processed_stream_window)
 	window.show()
-	sys.exit(app.exec())
 
 
 def main():
-	"""Run the drone control application."""
 	app = QApplication(sys.argv)
+	"""Run the drone control application."""
 	client = ZMQClient()
 	client.start()
-	window = DroneControlApp(client)
-	window.show()
+	run_app(client)
 	sys.exit(app.exec())
 
 

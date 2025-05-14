@@ -267,6 +267,7 @@ class ZMQServer:
 					message = self.control_socket.recv_string()
 					response = self.handle_command(message)
 					self.control_socket.send_string(response)
+					logger.info(f"Received command: {message}, Response: {response}")
 			except zmq.ZMQError as e:
 				logger.error(f"ZMQ error in control receiver: {e}")
 				time.sleep(0.1)

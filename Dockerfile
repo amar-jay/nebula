@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y \
     make \
     tmux \
     locales \
-	 lsb-release
+	lsb-release
 
 
 # Set the locale
@@ -72,13 +72,12 @@ WORKDIR ${HOME}
 
 
 # Clone ArduPilot
-RUN git clone https://github.com/ArduPilot/ardupilot && \
+RUN git clone https://github.com/ArduPilot/ardupilot -b Copter-3.5 && \
     cd ardupilot && \
     git checkout "Copter-4.5" && \
     git submodule update --init --recursive
 
-RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 install packaging==21.3
+RUN pip3 install --upgrade pip setuptools wheel
 
 # Install ArduPilot prerequisites
 RUN bash -c "${HOME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y"

@@ -1,0 +1,26 @@
+simulation:
+  gazebo:
+    enabled: true
+    world_file: "path/to/world/file.world"
+    physics: 
+      type: "ode"
+      max_step_size: 0.01
+      real_time_factor: 1.0
+  ardupilot:
+    enabled: true
+    connection_string: "udp:127.0.0.1:14550"
+    system_id: 1
+    component_id: 1
+  object_detection:
+    model_path: "path/to/model/file"
+    confidence_threshold: 0.5
+  gps:
+    update_rate: 1.0
+    noise_stddev: 0.5
+  slam:
+    enabled: true
+    map_resolution: 0.05
+    max_range: 30.0
+  pathfinding:
+    algorithm: "A*"
+    max_iterations: 1000

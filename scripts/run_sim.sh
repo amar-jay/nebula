@@ -39,7 +39,7 @@ cleanup() {
   echo "Cleaning up temporary files..."
   # Add file cleanup commands here, for example:
   rm mav.tlog* mav.tlog.raw mav.parm eeprom.bin
-  rm -rf terrain/
+  rm -rf terrain/ logs/
   echo "Cleanup done."
 }
 

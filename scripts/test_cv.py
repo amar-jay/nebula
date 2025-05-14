@@ -108,7 +108,6 @@ def test_camera(backend=None, index=0, pipeline=None):
 	print(f"Resolution: {width}x{height}")
 	print(f"FPS: {fps}")
 
-
 	ret, _ = cap.read()
 	if not ret:
 		print("ERROR: Failed to read frame")
@@ -146,4 +145,3 @@ if __name__ == "__main__":
 
 	success = test_camera(backend, args.index, args.pipeline)
 	sys.exit(0 if success else 1)
-

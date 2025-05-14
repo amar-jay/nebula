@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 	QTextEdit,
 	QProgressBar,
 	QFileDialog,
+	QMenu,
 	QSplitter,
 )
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
@@ -29,6 +30,7 @@ from PySide6.QtGui import QFont, QIcon, QColor, QPalette
 
 from pymavlink import mavutil
 from controls.mavlink import gz
+from controls.mavlink.mission_types import Waypoint
 
 
 class DroneClient(QObject):
@@ -40,7 +42,7 @@ class DroneClient(QObject):
 	connection_status = Signal(bool, str)
 	mission_progress = Signal(int, str)
 
-	def __init__(self):
+	def __init__(self, logger=None):
 		super().__init__()
 		self.connected = False
 		self.tcp_address = ""
@@ -58,13 +60,14 @@ class DroneClient(QObject):
 		self.battery = 100
 		self.master_connection = None
 		self.kamikaze_connection = None
+		self.log = logger
 
 		# Setup status update timer
 		self.status_timer = QTimer(self)
 		self.status_timer.timeout.connect(self._update_status)
 		self.status_timer.setInterval(5000)  # Update every second
 
-	def connect_to_drone(self, address, port, is_kamikaze=False):
+	def connect_to_drone(self, connection_string, is_kamikaze=False):
 		"""Connect to drone at the specified TCP address and port."""
 
 		# In a real implementation, establish TCP connection here
@@ -74,22 +77,30 @@ class DroneClient(QObject):
 		#     self.connection_status.emit(False, "Connection failed")
 		#     return False
 
+		if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
+			address, port = connection_string[4:].split(":")
+			port = int(port)
+
 		if is_kamikaze:
-			self.kamikaze_connection = mavutil.mavlink_connection(
-				f"udp:{address}:{port}"
-			)
+			self.kamikaze_connection = gz.ArdupilotConnection(connection_string)
 			self.k_tcp_address = address
 			self.k_tcp_port = port
 			self.k_connected = True
 			self.kamikaze_connection.wait_heartbeat()
 		else:
-			self.master_connection = gz.GazeboConnection(f"udp:{address}:{port}")
+			self.master_connection = gz.GazeboConnection(
+				connection_string=connection_string,
+				world="delivery_runway",
+				model_name="iris_with_stationary_gimbal",
+				camera_link="tilt_link",
+				logger=lambda *message: self.log(
+					f"[MAVLink] {' '.join(map(str, message))}",
+				)
+			)
 			self.tcp_address = address
 			self.tcp_port = port
 			self.connected = True
-			self.master_connection.wait_heartbeat()
 
-		print(f"[MOCK] Connecting to drone at {address}:{port}")
 		# Start status updates
 		self.status_timer.start()
 
@@ -99,6 +110,9 @@ class DroneClient(QObject):
 		)
 		# self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
 		return True
+
+	def set_logger(self, logger):
+		self.log = logger
 
 	def disconnect(self, is_kamikaze=False):
 		"""Disconnect from the drone."""
@@ -125,22 +139,21 @@ class DroneClient(QObject):
 			return False
 		print("Arming drone...")
 
-		mavlink.gz.arm(
-			self.master_connection if not is_kamikaze else self.kamikaze_connection
-		)
-		done = mavlink.gz.enable_streaming(
-			world="delivery_runway",
-			model_name="iris_with_stationary_gimbal",
-			camera_link="tilt_link",
-		)
+		if is_kamikaze:
+			self.kamikaze_connection.arm()
+		else:
+			self.master_connection.arm()
+		done = self.master_connection.enable_streaming()
 		if not done:
 			print("❌ Failed to enable streaming.")
 			return False
 		self.armed = True
 
-		location = mavlink.gz.get_current_gps_location(
-			self.master_connection if not is_kamikaze else self.kamikaze_connection
-		)
+		if is_kamikaze:
+			location = self.kamikaze_connection.get_current_gps_location()
+		else:
+			location = self.master_connection.get_current_gps_location()
+
 		if location is None:
 			print("❌ Failed to get current GPS location.")
 			exit(1)
@@ -154,11 +167,14 @@ class DroneClient(QObject):
 
 	def disarm(self):
 		"""Disarm the drone."""
-		if not self.connected or self.flying:
+		if not self.connected:
 			return False
 
-		print("[MOCK] Disarming drone")
+		if not self.armed or not self.flying:
+			self.log("Disarming a unarmed or not flying drone")
+
 		self.armed = False
+		self.master_connection.disarm()
 		return True
 
 	def takeoff(self, altitude):
@@ -209,11 +225,8 @@ class DroneClient(QObject):
 		if not self.connected:
 			return False
 
-		print(waypoints)
-		print(f"[MOCK] Uploading mission with {len(waypoints)} waypoints")
 		self.mission_waypoints = waypoints
 		self.master_connection.upload_mission(waypoints)
-		print(waypoints)
 		return True
 
 	def start_mission(self):
@@ -225,22 +238,42 @@ class DroneClient(QObject):
 		self.mission_active = True
 		self.flying = True
 		self.current_waypoint_index = 0
+		self.mission_completed = False
+
+		self.master_connection.start_mission()
+		self.mission_progress.emit(0, "Mission started")
+
+		def _update_status_hook(current, done):
+			self.current_waypoint_index = current
+			self.mission_completed = done
+			msg = f"Moving to waypoint {current + 1}/{len(self.mission_waypoints)}"
+			self.mission_progress.emit(
+				int((current + 1) * 100 / len(self.mission_waypoints)), msg
+			)
+
+		self.master_connection.monitor_mission_progress(
+			timeout=10000,
+			_update_status_hook=_update_status_hook,
+		)
 
 		# Simulate mission execution
-		for i, waypoint in enumerate(self.mission_waypoints):
-			self.current_waypoint_index = i
-			msg = f"Moving to waypoint {i + 1}/{len(self.mission_waypoints)}"
-			self.mission_progress.emit(
-				int((i + 1) * 100 / len(self.mission_waypoints)), msg
-			)
-			# In real implementation, this would be asynchronous
-			self.current_position = {
-				"lat": waypoint["lat"],
-				"lon": waypoint["lon"],
-				"alt": waypoint["alt"],
-			}
+		# for i, waypoint in enumerate(self.mission_waypoints):
+		# 	self.current_waypoint_index = i
+		# 	self.mission_progress.emit(
+		# 		int((i + 1) * 100 / len(self.mission_waypoints)), msg
+		# 	)
+		# 	# In real implementation, this would be asynchronous
+		# 	self.current_position = {
+		# 		"lat": waypoint.lat,
+		# 		"lon": waypoint.lon,
+		# 		"alt": waypoint.alt,
+		# 	}
 
 		return True
+
+	def clear_mission(self):
+		self.master_connection.clear_mission()
+		return
 
 	def cancel_mission(self):
 		"""Cancel the current mission."""
@@ -282,13 +315,13 @@ class MissionWaypointTable(QTableWidget):
 		super().__init__(parent)
 		self.setColumnCount(5)
 		self.setHorizontalHeaderLabels(
-			["#", "Latitude", "Longitude", "Altitude (m)", "Actions"]
+			["#", "Latitude", "Longitude", "Altitude (m)", "Hold", "Actions"]
 		)
 		self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 		self.setEditTriggers(QTableWidget.DoubleClicked)
 		self.verticalHeader().setVisible(False)
 
-	def add_waypoint(self, index, lat, lon, alt):
+	def add_waypoint(self, index, lat, lon, alt, hold=10):
 		"""Add a new waypoint to the table."""
 		row = self.rowCount()
 		self.insertRow(row)
@@ -298,13 +331,14 @@ class MissionWaypointTable(QTableWidget):
 		self.setItem(row, 1, QTableWidgetItem(str(lat)))
 		self.setItem(row, 2, QTableWidgetItem(str(lon)))
 		self.setItem(row, 3, QTableWidgetItem(str(alt)))
+		self.setItem(row, 4, QTableWidgetItem(str(hold)))
 
 		# Add delete button
 		delete_btn = QPushButton("Delete")
 		delete_btn.clicked.connect(
 			lambda: self.removeRow(self.indexAt(delete_btn.pos()).row())
 		)
-		self.setCellWidget(row, 4, delete_btn)
+		self.setCellWidget(row, 5, delete_btn)
 
 	def clear_waypoints(self):
 		"""Clear all waypoints from the table."""
@@ -314,11 +348,12 @@ class MissionWaypointTable(QTableWidget):
 		"""Get all waypoints from the table."""
 		waypoints = []
 		for row in range(self.rowCount()):
-			waypoint = {
-				"lat": float(self.item(row, 1).text()),
-				"lon": float(self.item(row, 2).text()),
-				"alt": float(self.item(row, 3).text()),
-			}
+			waypoint = Waypoint(
+				lat= float(self.item(row, 1).text()),
+				lon= float(self.item(row, 2).text()),
+				alt= float(self.item(row, 3).text()),
+				hold= int(self.item(row, 4).text()),
+			)
 			waypoints.append(waypoint)
 		return waypoints
 
@@ -382,6 +417,7 @@ class DroneControlApp(QMainWindow):
 
 		# Log application start
 		self.console.append_message("Drone Control Center started", "info")
+		self.drone_client.set_logger(self.console.append_message)
 
 	def _init_ui(self):
 		"""Initialize the UI components."""
@@ -404,6 +440,16 @@ class DroneControlApp(QMainWindow):
 
 		self.connect_btn = QPushButton("Connect")
 		self.connect_btn.clicked.connect(self._on_connect_clicked)
+		self.connect_menu = QMenu(self)
+		self.connect_action = self.connect_menu.addAction("Standard Connect")
+		self.connect_action.triggered.connect(lambda: self._on_connect_clicked)
+		self.connect_action = self.connect_menu.addAction("TCP Connect")
+		self.connect_action.triggered.connect(lambda: self._on_connect_clicked(_type="tcp"))
+		self.connect_auto_action = self.connect_menu.addAction("Serial (/dev/ttyAMA0)")
+		self.connect_auto_action.triggered.connect(self._on_serial_connect_clicked)
+		self.connect_sitl_action = self.connect_menu.addAction("USB (/dev/ttyUSB0)")
+		self.connect_sitl_action.triggered.connect(self._on_usb_connect_clicked)
+		self.connect_btn.setMenu(self.connect_menu)
 
 		self.disconnect_btn = QPushButton("Disconnect")
 		self.disconnect_btn.clicked.connect(self._on_disconnect_clicked)
@@ -437,6 +483,7 @@ class DroneControlApp(QMainWindow):
 		kamikaze_connection_layout.addWidget(self.k_tcp_port_input)
 		kamikaze_connection_layout.addWidget(self.k_connect_btn)
 		kamikaze_connection_layout.addWidget(self.k_disconnect_btn)
+
 
 		# Create tab widget for different control panels
 		tab_widget = QTabWidget()
@@ -587,6 +634,11 @@ class DroneControlApp(QMainWindow):
 		self.waypoint_alt_input.setSingleStep(1.0)
 		self.waypoint_alt_input.setValue(10.0)
 
+		self.waypoint_hold_input = QDoubleSpinBox()
+		self.waypoint_hold_input.setRange(0, 60)
+		self.waypoint_hold_input.setValue(10)
+		self.waypoint_hold_input.setSingleStep(1)
+
 		self.add_waypoint_btn = QPushButton("Add")
 		self.add_waypoint_btn.clicked.connect(self._on_add_waypoint_clicked)
 
@@ -596,6 +648,8 @@ class DroneControlApp(QMainWindow):
 		add_waypoint_layout.addWidget(self.waypoint_lon_input)
 		add_waypoint_layout.addWidget(QLabel("Altitude (m):"))
 		add_waypoint_layout.addWidget(self.waypoint_alt_input)
+		add_waypoint_layout.addWidget(QLabel("Hold (s):"))
+		add_waypoint_layout.addWidget(self.waypoint_hold_input)
 		add_waypoint_layout.addWidget(self.add_waypoint_btn)
 
 		# Mission file operations
@@ -676,7 +730,7 @@ class DroneControlApp(QMainWindow):
 
 		return datetime.now().strftime("%H:%M:%S")
 
-	def _on_connect_clicked(self):
+	def _on_connect_clicked(self, _type="udp"):
 		"""Handle connect button click."""
 		address = self.tcp_address_input.text()
 		port = self.tcp_port_input.value()
@@ -686,8 +740,8 @@ class DroneControlApp(QMainWindow):
 			return
 
 		self.console.append_message(f"Connecting to {address}:{port}...", "info")
-
-		if self.drone_client.connect_to_drone(address, port):
+		connection_string = f"{_type}:{address}:{port}"
+		if self.drone_client.connect_to_drone(connection_string):
 			self.connect_btn.setEnabled(False)
 			self.disconnect_btn.setEnabled(True)
 			self.arm_btn.setEnabled(True)
@@ -696,6 +750,37 @@ class DroneControlApp(QMainWindow):
 		else:
 			self.console.append_message(
 				f"Failed to connect to {address}:{port}", "error"
+			)
+	def _on_serial_connect_clicked(self):
+		"""Handle connect button click."""
+
+		serial_connection_string = "/dev/ttyAMA0"
+		self.console.append_message(f"Connecting to {serial_connection_string}...", "info")
+		if self.drone_client.connect_to_drone(serial_connection_string):
+			self.connect_btn.setEnabled(False)
+			self.disconnect_btn.setEnabled(True)
+			self.arm_btn.setEnabled(True)
+			self.upload_mission_btn.setEnabled(True)
+			self.console.append_message(f"Connected to {serial_connection_string}", "success")
+		else:
+			self.console.append_message(
+				f"Failed to connect to {serial_connection_string}", "error"
+			)
+
+	def _on_usb_connect_clicked(self):
+		"""Handle connect button click."""
+		usb_connection_string = "/dev/ttyUSB0"
+		self.console.append_message(f"Connecting to {usb_connection_string}...", "info")
+
+		if self.drone_client.connect_to_drone(usb_connection_string):
+			self.connect_btn.setEnabled(False)
+			self.disconnect_btn.setEnabled(True)
+			self.arm_btn.setEnabled(True)
+			self.upload_mission_btn.setEnabled(True)
+			self.console.append_message(f"Connected to {usb_connection_string}", "success")
+		else:
+			self.console.append_message(
+				f"Failed to connect to {usb_connection_string}", "error"
 			)
 
 	def _on_disconnect_clicked(self):
@@ -810,6 +895,7 @@ class DroneControlApp(QMainWindow):
 					waypoint.get("lat", 0),
 					waypoint.get("lon", 0),
 					waypoint.get("alt", 0),
+					waypoint.get("hold", 10),
 				)
 
 			self.console.append_message(f"Loaded mission from {file_path}", "success")
@@ -889,7 +975,11 @@ class DroneControlApp(QMainWindow):
 		# Update armed status
 		if status.get("armed", False):
 			self.armed_status_label.setText("Armed")
+			self.arm_btn.setEnabled(False)
+			self.disarm_btn.setEnabled(True)
 		else:
+			self.arm_btn.setEnabled(True)
+			self.disarm_btn.setEnabled(False)
 			self.armed_status_label.setText("Disarmed")
 
 		# Update flight status

@@ -1,0 +1,23 @@
+drone_control_system:
+  drone:
+    max_altitude: 120
+    max_speed: 15
+    battery_capacity: 5000
+    telemetry_interval: 1
+  communication:
+    zmq_address: "tcp://localhost:5555"
+    message_timeout: 5000
+  navigation:
+    gps:
+      update_interval: 0.5
+      accuracy_threshold: 5
+    slam:
+      map_resolution: 0.05
+      max_range: 30
+  ml:
+    object_detection:
+      model_path: "models/yolo.h5"
+      confidence_threshold: 0.5
+  logging:
+    log_level: "INFO"
+    log_file: "logs/drone_control.log"

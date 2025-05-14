@@ -165,7 +165,7 @@ class DroneClient(QObject):
 
 		# set windows frame dimensions
 		frame = self.zmq_client.get_current_frame()
-		if frame:
+		if frame is not None:
 			sh = frame.shape
 			self.video_stream_window.setWindowSize(sh[1], sh[0])
 			self.processed_stream_window.setWindowSize(sh[1], sh[0])

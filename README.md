@@ -24,6 +24,7 @@ This project uses **Git submodules**, so make sure to follow the correct steps w
 git clone --recurse-submodules https://github.com/amar-jay/nebula.git
 cd nebula
 git submodule update --remote --merge
+git submodule update --init --recursive
 ```
 
 

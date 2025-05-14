@@ -749,9 +749,9 @@ class DroneControlApp(QMainWindow):
 		# Add all controls to the layout
 		control_layout.addLayout(controls_row1)
 		control_layout.addLayout(takeoff_layout)
-		basic_control_layout.addWidget(controller_group)
 		basic_control_layout.addWidget(control_group)
 		basic_control_layout.addWidget(goto_group)
+		basic_control_layout.addWidget(controller_group)
 
 		# Create status display
 		status_group = QGroupBox("Drone Status")

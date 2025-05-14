@@ -57,14 +57,18 @@ git submodule update --init --recursive
 - **YOLO**: A state-of-the-art object detection system, used for detecting and tracking objects in the simulation.
 
 ### Commands
-```
+```bash
 python3 -m src.controls.mavlink.gz # test gazebo simulation and video streaming
 ```
 
-```
+```bash
 python -m src.mq.example_zmq_server # running an example zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
 ```
 
-```
+```bash
 python -m src.mq.example_zmq_reciever # the client of the zmq server.
+```
+
+```bash
+python -m src.example_gcs # to run the Ground Control Station Application
 ```

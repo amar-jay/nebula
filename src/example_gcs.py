@@ -52,6 +52,7 @@ class DroneClient(QObject):
 		logger=None,
 		video_stream_window=None,
 		processed_stream_window=None,
+		is_simulation=False,
 	):
 		super().__init__()
 		self.connected = False
@@ -74,6 +75,7 @@ class DroneClient(QObject):
 		self.zmq_client = zmq_client
 		self.video_stream_window = video_stream_window
 		self.processed_stream_window = processed_stream_window
+		self.is_simulation = is_simulation
 
 
 		# Setup status update timer
@@ -162,14 +164,19 @@ class DroneClient(QObject):
 		self.video_stream_window.start()
 
 		# set windows frame dimensions
-		sh = self.zmq_client.get_current_frame().shape
-		self.video_stream_window.setWindowSize(sh[1], sh[0])
-		self.processed_stream_window.setWindowSize(sh[1], sh[0])
+		frame = self.zmq_client.get_current_frame()
+		if frame:
+			sh = frame.shape
+			self.video_stream_window.setWindowSize(sh[1], sh[0])
+			self.processed_stream_window.setWindowSize(sh[1], sh[0])
+
+
 
 		self.connection_status.emit(
 			True,
 			f"[MAVLink] Connected to {address}:{port} for {'Kamikaze' if is_kamikaze else 'Drone'}",
 		)
+
 		# self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
 		return True
 
@@ -201,7 +208,7 @@ class DroneClient(QObject):
 			)
 
 	def arm(self, is_kamikaze=False):
-		"""Arm the drone. and enable streaming."""
+		"""Arm the drone."""
 		if not self.connected:
 			return False
 		print("Arming drone...")
@@ -210,10 +217,11 @@ class DroneClient(QObject):
 			self.kamikaze_connection.arm()
 		else:
 			self.master_connection.arm()
-		done = self.master_connection.enable_streaming()
-		if not done:
-			print("❌ Failed to enable streaming.")
-			return False
+
+		if self.connected and self.is_simulation:
+			done = self.master_connection.enable_streaming()
+			if not done:
+				print("❌ Failed to enable streaming.")
 		self.armed = True
 
 		if is_kamikaze:
@@ -225,6 +233,7 @@ class DroneClient(QObject):
 			print("❌ Failed to get current GPS location.")
 			exit(1)
 
+		self.armed = True
 		lat, lon, alt = location
 		if is_kamikaze:
 			self.k_current_position = {"lat": lat, "lon": lon, "alt": alt}
@@ -497,7 +506,6 @@ class CameraDisplay(QMainWindow):
 
 	def _update_frame(self):
 		if self.frame is None:
-			print("No frame to display")
 			return
 		# First convert color space
 		frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
@@ -535,7 +543,7 @@ class DroneControlApp(QMainWindow):
 	Main application window for drone control.
 	"""
 
-	def __init__(self, client, video_stream_window, processed_stream_window):
+	def __init__(self, client, video_stream_window, processed_stream_window, is_simulation=False):
 		super().__init__()
 
 		# Set application properties
@@ -552,6 +560,7 @@ class DroneControlApp(QMainWindow):
 			zmq_client=client,
 			video_stream_window=self.video_stream_window,
 			processed_stream_window=self.processed_stream_window,
+			is_simulation=is_simulation,
 		)
 
 		self._init_ui()
@@ -1243,9 +1252,17 @@ class DroneControlApp(QMainWindow):
 
 
 def run_app(client):
+	# parse command line arguments for simulation mode
+	parser = argparse.ArgumentParser(description="Drone Control Center")
+	parser.add_argument(
+		"--is-simulation", action="store_true", help="Run in simulation mode"
+	)
+	args = parser.parse_args()
+	is_simulation = args.is_simulation
+
 	video_stream_window = CameraDisplay(title="Raw Stream")
 	processed_stream_window = CameraDisplay(title="Processed Stream")
-	window = DroneControlApp(client, video_stream_window, processed_stream_window)
+	window = DroneControlApp(client, video_stream_window, processed_stream_window, is_simulation)
 	window.show()
 
 
@@ -1259,4 +1276,5 @@ def main():
 
 
 if __name__ == "__main__":
+	import argparse
 	main()

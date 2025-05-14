@@ -63,7 +63,10 @@ python3 -m src.controls.mavlink.gz # test gazebo simulation and video streaming
 
 ```bash
 python -m src.mq.example_zmq_server # running an example zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
+
+python -m src.mq.example_zmq_server --is-simulation # this is the simulation version of the zmq server
 ```
+
 
 ```bash
 python -m src.mq.example_zmq_reciever # the client of the zmq server.
@@ -71,4 +74,5 @@ python -m src.mq.example_zmq_reciever # the client of the zmq server.
 
 ```bash
 python -m src.example_gcs # to run the Ground Control Station Application
+python -m src.example_gcs --is-simulation # to run the Ground Control Station Application in simulation mode
 ```

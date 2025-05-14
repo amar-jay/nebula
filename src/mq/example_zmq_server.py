@@ -12,6 +12,7 @@ import threading
 import time
 from pymavlink import mavutil
 from .messages import ZMQTopics
+from src.controls.mavlink import gz
 
 logging.basicConfig(
 	level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -125,13 +126,18 @@ def forward_from_serial_to_tcp():
 
 class ZMQServer:
 	def __init__(
-		self, video_port: int = 5555, control_port: int = 5556, video_source: int = 0
+		self,
+		video_port: int = 5555,
+		control_port: int = 5556,
+		video_source: int = 0,
+		is_simulation: bool = False,
 	):
 		"""
 		video_port: Port for video frame publishing
 		control_port: Port for receiving control commands
 		video_source: Camera device ID or video file path
 		"""
+		self.is_simulation = is_simulation
 		self.context = zmq.Context()
 
 		# Video publisher socket (PUB-SUB pattern)
@@ -154,6 +160,14 @@ class ZMQServer:
 		self.video_thread = None
 		self.control_thread = None
 
+		# Enable video streaming for simulation
+		if self.is_simulation:
+			print("Enabling video streaming")
+			done = self.master_connection.enable_streaming()
+			print("Enabling streaming")
+			if not done:
+				print("❌ Failed to enable streaming.")
+				return False
 		logger.info(
 			f"Server initialized with video port {video_port} and control port {control_port}"
 		)
@@ -161,7 +175,10 @@ class ZMQServer:
 	def start_capture(self) -> bool:
 		"""Start the video capture"""
 		try:
-			self.cap = cv2.VideoCapture(self.video_source)
+			if self.is_simulation:
+				self.cap = gz.GazeboVideoCapture()
+			else:
+				self.cap = cv2.VideoCapture(self.video_source)
 			if not self.cap.isOpened():
 				logger.error(f"Failed to open video source {self.video_source}")
 				return False
@@ -318,6 +335,10 @@ def main():
 		description="ZMQ Video Server with Control Interface"
 	)
 	parser.add_argument(
+		"--is-simulation", action="store_true", help="Run in simulation mode"
+	)
+
+	parser.add_argument(
 		"--video-port", type=int, default=5555, help="Port for video publishing"
 	)
 	parser.add_argument(
@@ -335,6 +356,7 @@ def main():
 		pass  # Keep as string if it's not a number (e.g., file path)
 
 	server = ZMQServer(
+		is_simulation=args.is_simulation,
 		video_port=args.video_port,
 		control_port=args.control_port,
 		video_source=args.video_source,

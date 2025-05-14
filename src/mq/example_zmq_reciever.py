@@ -8,13 +8,14 @@ import argparse
 import logging
 from typing import Optional
 from .messages import ZMQTopics
+
 logging.basicConfig(
 	level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("zmq-video-client")
 
 
-class VideoClient:
+class Client:
 	def __init__(
 		self,
 		server_ip: str = "localhost",
@@ -54,6 +55,10 @@ class VideoClient:
 		self.current_frame = None
 		self.frame_lock = threading.Lock()
 
+		# processed frame storage
+		self.processed_frame = None
+		self.processed_frame_lock = threading.Lock()
+
 		logger.info(
 			f"Client initialized, connecting to {server_ip} on video port {video_port} and control port {control_port}"
 		)
@@ -77,15 +82,21 @@ class VideoClient:
 					frame = cv2.imdecode(jpg_buffer, cv2.IMREAD_COLOR)
 
 					# Update current frame with thread safety
-					with self.frame_lock:
-						self.current_frame = frame
+					if topic == b"processed_video":
+						with self.processed_frame_lock:
+							self.processed_frame = frame
+					elif topic == b"video":
+						with self.frame_lock:
+							self.current_frame = frame
+					else:
+						logger.warning(f"Unknown topic received: {topic}")
 
 					# FPS calculation
-					fps_count += 1
-					if time.time() - fps_timer > 5:  # Log FPS every 5 seconds
-						# logger.info(f"Receiving video at {fps_count / 5:.2f} FPS")
-						fps_count = 0
-						fps_timer = time.time()
+					# fps_count += 1
+					# if time.time() - fps_timer > 10:  # Log FPS every 5 seconds
+					# 	logger.info(f"Receiving video at {fps_count / 5:.2f} FPS")
+					# 	fps_count = 0
+					# 	fps_timer = time.time()
 			except zmq.ZMQError as e:
 				logger.error(f"ZMQ error in video receiver: {e}")
 				time.sleep(0.1)
@@ -104,13 +115,13 @@ class VideoClient:
 			logger.error(f"Failed to send command: {e}")
 			return None
 
-	def get_current_frame(self) -> Optional[np.ndarray]:
-		"""
-		Get the most recent frame received from the server
+	def get_current_processed_frame(self) -> Optional[np.ndarray]:
+		with self.processed_frame_lock:
+			if self.processed_frame is not None:
+				return self.processed_frame.copy()
+			return None
 
-		Returns:
-		    Current video frame or None if no frame received
-		"""
+	def get_current_frame(self) -> Optional[np.ndarray]:
 		with self.frame_lock:
 			if self.current_frame is not None:
 				return self.current_frame.copy()
@@ -146,43 +157,32 @@ class VideoClient:
 
 		logger.info("Client stopped")
 
-
-def video_thread_func(client: VideoClient):
-	"""Thread function to handle video receiving"""
-	# Display loop for video frames and handle keyboard commands
-	while True:
-		frame = client.get_current_frame()
+	def get_video_stream(self, imshow_func=None):
+		frame = self.get_current_frame()
 		if frame is not None:
-			# Add hook state text to the frame
-			response = client.send_command(ZMQTopics.STATUS)
-			if response:
-				# Extract the hook state from response
-				hook_text = response.split(": ")[1] if ": " in response else "Unknown"
-				cv2.putText(
-					frame,
-					f"Hook: {hook_text}",
-					(10, 30),
-					cv2.FONT_HERSHEY_SIMPLEX,
-					1,
-					(0, 255, 0),
-					2,
-				)
+			if imshow_func is not None:
+				imshow_func(frame)
+			else:
+				cv2.imshow("ZMQ Video Client", frame)
+				key = cv2.waitKey(1) & 0xFF
+				if key == ord("q"):
+					return
 
-				# Display the frame
-			cv2.imshow("ZMQ Video Client", frame)
+	def get_processed_stream(self, imshow_func=None):
+		frame = self.get_current_processed_frame()
+		if frame is not None:
+			if imshow_func is not None:
+				imshow_func(frame)
+			else:
+				cv2.imshow("Processed Video", frame)
 
-			# Handle keyboard input
-		key = cv2.waitKey(1) & 0xFF
-		if key == ord("q"):
-			break
-
-		time.sleep(0.05)  # Small delay to prevent CPU usage spike
+			key = cv2.waitKey(1) & 0xFF
+			if key == ord("q"):
+				return
 
 
 def main():
-	from pymavlink import mavutil
 	from src.controls.mavlink.ardupilot import ArdupilotConnection
-
 
 	parser = argparse.ArgumentParser(
 		description="ZMQ Video Client with Control Interface"
@@ -198,19 +198,27 @@ def main():
 	)
 	args = parser.parse_args()
 
+	print("ZMQ Video Client with Control Interface\n")
 	connection = ArdupilotConnection("tcp:127.0.0.1:16550")
-	client = VideoClient(
+	print("ZMQ Video Client with Control Interface\n")
+	client = Client(
 		server_ip=args.server,
 		video_port=args.video_port,
 		control_port=args.control_port,
 	)
+
+	def video_thread_func(client):
+		while client.running:
+			client.get_video_stream()
+			client.get_processed_stream()
+			time.sleep(0.01)
 
 	video_thread = threading.Thread(
 		target=video_thread_func, args=(client,), daemon=True
 	)
 
 	try:
-		client
+		client.start()
 		video_thread.start()
 		logger.info(
 			"Client running. Press 'q' to quit, 'r' to raise hook, 'd' to drop hook"

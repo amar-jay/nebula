@@ -128,9 +128,9 @@ class ZMQServer:
 		self, video_port: int = 5555, control_port: int = 5556, video_source: int = 0
 	):
 		"""
-		    video_port: Port for video frame publishing
-		    control_port: Port for receiving control commands
-		    video_source: Camera device ID or video file path
+		video_port: Port for video frame publishing
+		control_port: Port for receiving control commands
+		video_source: Camera device ID or video file path
 		"""
 		self.context = zmq.Context()
 
@@ -170,15 +170,19 @@ class ZMQServer:
 			logger.error(f"Error starting video capture: {e}")
 			return False
 
-	def encode_frame(self, frame: np.ndarray) -> Tuple[bytes, bytes]:
+	def encode_frame(self, frame: np.ndarray, _type="raw") -> Tuple[bytes, bytes]:
 		"""
 		Encode a frame to JPEG and prepare it for sending
 
 		Returns:
 		    Tuple of (topic, jpeg_bytes)
 		"""
+		if _type == "raw":
+			topic = b"video"
+		else:
+			topic = b"processed_video"
 		_, jpeg_frame = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-		return b"video", jpeg_frame.tobytes()
+		return topic, jpeg_frame.tobytes()
 
 	def video_publisher_loop(self):
 		"""Video publishing loop - runs in a separate thread"""
@@ -202,9 +206,16 @@ class ZMQServer:
 			topic, encoded_frame = self.encode_frame(frame)
 			self.video_socket.send_multipart([topic, encoded_frame])
 
+			# send the processed frame to the serial connection
+			processed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			topic, processed_encoded_frame = self.encode_frame(
+				processed_frame, _type="processed"
+			)
+			self.video_socket.send_multipart([topic, processed_encoded_frame])
+
 			# FPS calculation
 			fps_count += 1
-			if time.time() - fps_timer > 5:  # Log FPS every 5 seconds
+			if time.time() - fps_timer > 10:  # Log FPS every 5 seconds
 				logger.info(f"Publishing video at {fps_count / 5:.2f} FPS")
 				fps_count = 0
 				fps_timer = time.time()

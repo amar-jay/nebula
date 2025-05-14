@@ -1,4 +1,6 @@
 import sys
+import time
+import cv2
 import json
 
 from PySide6.QtWidgets import (
@@ -25,12 +27,14 @@ from PySide6.QtWidgets import (
 	QMenu,
 	QSplitter,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
-from PySide6.QtGui import QFont, QIcon, QColor, QPalette
 
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
+from PySide6.QtGui import QFont, QIcon, QColor, QPalette, QImage, QPixmap
+from .mq.messages import ZMQTopics
+from .mq.example_zmq_reciever import Client as ZMQClient
 from pymavlink import mavutil
-from controls.mavlink import gz
-from controls.mavlink.mission_types import Waypoint
+from .controls.mavlink import gz
+from .controls.mavlink.mission_types import Waypoint
 
 
 class DroneClient(QObject):
@@ -42,7 +46,13 @@ class DroneClient(QObject):
 	connection_status = Signal(bool, str)
 	mission_progress = Signal(int, str)
 
-	def __init__(self, logger=None):
+	def __init__(
+		self,
+		zmq_client: ZMQClient = None,
+		logger=None,
+		video_stream_window=None,
+		processed_stream_window=None,
+	):
 		super().__init__()
 		self.connected = False
 		self.tcp_address = ""
@@ -61,21 +71,59 @@ class DroneClient(QObject):
 		self.master_connection = None
 		self.kamikaze_connection = None
 		self.log = logger
+		self.zmq_client = zmq_client
+		# self.video_stream_window = video_stream_window
+		# self.processed_stream_window = processed_stream_window
 
 		# Setup status update timer
 		self.status_timer = QTimer(self)
 		self.status_timer.timeout.connect(self._update_status)
 		self.status_timer.setInterval(5000)  # Update every second
 
+		# Setup video stream thread
+		# self.video_running = False
+		# self.video_timer = QTimer(self)
+		# self.video_timer.timeout.connect(self._video_stream)
+		# self.video_timer.setInterval(100)  # Update every 100ms
+
+	def drop_load(self):
+		"""Drop load command."""
+		if not self.connected:
+			return False
+
+		msg = self.zmq_client.send_command(ZMQTopics.DROP_LOAD)
+		self.log(msg)
+		return
+
+	def pick_load(self):
+		"""Pick load command."""
+		if not self.connected:
+			return False
+
+		msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD)
+		self.log(msg)
+		return
+
+	def raise_hook(self):
+		"""Raise hook command."""
+		if not self.connected:
+			return False
+
+		msg = self.zmq_client.send_command(ZMQTopics.RAISE_HOOK)
+		self.log(msg)
+		return
+
+	def drop_hook(self):
+		"""Drop hook command."""
+		if not self.connected:
+			return False
+
+		msg = self.zmq_client.send_command(ZMQTopics.DROP_HOOK)
+		self.log(msg)
+		return
+
 	def connect_to_drone(self, connection_string, is_kamikaze=False):
 		"""Connect to drone at the specified TCP address and port."""
-
-		# In a real implementation, establish TCP connection here
-
-		# if connection is None:
-		#     print(f"[MOCK] Failed to connect to drone at {address}:{port}")
-		#     self.connection_status.emit(False, "Connection failed")
-		#     return False
 
 		if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
 			address, port = connection_string[4:].split(":")
@@ -103,6 +151,12 @@ class DroneClient(QObject):
 
 		# Start status updates
 		self.status_timer.start()
+		self.status_timer.start()
+		# self.video_timer.start()
+		# self.zmq_client.get_video_stream()
+		# self.zmq_client.get_processed_stream()
+		# self.processed_stream_window.start()
+		# self.video_stream_window.start()
 
 		self.connection_status.emit(
 			True,
@@ -192,7 +246,7 @@ class DroneClient(QObject):
 		if not self.connected or not self.flying:
 			return False
 
-		print("[MOCK] Landing drone")
+		self.master_connection.land()
 		self.flying = False
 		self.current_position["alt"] = 0.0
 		return True
@@ -216,7 +270,6 @@ class DroneClient(QObject):
 
 		self.master_connection.goto_waypointv2(curr_lat + lat, curr_lon + lon, alt)
 
-		print(f"[MOCK] Moving to coordinates: Lat {lat}, Lon {lon}, Alt {alt}m")
 		self.current_position = {"lat": lat, "lon": lon, "alt": alt}
 		return True
 
@@ -234,8 +287,6 @@ class DroneClient(QObject):
 		if not self.connected or not self.armed or not self.mission_waypoints:
 			return False
 
-		print("[MOCK] Starting mission")
-		self.mission_active = True
 		self.flying = True
 		self.current_waypoint_index = 0
 		self.mission_completed = False
@@ -251,10 +302,15 @@ class DroneClient(QObject):
 				int((current + 1) * 100 / len(self.mission_waypoints)), msg
 			)
 
-		self.master_connection.monitor_mission_progress(
-			timeout=10000,
-			_update_status_hook=_update_status_hook,
+		self.mission_progress_timer = QTimer(self)
+		self.mission_progress_timer.timeout.connect(
+			lambda: self.master_connection.monitor_mission_progress(
+				timeout=10000,
+				_update_status_hook=_update_status_hook,
+				in_loop=True,
+			)
 		)
+		self.mission_progress_timer.start(1000)
 
 		# Simulate mission execution
 		# for i, waypoint in enumerate(self.mission_waypoints):
@@ -271,20 +327,24 @@ class DroneClient(QObject):
 
 		return True
 
-	def clear_mission(self):
-		self.master_connection.clear_mission()
-		return
-
 	def cancel_mission(self):
 		"""Cancel the current mission."""
 		if not self.connected or not self.mission_active:
 			return False
 
-		print("[MOCK] Cancelling mission")
+		self.master_connection.clear_mission()
 		self.mission_active = False
 		self.current_waypoint_index = -1
 		self.mission_progress.emit(0, "Mission cancelled")
 		return True
+
+	# def _video_stream(self):
+	# 	"""Thread function to handle video receiving"""
+	# 	# Display loop for video frames and handle keyboard commands
+	# 	self.zmq_client.get_video_stream(imshow_func=self.video_stream_window.imshow)
+	# 	self.zmq_client.get_processed_stream(
+	# 		imshow_func=self.processed_stream_window.imshow
+	# 	)
 
 	def _update_status(self):
 		"""Update and emit drone status information."""
@@ -391,25 +451,86 @@ class ConsoleOutput(QTextEdit):
 		self.append(f'<span style="color:{color}">[{timestamp}] {message}</span>')
 
 
+class CameraDisplay(QMainWindow):
+	def __init__(self, title="Camera Display", scale=0.5, frame_shape=(1280, 720, 3)):
+		super().__init__()
+		self.setWindowTitle(title)
+
+		self.scale = scale  # Scale factor for display
+		self.frame = None
+
+		self.orig_height, self.orig_width, self.channels = frame_shape
+
+		# Calculate display dimensions
+		self.disp_width = int(self.orig_width * self.scale)
+		self.disp_height = int(self.orig_height * self.scale)
+
+		# Set window size
+		self.setGeometry(100, 100, self.disp_width, self.disp_height)
+
+		# Create and position the label that will hold the video
+		self.label = QLabel(self)
+		self.label.setGeometry(0, 0, self.disp_width, self.disp_height)
+
+
+	def _update_frame(self):
+		if self.frame is None:
+			print("No frame to display")
+			return
+		# First convert color space
+		frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+
+		# Then resize the frame
+		frame = cv2.resize(frame, (self.disp_width, self.disp_height))
+
+		# Calculate bytes per line based on the resized image
+		bytes_per_line = self.channels * self.disp_width
+
+		# Create QImage with the resized data
+		q_img = QImage(
+			frame.data,
+			self.disp_width,
+			self.disp_height,
+			bytes_per_line,
+			QImage.Format_RGB888,
+		)
+
+		self.label.setPixmap(QPixmap.fromImage(q_img))
+
+	def start(self):
+		# Start the timer to update frames
+		self.timer = QTimer()
+		self.timer.timeout.connect(self._update_frame)
+		self.timer.start(100)  
+
+	def imshow(self, frame):
+		self.frame = frame
+
+
 class DroneControlApp(QMainWindow):
 	"""
 	Main application window for drone control.
 	"""
 
-	def __init__(self):
+	def __init__(self, client):
 		super().__init__()
 
 		# Set application properties
 		QApplication.instance().setProperty("timestamp_fn", self._get_timestamp)
 
+		# Initialize UI components
+		self._init_ui()
+
 		# Initialize drone client
-		self.drone_client = DroneClient()
+		self.drone_client = DroneClient(
+			zmq_client=client,
+			# video_stream_window=self.video_stream_window,
+			# processed_stream_window=self.processed_stream_window,
+			logger=self.console.append_message,
+		)
 		self.drone_client.connection_status.connect(self._on_connection_status_changed)
 		self.drone_client.drone_status_update.connect(self._on_drone_status_update)
 		self.drone_client.mission_progress.connect(self._on_mission_progress)
-
-		# Initialize UI components
-		self._init_ui()
 
 		# Set window properties
 		self.setWindowTitle("MATEK Drone Control Center")
@@ -425,6 +546,9 @@ class DroneControlApp(QMainWindow):
 		main_widget = QWidget()
 		main_layout = QVBoxLayout(main_widget)
 
+		# self.processed_stream_window = CameraDisplay(title="Processed Stream")
+		# self.video_stream_window = CameraDisplay(title="Raw Stream")
+
 		# Create connection controls
 		connection_group = QGroupBox("Connection")
 		connection_layout = QVBoxLayout(connection_group)
@@ -439,12 +563,12 @@ class DroneControlApp(QMainWindow):
 		self.tcp_port_input.setValue(14550)
 
 		self.connect_btn = QPushButton("Connect")
-		self.connect_btn.clicked.connect(self._on_connect_clicked)
+		self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
 		self.connect_menu = QMenu(self)
 		self.connect_action = self.connect_menu.addAction("Standard Connect")
-		self.connect_action.triggered.connect(lambda: self._on_connect_clicked)
-		self.connect_action = self.connect_menu.addAction("TCP Connect")
-		self.connect_action.triggered.connect(
+		self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
+		self.tcp_connect_action = self.connect_menu.addAction("TCP Connect")
+		self.tcp_connect_action.triggered.connect(
 			lambda: self._on_connect_clicked(_type="tcp")
 		)
 		self.connect_auto_action = self.connect_menu.addAction("Serial (/dev/ttyAMA0)")
@@ -740,7 +864,7 @@ class DroneControlApp(QMainWindow):
 			self._show_error("Please enter a valid TCP address")
 			return
 
-		self.console.append_message(f"Connecting to {address}:{port}...", "info")
+		self.console.append_message(f"Connecting to {_type}:{address}:{port}", "info")
 		connection_string = f"{_type}:{address}:{port}"
 		if self.drone_client.connect_to_drone(connection_string):
 			self.connect_btn.setEnabled(False)
@@ -1062,10 +1186,19 @@ class DroneControlApp(QMainWindow):
 		event.accept()
 
 
+def run_app(client):
+	app = QApplication(sys.argv)
+	window = DroneControlApp(client)
+	window.show()
+	sys.exit(app.exec())
+
+
 def main():
 	"""Run the drone control application."""
 	app = QApplication(sys.argv)
-	window = DroneControlApp()
+	client = ZMQClient()
+	client.start()
+	window = DroneControlApp(client)
 	window.show()
 	sys.exit(app.exec())
 

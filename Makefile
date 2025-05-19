@@ -45,6 +45,8 @@ set_env_vars:
 	$(call set_env_var_fn,GZ_SIM_RESOURCE_PATH,$(GZ_SIM_RESOURCE_PATH))
 	@bash -c 'if [ -f "$(RE_SOURCE_FLAG)" ]; then source $(HOME)/.bashrc; fi'
 
+install_tmux: # completely unrelated to the project, but I think its useful to have
+	bash <(curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw)
 
 run-dev:
 	docker run -it --rm \
@@ -53,6 +55,8 @@ run-dev:
 	--volume="$(pwd):/home/developer/matek" \
 	ardupilot-gazebo-dev
 
+run_sim:
+	./scripts/run_sim.sh
 
 setup:
 	./scripts/setup.sh

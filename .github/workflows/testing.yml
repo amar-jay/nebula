@@ -16,4 +16,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y make bash
 
       - name: Run Make Create
-        run: ls && bash -c 'source ./scripts/setup.sh' >> ./.devcontainer/postCreate.log 2>&1
+        run: bash -c 'source ./scripts/setup.sh'

@@ -56,7 +56,19 @@ run-dev:
 	ardupilot-gazebo-dev
 
 run_sim:
-	./scripts/run_sim.sh
+	@./scripts/run_sim.sh
+
+cpu_info:
+	@python ./scripts/cpu_info.py
+
+test_cv:
+	@python ./scripts/test_cv.py
+
+test_gst:
+	@python ./scripts/camera_display.py
+
+test_torch: # not sure if this is needed, only endpoint is in YOLO
+	@python ./scripts/test_torch.py
 
 setup:
-	./scripts/setup.sh
+	@./scripts/setup.sh

@@ -11,9 +11,7 @@ sudo apt upgrade -y
 sudo apt-get install -y xauth x11-apps x11-common build-essential cmake git lsb-release wget
 sudo apt install -y libgz-sim8-dev rapidjson-dev libopencv-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \
-  libgl1-mesa-dev  libgl1-mesa-dri  libgl1-mesa-glx \
-  mesa-utils
+  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl
 
 # install tmux
 bash <(curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw)
@@ -26,7 +24,7 @@ else
     git clone https://github.com/ArduPilot/ardupilot $HOME/ardupilot
     cd $HOME/ardupilot
     git checkout "Copter-4.5"
-
+fi
 git submodule update --init --recursive
 
 # Install ArduPilot prerequisites

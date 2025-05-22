@@ -10,6 +10,7 @@ from folium.plugins import MousePosition
 
 # Make Icon
 from PIL import Image
+import time
 import base64
 
 
@@ -52,9 +53,30 @@ def custom_code(location, map_variable_name):
 		f"{location[0]},{location[1]}",
 	)
 
+class WebEnginePage(QWebEnginePage):
+	def __init__(self, parent):
+		super().__init__()
+		self.parent = parent
+
+	def javaScriptConsoleMessage(self, level, msg, line, sourceID):
+		if msg[0] == "m":
+			self.parent.clear_mission_fn()
+			pairs = msg[1:].split("&")
+			for i, pair in enumerate(pairs):
+				waypoint = list(map(float, pair.split(",")))
+				self.parent.update_mission_fn(
+					i + 1,
+					waypoint[0],
+					waypoint[1],
+					10
+				)
+				# self.parent.mission.append(list(map(float, pair.split(","))))
+		else:
+			markers_pos = msg.split(",")
+			self.parent.markers_pos = list(map(float, markers_pos))
+			print(msg)
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
-	mission = []
 
 	def __init__(self, center_coord, starting_zoom=13):
 		super().__init__()
@@ -69,6 +91,7 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 		self.fmap.save("map.html")
 		self.fmap.save(data, close_file=False)
 
+		self.markers_pos = []
 		# reading the folium file
 		html = data.getvalue().decode()
 
@@ -88,7 +111,7 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 		data.write(html.encode())
 
 		# To Get Java Script Console Messages
-		self.map_page = self.WebEnginePage()
+		self.map_page = WebEnginePage(parent=self)
 		self.setPage(self.map_page)
 
 		# To Display the Map
@@ -97,27 +120,27 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 
 		# A variable that holds if the widget is child of the main window or not
 		self.isAttached = True
+		self.update_mission_fn = None
+		self.clear_mission_fn = None
 
 		# self.loadFinished.connect(self.onLoadFinished)
+	def addMissionCallback(self, fn):
+		self.update_mission_fn = fn
 
 	def resizeEvent(self, event):
 		super().resizeEvent(event)
 
-	class WebEnginePage(QWebEnginePage):
-		def __init__(self):
-			super().__init__()
-			self.markers_pos = []
+	def clearMissionCallback(self, fn):
+		self.clear_mission_fn = fn
 
-		def javaScriptConsoleMessage(self, level, msg, line, sourceID):
-			if msg[0] == "m":
-				MapWidget.mission = []
-				pairs = msg[1:].split("&")
-				for pair in pairs:
-					MapWidget.mission.append(list(map(float, pair.split(","))))
-				print("mission: ", MapWidget.mission)
-			else:
-				self.markers_pos = msg.split(",")
-				print(msg)
+	def get_markers_pos(self):
+		def process_result(_):
+			return self.markers_pos
+		return self.page().runJavaScript("setMission('ddd')", process_result)
+	def get_mission(self):
+		return self.page().runJavaScript("setMission('ddd')")
+
+
 
 	def find_variable_name(self, html, name_start):
 		variable_pattern = "var "

@@ -102,7 +102,7 @@ var mymarker = L.marker(
 
 // Some Functions To Make Map Interactive
 function moveMarkerByClick(e) {
-    //console.log(e.latlng.lat.toFixed(4) + "," +e.latlng.lng.toFixed(4));
+    console.log(e.latlng.lat + "," +e.latlng.lng);
     mymarker.setLatLng([e.latlng.lat, e.latlng.lng])
 }
 
@@ -118,7 +118,7 @@ var waypointNumber = 0;
 var waypoints = [];
 var lines = [];
 function putWaypointEvent(e) {
-    putWaypoint(e.latlng.lat.toFixed(4), e.latlng.lng.toFixed(4))
+    putWaypoint(e.latlng.lat, e.latlng.lng)
 }
 
 function putWaypoint(lat, lng) {
@@ -155,7 +155,7 @@ function setMission(mission_type) {
     var msg = "m";
     if (mission_type){ // waypoints
         for(let i = 0; i < waypoints.length; i++){
-            msg += waypoints[i].getLatLng().lat.toFixed(4) + "," + waypoints[i].getLatLng().lng.toFixed(4) ;
+            msg += waypoints[i].getLatLng().lat + "," + waypoints[i].getLatLng().lng ;
             if (i < waypoints.length-1){
                 msg += "&"
             }
@@ -163,7 +163,7 @@ function setMission(mission_type) {
     }
     else{ // exploration
         for(let i = 0; i < 2; i++){
-            msg += corners[i].lat.toFixed(4) + "," + corners[i].lng.toFixed(4) ;
+            msg += corners[i].lat + "," + corners[i].lng;
             if (i < corners.length-1){
                 msg += "&"
             }

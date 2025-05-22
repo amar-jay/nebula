@@ -7,29 +7,22 @@ from PySide6.QtWidgets import (
 	QApplication,
 	QMainWindow,
 	QWidget,
-	QStackedWidget,
-	QTableWidget,
 	QVBoxLayout,
 	QHBoxLayout,
-	QPushButton,
-	QLabel,
-	QLineEdit,
 	QGroupBox,
 	QGridLayout,
-	QTableWidget,
 	QTableWidgetItem,
 	QHeaderView,
-	QSpinBox,
-	QDoubleSpinBox,
 	QDockWidget,
-	QMessageBox,
 	QTabWidget,
-	QTextEdit,
 	QProgressBar,
 	QFileDialog,
-	QMenu,
+	QStyle,
 	QSplitter,
 )
+from PySide6.QtCore import QEvent
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QTransform
+from PySide6.QtSvg import QSvgRenderer
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
 from PySide6.QtGui import QFont, QIcon, QColor, QPalette, QImage, QPixmap
@@ -39,6 +32,27 @@ from pymavlink import mavutil
 from .controls.mavlink import gz
 from .controls.mavlink.mission_types import Waypoint
 from .map_widget import MapWidget
+from qfluentwidgets import FluentIcon as FIF
+from qfluentwidgets import (
+	MessageBox as QMessageBox,
+	LineEdit as QLineEdit,
+	SpinBox as QSpinBox,
+	DoubleSpinBox as QDoubleSpinBox,
+	TableWidget as QTableWidget,
+	RoundMenu as QMenu,
+	# HeaderCardWidget as QGroupBox,
+	TextEdit as QTextEdit,
+	PushButton as QPushButton,
+	PrimaryPushButton,
+	# ProgressBar as QProgressBar,
+	Action,
+	BodyLabel as QLabel,
+	TabBar,
+	setTheme,
+	setThemeColor,
+	Theme,
+	NavigationInterface,
+)
 
 
 class DroneClient(QObject):
@@ -92,6 +106,11 @@ class DroneClient(QObject):
 		self.video_timer.timeout.connect(self._video_stream)
 		self.video_timer.setInterval(100)  # Update every 100ms
 
+		# start mission with updadtes timer
+		self.mission_progress_timer = QTimer(self)
+		self.mission_progress_timer.setSingleShot(True)
+		self.mission_progress_timer.timeout.connect(self.start_mission)
+
 	def drop_load(self):
 		"""Drop load command."""
 		if not self.connected:
@@ -140,7 +159,7 @@ class DroneClient(QObject):
 			self.k_tcp_address = address
 			self.k_tcp_port = port
 			self.k_connected = True
-			self.kamikaze_connection.wait_heartbeat()
+			# self.kamikaze_connection.wait_heartbeat()
 		else:
 			self.master_connection = gz.GazeboConnection(
 				connection_string=connection_string,
@@ -306,6 +325,10 @@ class DroneClient(QObject):
 		return True
 
 	def start_mission(self):
+		self.mission_progress_timer.start()
+		return True
+
+	def _start_mission(self):
 		"""Start the uploaded mission."""
 		if not self.connected or not self.armed or not self.mission_waypoints:
 			return False
@@ -418,6 +441,7 @@ class MissionWaypointTable(QTableWidget):
 
 		# Add delete button use icon
 		delete_btn = QPushButton("❌")
+		delete_btn.setStyleSheet("margin: 2px;")
 		delete_btn.clicked.connect(
 			lambda: self.removeRow(self.indexAt(delete_btn.pos()).row())
 		)
@@ -574,7 +598,7 @@ class DroneControlApp(QMainWindow):
 
 		# Set window properties
 		self.setWindowTitle("MATEK Drone Control Center")
-		self.resize(900, 700)
+		# self.resize(900, 700)
 
 		# Log application start
 		self.console.append_message("Drone Control Center started", "info")
@@ -582,6 +606,8 @@ class DroneControlApp(QMainWindow):
 
 	def _init_ui(self):
 		"""Initialize the UI components."""
+		setTheme(Theme.DARK)
+		setThemeColor("#0078d4", save=True)
 		# Create main widget and layout
 		main_widget = QWidget()
 		main_layout = QVBoxLayout(main_widget)
@@ -594,31 +620,54 @@ class DroneControlApp(QMainWindow):
 		kamikaze_connection_group = QGroupBox("")
 		kamikaze_connection_layout = QHBoxLayout(kamikaze_connection_group)
 
-		self.tcp_address_input = QLineEdit("127.0.0.1")
+		self.tcp_address_input = QLineEdit()
+		self.tcp_address_input.setText("127.0.0.1")
+		self.tcp_address_input.setToolTip("Enter the drone's IP address")
 		self.tcp_port_input = QSpinBox()
 		self.tcp_port_input.setRange(1, 65535)
 		self.tcp_port_input.setValue(14550)
 
-		self.connect_btn = QPushButton("Connect")
+		self.connect_btn = PrimaryPushButton("Connect")
 		self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
-		self.connect_menu = QMenu(self)
-		self.connect_action = self.connect_menu.addAction("Standard Connect")
-		self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
-		self.tcp_connect_action = self.connect_menu.addAction("TCP Connect")
-		self.tcp_connect_action.triggered.connect(
-			lambda: self._on_connect_clicked(_type="tcp")
+		self.connect_menu = QMenu("Connect", self)
+		self.connect_action = self.connect_menu.addAction(
+			Action(
+				FIF.CONNECT,
+				"Standard Connect",
+				triggered=lambda: self._on_connect_clicked(),
+			)
 		)
-		self.connect_auto_action = self.connect_menu.addAction("Serial (/dev/ttyAMA0)")
-		self.connect_auto_action.triggered.connect(self._on_serial_connect_clicked)
-		self.connect_sitl_action = self.connect_menu.addAction("USB (/dev/ttyUSB0)")
-		self.connect_sitl_action.triggered.connect(self._on_usb_connect_clicked)
+		# self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
+		self.tcp_connect_action = self.connect_menu.addAction(
+			Action(
+				FIF.CONNECT,
+				"TCP Connect",
+				triggered=lambda: self._on_connect_clicked(_type="tcp"),
+			)
+		)
+		self.connect_auto_action = self.connect_menu.addAction(
+			Action(
+				FIF.CONNECT,
+				"Serial (/dev/ttyAMA0)",
+				triggered=lambda: self._on_serial_connect_clicked(),
+			)
+		)
+		self.connect_sitl_action = self.connect_menu.addAction(
+			Action(
+				FIF.CONNECT,
+				"USB (/dev/ttyUSB0)",
+				triggered=lambda: self._on_usb_connect_clicked(),
+			)
+		)
 		self.connect_btn.setMenu(self.connect_menu)
 
 		self.disconnect_btn = QPushButton("Disconnect")
 		self.disconnect_btn.clicked.connect(self._on_disconnect_clicked)
 		self.disconnect_btn.setEnabled(False)
 
-		self.k_tcp_address_input = QLineEdit("127.0.0.1")
+		self.k_tcp_address_input = QLineEdit()
+		self.k_tcp_address_input.setPlaceholderText("127.0.0.1")
+		self.k_tcp_address_input.setToolTip("Enter the kamikaze drone's IP address")
 		self.k_tcp_port_input = QSpinBox()
 		self.k_tcp_port_input.setRange(1, 65535)
 		self.k_tcp_port_input.setValue(14560)
@@ -634,14 +683,33 @@ class DroneControlApp(QMainWindow):
 		self.max_button.clicked.connect(self.toggle_maximized)
 
 		self.map_btn_group = QGroupBox()
-		button_layout = QVBoxLayout(self.map_btn_group)
+		map_btn_layout = QHBoxLayout(self.map_btn_group)
 
 		move_marker_btn = QPushButton("Move Marker")
+		move_marker_btn.clicked.connect(lambda: self.map_event("move_marker"))
 		select_area_btn = QPushButton("Select Area")
+		select_area_btn.clicked.connect(lambda: self.map_event("select_area"))
 		select_waypoint = QPushButton("Set Waypoint")
+		select_waypoint.clicked.connect(lambda: self.map_event("set_waypoint"))
 		clear_all_btn = QPushButton("Clear All")
+		clear_all_btn.clicked.connect(lambda: self.map_event("clear_all"))
 		undo_btn = QPushButton("Undo")
 		choose_field_btn = QPushButton("Choose Field")
+		choose_field_btn.clicked.connect(lambda: self.map_event("choose_field"))
+		sync_btn = PrimaryPushButton("Sync")
+		sync_btn.clicked.connect(lambda: self.map_event("sync"))
+
+		map_btn_layout.addWidget(move_marker_btn)
+		map_btn_layout.addWidget(select_area_btn)
+		map_btn_layout.addWidget(select_waypoint)
+		map_btn_layout.addWidget(clear_all_btn)
+		map_btn_layout.addWidget(undo_btn)
+		map_btn_layout.addWidget(choose_field_btn)
+		map_btn_layout.addWidget(sync_btn)
+
+
+
+
 
 		connection_layout.addWidget(main_connection_group)
 		connection_layout.addWidget(kamikaze_connection_group)
@@ -662,6 +730,52 @@ class DroneControlApp(QMainWindow):
 
 		# Create tab widget for different control panels
 		tab_widget = QTabWidget()
+		tab_widget.setTabPosition(QTabWidget.West)
+		tab_widget.setStyleSheet("""
+		QTabWidget::pane {
+		    border-radius: 8px;
+			padding: 5px;
+			padding: 5px;
+			margin: 0px;
+		}
+
+		QTabBar::tab {
+		    color: #707070;
+		    border: 1.5px solid #333;
+		    border-radius: 6px;
+		    padding: 0px 15px;
+		    margin-bottom: 5px;
+		    font-size: 11pt;
+		}
+
+
+		QTabBar::tab:left {
+		    background-color: #404040;
+		    color: #ffffff;
+		    border-radius: 6px;
+		    min-height: 20px;
+		    max-height: 100px;
+		    min-width: 30px;
+		    padding: 5px;
+		    margin-bottom: 5px;
+		    margin-right: 3px;
+		    font-size: 8pt;
+		}
+
+		QTabBar::tab:selected {
+			border-right: 2px solid #0078d4;
+		}
+
+		QTabBar::tab:hover:!selected {
+			color: white;
+		}
+
+		QTabWidget::tab-bar {
+		    alignment: center;
+		    left: 5px;
+		    top: 5px;
+		}
+		""")
 
 		# Basic controls tab
 		basic_control_widget = QWidget()
@@ -684,8 +798,10 @@ class DroneControlApp(QMainWindow):
 		self.drop_hook_btn = QPushButton("Drop Hook")
 		self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
 		# kamikaze - red
-		self.kamikaze_btn = QPushButton("Kamikaze")
-		self.kamikaze_btn.setStyleSheet("background-color: red;color: black;")
+		self.kamikaze_btn = PrimaryPushButton("Kamikaze")
+		style_sheet = self.kamikaze_btn.styleSheet()
+		style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}"
+		self.kamikaze_btn.setStyleSheet(style_sheet)
 
 		controller_row.addWidget(self.drop_load_btn)
 		controller_row.addWidget(self.pick_load_btn)
@@ -701,11 +817,11 @@ class DroneControlApp(QMainWindow):
 		# First row of controls
 		controls_row1 = QHBoxLayout()
 
-		self.arm_btn = QPushButton("Arm")
+		self.arm_btn = PrimaryPushButton("Arm")
 		self.arm_btn.clicked.connect(self._on_arm_clicked)
 		self.arm_btn.setEnabled(False)
 
-		self.disarm_btn = QPushButton("Disarm")
+		self.disarm_btn = PrimaryPushButton("Disarm")
 		self.disarm_btn.clicked.connect(self._on_disarm_clicked)
 		self.disarm_btn.setEnabled(False)
 
@@ -747,9 +863,12 @@ class DroneControlApp(QMainWindow):
 		self.goto_alt_input.setSingleStep(1.0)
 		self.goto_alt_input.setValue(10.0)
 
-		self.goto_btn = QPushButton("Go")
+		self.goto_btn = PrimaryPushButton("Go")
 		self.goto_btn.clicked.connect(self._on_goto_clicked)
 		self.goto_btn.setEnabled(False)
+
+		self.open_map_btn = PrimaryPushButton("Open Map")
+		self.open_map_btn.clicked.connect(self._on_open_map_clicked)
 
 		goto_layout.addWidget(QLabel("Latitude:"))
 		goto_layout.addWidget(self.goto_lat_input)
@@ -758,6 +877,7 @@ class DroneControlApp(QMainWindow):
 		goto_layout.addWidget(QLabel("Altitude (m):"))
 		goto_layout.addWidget(self.goto_alt_input)
 		goto_layout.addWidget(self.goto_btn)
+		goto_layout.addWidget(self.open_map_btn)
 
 		# Add takeoff altitude spinner
 		takeoff_layout = QHBoxLayout()
@@ -771,6 +891,7 @@ class DroneControlApp(QMainWindow):
 		# Add all controls to the layout
 		control_layout.addLayout(controls_row1)
 		control_layout.addLayout(takeoff_layout)
+		basic_control_layout.addWidget(self.map_btn_group)
 		basic_control_layout.addWidget(control_group)
 		basic_control_layout.addWidget(goto_group)
 		basic_control_layout.addWidget(controller_group)
@@ -916,9 +1037,12 @@ class DroneControlApp(QMainWindow):
 		console_layout.addWidget(self.console)
 
 		# Add tabs to the tab widget
-		tab_widget.addTab(basic_control_widget, "Basic Controls")
-		tab_widget.addTab(mission_widget, "Mission Planning")
-		tab_widget.addTab(console_widget, "Console")
+		tab_widget.addTab(basic_control_widget, "🤖 Controls")
+		# tab_widget.addTab(basic_control_widget, "Basic Controls")
+		tab_widget.addTab(mission_widget, "🚀 Missions")
+		# tab_widget.addTab(mission_widget, "Mission Planning")
+		tab_widget.addTab(console_widget, "🧑‍💻️ Console")
+		# tab_widget.addTab(console_widget, "Console")
 
 		# Add widgets to main layout
 		main_layout.addWidget(connection_group)
@@ -928,11 +1052,19 @@ class DroneControlApp(QMainWindow):
 		self.setCentralWidget(main_widget)
 
 		# Create dock widget
-		self.dock = QDockWidget("Special Dock (Fullscreen Only)", self)
+		self.dock = QDockWidget("Map Dock(Fullscreen Only)", self)
 		self.dock_content = MapWidget([41.27442, 28.727317])
-		# self.dock_content.setMinimumSize(800, 800)
-		# self.dock_content.setMaximumSize(800, 2000)
+		self.dock_content.addMissionCallback(self.waypoint_table.add_waypoint)
+		self.dock_content.clearMissionCallback(self.waypoint_table.clear_waypoints)
 		self.dock.setWidget(self.dock_content)
+		self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+		self.dock.setFeatures(
+			QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetVerticalTitleBar
+		)
+		# set to full width
+		self.dock.setMinimumWidth(650)
+		# minimum height should be fullscreen height
+		self.dock.setMinimumHeight(1000)
 		self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
 		# Initially hide the dock widget
@@ -1067,6 +1199,12 @@ class DroneControlApp(QMainWindow):
 		else:
 			self.console.append_message("Failed to return to home", "error")
 
+	def _on_open_map_clicked(self):
+		if self.isFullScreen():
+			self.showNormal()
+		else:
+			self.showMaximized()	
+
 	def _on_goto_clicked(self):
 		"""Handle go to position button click."""
 		lat = self.goto_lat_input.value()
@@ -1128,29 +1266,69 @@ class DroneControlApp(QMainWindow):
 
 	def map_event(self, event):
 		if event == "move_marker":
-			self.dock_content.page().runJavaScript("map.on('click', moveMarkerByClick);")
+			self.dock_content.page().runJavaScript(
+				"map.on('click', moveMarkerByClick);"
+			)
 			self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
-			self.dock_content.page().runJavaScript("map.off('click', putWaypointEvent);")
+			self.dock_content.page().runJavaScript(
+				"map.off('click', putWaypointEvent);"
+			)
 		elif event == "select_area":
-			self.dock_content.page().runJavaScript("map.off('click', putWaypointEvent);")
-			self.dock_content.page().runJavaScript("map.off('click', moveMarkerByClick);")
+			self.dock_content.page().runJavaScript(
+				"map.off('click', putWaypointEvent);"
+			)
+			self.dock_content.page().runJavaScript(
+				"map.off('click', moveMarkerByClick);"
+			)
 			self.dock_content.page().runJavaScript("map.on('click', drawRectangle);")
-		elif event == "waypoint":
-			self.dock_content.page().runJavaScript("map.off('click', moveMarkerByClick);")
+		elif event == "set_waypoint":
+			self.dock_content.page().runJavaScript(
+				"map.off('click', moveMarkerByClick);"
+			)
 			self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
 			self.dock_content.page().runJavaScript("map.on('click', putWaypointEvent);")
 		elif event == "clear_all":
+			self.waypoint_table.clear_waypoints()
 			self.dock_content.page().runJavaScript("clearAll();")
 		elif event == "undo_waypoint":
 			self.dock_content.page().runJavaScript("undoWaypoint();")
 		elif event == "choose_field":
 			self.dock_content.page().runJavaScript("chooseField();")
+		elif event == "sync":
+			self.dock_content.page().runJavaScript("setMission('ddd');")
 
 	def toggle_maximized(self):
 		if self.isMaximized():
 			self.showNormal()
 		else:
 			self.showMaximized()
+
+
+	def _create_tab_icon(self, svg_path, size=32):
+		renderer = QSvgRenderer(svg_path)
+
+		# Create a pixmap to draw on
+		pixmap = QPixmap(size, size)
+		pixmap.fill(Qt.transparent)
+
+		# Paint the SVG onto the pixmap
+		painter = QPainter(pixmap)
+
+		# Apply rotation (90 degrees for West tabs)
+		transform = QTransform()
+		transform.rotate(90)
+		painter.setTransform(transform)
+		painter.translate(0, -size)  # Adjust position after rotation
+
+		# Set white color for the icon
+		painter.setPen(Qt.white)
+
+		# Draw the SVG
+		renderer.render(painter)
+		painter.end()
+
+		# Create an icon from the pixmap
+		return QIcon(pixmap)
 
 	def _on_save_mission_clicked(self):
 		"""Handle save mission button click."""
@@ -1300,10 +1478,14 @@ class DroneControlApp(QMainWindow):
 	def eventFilter(self, obj, event):
 		# Check for window state change events
 		if obj == self:
+			
 			is_maximized = self.isMaximized()
 			self.dock.setVisible(is_maximized)
 			self.map_btn_group.setVisible(is_maximized)
 			self.max_button.setText("Hide Map" if is_maximized else "Show Map")
+
+			if not is_maximized:
+				self.setGeometry(100, 100, 500, 500)
 
 		return super().eventFilter(obj, event)
 	def closeEvent(self, event):
@@ -1311,7 +1493,6 @@ class DroneControlApp(QMainWindow):
 		if self.drone_client.connected:
 			self.drone_client.disconnect()
 		event.accept()
-
 
 def run_app(client):
 	# parse command line arguments for simulation mode
@@ -1330,8 +1511,27 @@ def run_app(client):
 	window.show()
 
 
+def set_theme(app):
+	palette = QPalette()
+	palette.setColor(QPalette.Window, QColor(240, 240, 240))
+	palette.setColor(QPalette.WindowText, Qt.black)
+	palette.setColor(QPalette.Base, QColor(255, 255, 255))
+	palette.setColor(QPalette.AlternateBase, QColor(245, 245, 245))
+	palette.setColor(QPalette.Text, Qt.black)
+	palette.setColor(QPalette.Button, QColor(240, 240, 240))
+	palette.setColor(QPalette.ButtonText, Qt.black)
+	palette.setColor(QPalette.Link, QColor(0, 100, 200))
+	palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+	palette.setColor(QPalette.HighlightedText, Qt.white)
+
+	app.setPalette(palette)
+
+
 def main():
 	app = QApplication(sys.argv)
+	app.setStyle("Fusion")
+	# set_theme(app)
+	# Apply the palette
 	"""Run the drone control application."""
 	client = ZMQClient()
 	client.start()

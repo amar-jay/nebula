@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 	QWidget,
 )
 
-from map_widget import MapWidget
+from src.map_widget import MapWidget
 
 
 class MainWindow(QMainWindow):

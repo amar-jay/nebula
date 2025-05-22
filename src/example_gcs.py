@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 	QHeaderView,
 	QSpinBox,
 	QDoubleSpinBox,
+	QDockWidget,
 	QMessageBox,
 	QTabWidget,
 	QTextEdit,
@@ -37,6 +38,7 @@ from .mq.example_zmq_reciever import Client as ZMQClient
 from pymavlink import mavutil
 from .controls.mavlink import gz
 from .controls.mavlink.mission_types import Waypoint
+from .map_widget import MapWidget
 
 
 class DroneClient(QObject):
@@ -628,6 +630,19 @@ class DroneControlApp(QMainWindow):
 		self.k_disconnect_btn.clicked.connect(self._on_disconnect_clicked)
 		self.k_disconnect_btn.setEnabled(False)
 
+		self.max_button = QPushButton("Show Map")
+		self.max_button.clicked.connect(self.toggle_maximized)
+
+		self.map_btn_group = QGroupBox()
+		button_layout = QVBoxLayout(self.map_btn_group)
+
+		move_marker_btn = QPushButton("Move Marker")
+		select_area_btn = QPushButton("Select Area")
+		select_waypoint = QPushButton("Set Waypoint")
+		clear_all_btn = QPushButton("Clear All")
+		undo_btn = QPushButton("Undo")
+		choose_field_btn = QPushButton("Choose Field")
+
 		connection_layout.addWidget(main_connection_group)
 		connection_layout.addWidget(kamikaze_connection_group)
 
@@ -912,6 +927,20 @@ class DroneControlApp(QMainWindow):
 		# Set central widget
 		self.setCentralWidget(main_widget)
 
+		# Create dock widget
+		self.dock = QDockWidget("Special Dock (Fullscreen Only)", self)
+		self.dock_content = MapWidget([41.27442, 28.727317])
+		# self.dock_content.setMinimumSize(800, 800)
+		# self.dock_content.setMaximumSize(800, 2000)
+		self.dock.setWidget(self.dock_content)
+		self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
+		# Initially hide the dock widget
+		self.dock.setVisible(False)
+
+		# Create the event filter to track window state changes
+		self.installEventFilter(self)
+
 	def _get_timestamp(self):
 		"""Get a formatted timestamp for console messages."""
 		from datetime import datetime
@@ -1097,6 +1126,32 @@ class DroneControlApp(QMainWindow):
 		except Exception as e:
 			self.console.append_message(f"Failed to load mission: {str(e)}", "error")
 
+	def map_event(self, event):
+		if event == "move_marker":
+			self.dock_content.page().runJavaScript("map.on('click', moveMarkerByClick);")
+			self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
+			self.dock_content.page().runJavaScript("map.off('click', putWaypointEvent);")
+		elif event == "select_area":
+			self.dock_content.page().runJavaScript("map.off('click', putWaypointEvent);")
+			self.dock_content.page().runJavaScript("map.off('click', moveMarkerByClick);")
+			self.dock_content.page().runJavaScript("map.on('click', drawRectangle);")
+		elif event == "waypoint":
+			self.dock_content.page().runJavaScript("map.off('click', moveMarkerByClick);")
+			self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
+			self.dock_content.page().runJavaScript("map.on('click', putWaypointEvent);")
+		elif event == "clear_all":
+			self.dock_content.page().runJavaScript("clearAll();")
+		elif event == "undo_waypoint":
+			self.dock_content.page().runJavaScript("undoWaypoint();")
+		elif event == "choose_field":
+			self.dock_content.page().runJavaScript("chooseField();")
+
+	def toggle_maximized(self):
+		if self.isMaximized():
+			self.showNormal()
+		else:
+			self.showMaximized()
+
 	def _on_save_mission_clicked(self):
 		"""Handle save mission button click."""
 		if self.waypoint_table.rowCount() == 0:
@@ -1242,6 +1297,15 @@ class DroneControlApp(QMainWindow):
 		"""Show an error message dialog."""
 		QMessageBox.critical(self, "Error", message)
 
+	def eventFilter(self, obj, event):
+		# Check for window state change events
+		if obj == self:
+			is_maximized = self.isMaximized()
+			self.dock.setVisible(is_maximized)
+			self.map_btn_group.setVisible(is_maximized)
+			self.max_button.setText("Hide Map" if is_maximized else "Show Map")
+
+		return super().eventFilter(obj, event)
 	def closeEvent(self, event):
 		"""Handle window close event."""
 		if self.drone_client.connected:

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QInputDialog
 from PySide6.QtCore import Qt, QTimer
 
 from CameraWidget import CameraWidget
-from MapWidget import MapWidget
+from map_widget import MapWidget
 from Vehicle.ArdupilotConnection import MissionModes
 from uifolder import Ui_HomePage
 

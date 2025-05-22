@@ -1,6 +1,3 @@
-# MYHOME=/workspaces/nebula
-MYHOME=/teamspace/studios/this_studio/nebula
-
 WORLD=our_runway.sdf
 #WORLD=gimbal.sdf
 MODEL=gazebo-iris
@@ -10,7 +7,7 @@ MODEL=gazebo-iris
 GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
 GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
-HERE=$(pwd -P) # Absolute path of current directory
+#HERE=$(pwd -P) # Absolute path of current directory
 
 RE_SOURCE_FLAG := /tmp/re_source_needed.flag
 define set_env_var_fn
@@ -28,7 +25,7 @@ gz:
 	gz sim -v4 -r ${WORLD} 
 
 ardupilot_gz:
-	${MYHOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL} --model JSON --map --console
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL} --model JSON --map --console
 
 create:
 	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1
@@ -46,7 +43,7 @@ set_env_vars:
 	@bash -c 'if [ -f "$(RE_SOURCE_FLAG)" ]; then source $(HOME)/.bashrc; fi'
 
 install_tmux: # completely unrelated to the project, but I think its useful to have
-	bash <(curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw)
+	curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw | bash
 
 run-dev:
 	docker run -it --rm \
@@ -72,3 +69,8 @@ test_torch: # not sure if this is needed, only endpoint is in YOLO
 
 setup:
 	@./scripts/setup.sh
+
+app:
+	@python -m src.example_gcs
+
+.PHONY: gz ardupilot_gz create camera_feed set_env_vars install_tmux run-dev run_sim cpu_info test_cv test_gst test_torch setup

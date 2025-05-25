@@ -11,10 +11,11 @@ from PySide6.QtWidgets import (
 	QWidget,
 )
 
-from src.map_widget import MapWidget
+from src.new_control_station.map_widget import MapWidget
+from qfluentwidgets import FluentWindow, setTheme, Theme
 
 
-class MainWindow(QMainWindow):
+class MainWindow(FluentWindow, QMainWindow):
 	def __init__(self):
 		super().__init__()
 		self.setWindowTitle("Dock Widget in Fullscreen Example")
@@ -83,7 +84,12 @@ class MainWindow(QMainWindow):
 		layout.addWidget(self.max_button)
 		layout.addWidget(self.fullscreen_button_widget)
 		layout.addWidget(text_edit)
-		self.setCentralWidget(central)
+
+		# wrap widget in a single widget layout
+		central_layout = QVBoxLayout(central)
+		central_layout.addLayout(layout)
+		central_layout.setContentsMargins(10, 10, 10, 10)
+		self.setLayout(central_layout)
 
 		# Create dock widget
 		self.dock = QDockWidget("Special Dock (Fullscreen Only)", self)
@@ -129,15 +135,16 @@ class MainWindow(QMainWindow):
 		else:
 			self.showMaximized()
 
-	def eventFilter(self, obj, event):
-		# Check for window state change events
-		if obj == self:
-			is_maximized = self.isMaximized()
-			self.dock.setVisible(is_maximized)
-			self.fullscreen_button_widget.setVisible(is_maximized)
-			self.max_button.setText("Hide Map" if is_maximized else "Show Map")
+	# def eventFilter(self, obj, event):
+	# 	super().eventFilter(obj, event)
+	# 	# Check for window state change events
+	# 	if obj == self:
+	# 		is_maximized = self.isMaximized()
+	# 		self.dock.setVisible(is_maximized)
+	# 		self.fullscreen_button_widget.setVisible(is_maximized)
+	# 		self.max_button.setText("Hide Map" if is_maximized else "Show Map")
 
-		return super().eventFilter(obj, event)
+	# 	return super().eventFilter(obj, event)
 
 
 if __name__ == "__main__":

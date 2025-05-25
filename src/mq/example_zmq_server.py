@@ -21,7 +21,7 @@ logger = logging.getLogger("zmq-video-server")
 
 
 # Configuration
-serial_port = "/dev/ttyACM0"  # Change to your serial port
+serial_port = "/dev/ttyUSB0"  # Change to your serial port
 baud_rate = 57600  # Change to your baud rate
 tcp_host = "0.0.0.0"  # Listen on all interfaces
 tcp_port = 16550  # Standard MAVLink port
@@ -161,16 +161,16 @@ class ZMQServer:
 		self.control_thread = None
 
 		# Enable video streaming for simulation
-		if self.is_simulation:
-			print("Enabling video streaming")
-			done = self.master_connection.enable_streaming()
-			print("Enabling streaming")
-			if not done:
-				print("❌ Failed to enable streaming.")
-				return False
-		logger.info(
-			f"Server initialized with video port {video_port} and control port {control_port}"
-		)
+		# if self.is_simulation:
+		# 	print("Enabling video streaming")
+		# 	done = self.master_connection.enable_streaming()
+		# 	print("Enabling streaming")
+		# 	if not done:
+		# 		print("❌ Failed to enable streaming.")
+		# 		return False
+		# logger.info(
+		# 	f"Server initialized with video port {video_port} and control port {control_port}"
+		# )
 
 	def start_capture(self) -> bool:
 		"""Start the video capture"""

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QPushButton, QInputDialog
 
 from CameraWidget import CameraWidget
 from IndicatorsPage import IndicatorsPage
-from map_widget import MapWidget
+from new_control_station.map_widget import MapWidget
 from Database.users_db import FirebaseUser
 from Vehicle.Exploration import exploration
 

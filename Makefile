@@ -73,4 +73,10 @@ setup:
 app:
 	@python -m src.example_gcs
 
+sim_server:
+	@python -m src.mq.example_zmq_server --is-simulation
+
+server:
+	@python -m src.mq.example_zmq_server
+
 .PHONY: gz ardupilot_gz create camera_feed set_env_vars install_tmux run-dev run_sim cpu_info test_cv test_gst test_torch setup

@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt, QEvent, QTimer, QByteArray, QBuffer, QIODevice
 from Database.Cloud import UpdateUserMenuThread
 from uifolder import Ui_TargetsPage
 from MediaPlayer import MediaPlayerWindow
-from map_widget import image_to_base64
+from new_control_station.map_widget import image_to_base64
 
 
 def qimage_to_base64(qimage, image_format="PNG"):

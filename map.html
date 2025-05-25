@@ -25,7 +25,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_25ec8f5c37d023871202773a5ed3d56e {
+                #map_32dce0c96b93a3a6438826e33be557d9 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -41,19 +41,19 @@
 <body>
     
     
-            <div class="folium-map" id="map_25ec8f5c37d023871202773a5ed3d56e" ></div>
+            <div class="folium-map" id="map_32dce0c96b93a3a6438826e33be557d9" ></div>
         
 </body>
 <script>
     
     
-            var map_25ec8f5c37d023871202773a5ed3d56e = L.map(
-                "map_25ec8f5c37d023871202773a5ed3d56e",
+            var map_32dce0c96b93a3a6438826e33be557d9 = L.map(
+                "map_32dce0c96b93a3a6438826e33be557d9",
                 {
                     center: [41.27442, 28.727317],
                     crs: L.CRS.EPSG3857,
                     ...{
-  "zoom": 13,
+  "zoom": 20,
   "zoomControl": true,
   "preferCanvas": false,
 }
@@ -65,14 +65,14 @@
 
         
     
-            var tile_layer_e1e8f9654296b9154ad7905c85f779c3 = L.tileLayer(
-                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            var tile_layer_69bdc718bc7f35a76d419612ebfdcd98 = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                 {
   "minZoom": 0,
-  "maxZoom": 19,
-  "maxNativeZoom": 19,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
   "noWrap": false,
-  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "attribution": "Esri",
   "subdomains": "abc",
   "detectRetina": false,
   "tms": false,
@@ -82,10 +82,10 @@
             );
         
     
-            tile_layer_e1e8f9654296b9154ad7905c85f779c3.addTo(map_25ec8f5c37d023871202773a5ed3d56e);
+            tile_layer_69bdc718bc7f35a76d419612ebfdcd98.addTo(map_32dce0c96b93a3a6438826e33be557d9);
         
     
-            var mouse_position_6b1d0699e7479d9eff03dcc462f6ff3f = new L.Control.MousePosition(
+            var mouse_position_22a4bda5e36115170035408f6546ebae = new L.Control.MousePosition(
                 {
   "position": "bottomright",
   "separator": " : ",
@@ -95,11 +95,11 @@
   "prefix": "",
 }
             );
-            mouse_position_6b1d0699e7479d9eff03dcc462f6ff3f.options["latFormatter"] =
+            mouse_position_22a4bda5e36115170035408f6546ebae.options["latFormatter"] =
                 undefined;
-            mouse_position_6b1d0699e7479d9eff03dcc462f6ff3f.options["lngFormatter"] =
+            mouse_position_22a4bda5e36115170035408f6546ebae.options["lngFormatter"] =
                 undefined;
-            map_25ec8f5c37d023871202773a5ed3d56e.addControl(mouse_position_6b1d0699e7479d9eff03dcc462f6ff3f);
+            map_32dce0c96b93a3a6438826e33be557d9.addControl(mouse_position_22a4bda5e36115170035408f6546ebae);
         
 </script>
 </html>

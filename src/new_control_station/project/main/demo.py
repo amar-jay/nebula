@@ -1,23 +1,28 @@
 # coding:utf-8
-import sys
-
+import os
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QIcon, QDesktopServices
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout 
 from qfluentwidgets import (
 	NavigationItemPosition,
 	MessageBox,
 	setTheme,
 	Theme,
-	SplitFluentWindow,
+	FluentWindow,
 	NavigationAvatarWidget,
 	qrouter,
 	SubtitleLabel,
 	setFont,
 )
 from qfluentwidgets import FluentIcon as FIF
-from utils import get_asset
-from .map_widget import MapWidget
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from src.new_control_station.map_widget import MapWidget
+
+
+def get_asset(path: str) -> str:
+	"""Get the asset path"""
+	basePath = "/home/amarjay/Desktop/code/matek/src/new_control_station/assets"
+	return os.path.join(basePath, path)
 
 
 class Widget(QFrame):
@@ -35,16 +40,25 @@ class Widget(QFrame):
 		self.hBoxLayout.setContentsMargins(0, 32, 0, 0)
 
 
-class Window(SplitFluentWindow):
+class Window(FluentWindow):
 	def __init__(self):
 		super().__init__()
+		self.setResizeEnabled(True)
+		
 
 		# create sub interface
-		# self.homeInterface = MapWidget(center_coord=[41.27442, 28.727317])
-		self.homeInterface = Widget("Home", self)
+		self.homeInterface = MapWidget(center_coord=[41.27442, 28.727317])
+		self.homeInterface.setObjectName("home-interface")
+		# self.homeInterface = Widget("Home", self)
 		self.telemetryInterface = Widget("Telemetry", self)
-		self.missionInterface = Widget("Missions", self)
-		self.consoleInterface = Widget("Console Interface", self)
+
+		# the mission page should be a webview to google.com
+		self.missionInterface = QWebEngineView()
+		self.missionInterface.load(QUrl("https://www.google.com"))
+		self.missionInterface.setObjectName("mission-interface")
+		self.consoleInterface = QWebEngineView()
+		self.consoleInterface.load(QUrl("https://www.github.com"))
+		self.consoleInterface.setObjectName("console-interface")
 		self.settingInterface = Widget("Setting Interface", self)
 		self.albumInterface = Widget("Album Interface", self)
 		self.albumInterface1 = Widget("Album Interface 1", self)
@@ -118,3 +132,15 @@ class Window(SplitFluentWindow):
 
 		if w.exec():
 			QDesktopServices.openUrl(QUrl("https://amarjay.vercel.app/"))
+
+
+if __name__ == "__main__":
+	from PySide6.QtWidgets import QApplication
+	import sys
+
+	app = QApplication(sys.argv)
+	setTheme(Theme.DARK)
+	window = Window()
+	window.show()
+
+	sys.exit(app.exec())

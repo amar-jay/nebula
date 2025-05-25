@@ -12,7 +12,7 @@ from qfluentwidgets import (
 	SplitTitleBar,
 	isDarkTheme,
 )
-from Ui_LoginWindow import Ui_Form, get_asset
+from .Ui_LoginWindow import Ui_Form, get_asset
 from qfluentwidgets.window.fluent_window import FluentWindow
 
 

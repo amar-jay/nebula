@@ -17,7 +17,8 @@ from src.new_control_station.map_widget import (
 # coding:utf-8
 from PySide6.QtCore import QEvent, Qt, QSize, QRect
 from PySide6.QtWidgets import QWidget, QMainWindow, QDialog
-# import QGuiApplication 
+
+# import QGuiApplication
 from PySide6.QtGui import QGuiApplication
 
 from qframelesswindow import FramelessWindow

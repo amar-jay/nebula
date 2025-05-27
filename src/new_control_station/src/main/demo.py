@@ -2,7 +2,7 @@
 import os
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QIcon, QDesktopServices
-from PySide6.QtWidgets import QFrame, QHBoxLayout 
+from PySide6.QtWidgets import QFrame, QHBoxLayout
 from qfluentwidgets import (
 	NavigationItemPosition,
 	MessageBox,
@@ -44,7 +44,6 @@ class Window(FluentWindow):
 	def __init__(self):
 		super().__init__()
 		self.setResizeEnabled(True)
-		
 
 		# create sub interface
 		self.homeInterface = MapWidget(center_coord=[41.27442, 28.727317])

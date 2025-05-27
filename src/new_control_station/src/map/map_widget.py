@@ -40,7 +40,9 @@ home_icon_base64 = icon_to_base64("src/new_control_station/assets/images/home.pn
 
 
 def custom_code(location, map_variable_name):
-	with open("src/new_control_station/src/map/map_script.js", "r", encoding="utf-8") as f:
+	with open(
+		"src/new_control_station/src/map/map_script.js", "r", encoding="utf-8"
+	) as f:
 		script_file = f.read()
 	return script_file % (
 		map_variable_name,
@@ -65,11 +67,12 @@ class WebEnginePage(QWebEnginePage):
 				waypoint = list(map(float, pair.split(",")))
 				self.parent.update_mission_fn(i + 1, waypoint[0], waypoint[1], 10)
 				# self.parent.mission.append(list(map(float, pair.split(","))))
-		if msg[0] == "p": # single marker point
+		if msg[0] == "p":  # single marker point
 			markers_pos = msg[1:].split(",")
 			self.parent.markers_pos = list(map(float, markers_pos))
 			self.parent.update_pos_fn(
-				self.parent.markers_pos[0], self.parent.markers_pos[1])
+				self.parent.markers_pos[0], self.parent.markers_pos[1]
+			)
 			print(msg)
 		else:
 			print("JavaScript Console Message(Error):", msg)
@@ -78,28 +81,28 @@ class WebEnginePage(QWebEnginePage):
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
 	def __init__(self, center_coord, starting_zoom=20):
 		super().__init__()
-		MAPBOX_TOKEN="sk.eyJ1IjoiYW1hcmpheSIsImEiOiJjbWI1bzVkcnkwMGlqMmtzMnBrcmJvb2thIn0.Y0JIq8H_w522Dh4H_gWj0Q"
-		#NOTE: WHILE HARDCODING ENVIRONMENT VARIABLES IS NOT RECOMMENDED, IT IS 
+		MAPBOX_TOKEN = "sk.eyJ1IjoiYW1hcmpheSIsImEiOiJjbWI1bzVkcnkwMGlqMmtzMnBrcmJvb2thIn0.Y0JIq8H_w522Dh4H_gWj0Q"
+		# NOTE: WHILE HARDCODING ENVIRONMENT VARIABLES IS NOT RECOMMENDED, IT IS
 		# DONE HERE FOR CONVENIENCE SO THAT MY PEERS CAN RUN THE CODE WITHOUT HASSLE.
 
 		mapbox_tiles = (
-		    f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{{z}}/{{x}}/{{y}}@2x"
-		    f"?access_token={MAPBOX_TOKEN}"
+			f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{{z}}/{{x}}/{{y}}@2x"
+			f"?access_token={MAPBOX_TOKEN}"
 		)
 		satellite_tiles = (
-		    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
-		    "tile/{z}/{y}/{x}"
+			"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
+			"tile/{z}/{y}/{x}"
 		)
 
 		self.fmap = folium.Map(
-			location=[41.27442, 28.727317], #center_coord,
+			location=[41.27442, 28.727317],  # center_coord,
 			tiles=mapbox_tiles,
 			attr="Mapbox Satellite",
 			# attr="Esri",
-			max_zoom=22, 
+			max_zoom=22,
 			zoom_start=starting_zoom,
-		    # scrollWheelZoom=True,
-		    # tiles='OpenStreetMap'
+			# scrollWheelZoom=True,
+			# tiles='OpenStreetMap'
 		)
 		self.zoom_start = starting_zoom
 
@@ -145,6 +148,7 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 		self.update_pos_fn = None
 
 		# self.loadFinished.connect(self.onLoadFinished)
+
 	def __del__(self):
 		del self.map_page
 
@@ -156,18 +160,17 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 
 	def clearMissionCallback(self, fn):
 		self.clear_mission_fn = fn
+
 	def addPositionCallback(self, fn):
 		self.update_pos_fn = fn
 
 	def set_marker(self, lat, lon):
 		return self.page().runJavaScript(
-			f"var homeMarker = L.marker({[lat+1, lon+1]}).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
+			f"var homeMarker = L.marker({[lat + 1, lon + 1]}).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
 		)
 
 	def set_drone_marker(self, lat, lon):
-		return self.page().runJavaScript(
-			f"updateUavMarker({[lat, lon]});"
-		)
+		return self.page().runJavaScript(f"updateUavMarker({[lat, lon]});")
 
 	def set_target_marker(self, lat, lon):
 		return self.page().runJavaScript(
@@ -198,7 +201,6 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 		ending_index = tmp_html.find(" =") + starting_index
 
 		return html[starting_index:ending_index]
-
 
 
 if __name__ == "__main__":

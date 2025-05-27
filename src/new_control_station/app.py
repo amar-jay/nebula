@@ -253,7 +253,6 @@ class DroneClient(QObject):
 		print("Drone armed successfully.")
 		return True
 
-
 	def disarm(self):
 		"""Disarm the drone."""
 		if not self.connected:
@@ -304,7 +303,7 @@ class DroneClient(QObject):
 		print(f"Moving to coordinates: {lat}, {lon}, {alt} (relative={relative})")
 		print("Initial position:", self.initial_position)
 
-		self.master_connection.goto_waypointv2(lat,lon, alt)
+		self.master_connection.goto_waypointv2(lat, lon, alt)
 
 		self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
 		return True
@@ -359,7 +358,9 @@ class DroneClient(QObject):
 		status = self.master_connection.get_status()
 
 		if hasattr(self, "mission_completed"):
-			if self.master_connection.monitor_mission_progress(_update_status_hook=self._update_status_hook):
+			if self.master_connection.monitor_mission_progress(
+				_update_status_hook=self._update_status_hook
+			):
 				self.mission.progress.emit(100, "Mission completed")
 				delattr(self, "mission_completed")
 		else:
@@ -778,7 +779,7 @@ class DroneControlApp(QMainWindow):
 		self.disarm_btn.setEnabled(False)
 
 		self.safety_btn = PrimaryPushButton("Enable Safety")
-		self.safety_btn.setCheckable(True) 
+		self.safety_btn.setCheckable(True)
 		self.safety_btn.clicked.connect(self._on_safety_clicked)
 		self.safety_btn.setEnabled(True)
 
@@ -1027,7 +1028,8 @@ class DroneControlApp(QMainWindow):
 		self.dock_content.addMissionCallback(self.waypoint_table.add_waypoint)
 		self.dock_content.clearMissionCallback(self.waypoint_table.clear_waypoints)
 		self.dock_content.addPositionCallback(
-			lambda lat, lon: self.goto_lat_input.setValue(lat) or self.goto_lon_input.setValue(lon)
+			lambda lat, lon: self.goto_lat_input.setValue(lat)
+			or self.goto_lon_input.setValue(lon)
 		)
 		self.dock.setWidget(self.dock_content)
 		self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -1143,7 +1145,9 @@ class DroneControlApp(QMainWindow):
 		print(f"Safety switch state: {state}")
 		self.safety_btn.setText("Disable Safety" if state else "Enable Safety")
 		self.drone_client.master_connection.safety_switch(not state)
-		self.console.append_message("Drone safety switch " + ("disabled" if state else "enabled"), "success")
+		self.console.append_message(
+			"Drone safety switch " + ("disabled" if state else "enabled"), "success"
+		)
 
 	def _on_disarm_clicked(self):
 		"""Handle disarm button click."""
@@ -1412,7 +1416,14 @@ class DroneControlApp(QMainWindow):
 			# print(f"Updating home marker to new position: {lat}, {lon}")
 			# print(f"Old home marker position: {pose['lat']}, {pose['lon']}")
 			# print(f"Difference: {abs(pose['lat'] - lat)}, {abs(pose['lon'] - lon)}")
-			if lat is not None and lon is not None and pose['lat']!=0 and pose['lon'] !=0 and abs(pose["lat"] - lat) > 1e-6 and abs(pose["lon"] - lon) > 1e-6:
+			if (
+				lat is not None
+				and lon is not None
+				and pose["lat"] != 0
+				and pose["lon"] != 0
+				and abs(pose["lat"] - lat) > 1e-6
+				and abs(pose["lon"] - lon) > 1e-6
+			):
 				self.dock_content.set_drone_marker(lat, lon)
 
 		# orientation
@@ -1440,7 +1451,6 @@ class DroneControlApp(QMainWindow):
 		# 		progress = int(current_wp * 100 / total_wp)
 		# 		self.mission_progress_bar.setValue(progress)
 		# 		self.mission_status_label.setText(f"Waypoint {current_wp}/{total_wp}")
-		
 
 	def _on_mission_progress(self, progress, message):
 		"""Handle mission progress updates."""
@@ -1486,6 +1496,7 @@ class DroneControlApp(QMainWindow):
 
 def run_app(client):
 	import argparse
+
 	# parse command line arguments for simulation mode
 	parser = argparse.ArgumentParser(description="Drone Control Center")
 	parser.add_argument(
@@ -1531,5 +1542,4 @@ def main():
 
 
 if __name__ == "__main__":
-
 	main()

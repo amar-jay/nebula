@@ -23,7 +23,8 @@ while getopts ":vw:" opt; do
   esac
 done
 
-ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --map --console"
+#ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=4.7110,-74.0721,0,0 --model JSON --map --console"
+ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console"
 
 # Name of the tmux session
 SESSION="gz_ardupilot"

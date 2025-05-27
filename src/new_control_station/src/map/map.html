@@ -25,7 +25,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_8b6cf6c6e37179f112714fb6f71dccd6 {
+                #map_161425536d34caab4284dec9cd45df59 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -41,16 +41,16 @@
 <body>
     
     
-            <div class="folium-map" id="map_8b6cf6c6e37179f112714fb6f71dccd6" ></div>
+            <div class="folium-map" id="map_161425536d34caab4284dec9cd45df59" ></div>
         
 </body>
 <script>
     
     
-            var map_8b6cf6c6e37179f112714fb6f71dccd6 = L.map(
-                "map_8b6cf6c6e37179f112714fb6f71dccd6",
+            var map_161425536d34caab4284dec9cd45df59 = L.map(
+                "map_161425536d34caab4284dec9cd45df59",
                 {
-                    center: [41.27442, 28.727317],
+                    center: [41.0082, 28.9784],
                     crs: L.CRS.EPSG3857,
                     ...{
   "zoom": 20,
@@ -65,14 +65,14 @@
 
         
     
-            var tile_layer_eef1567b943d11ada44f39da78911044 = L.tileLayer(
-                "https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}@2x?access_token=sk.eyJ1IjoiYW1hcmpheSIsImEiOiJjbWI1bzVkcnkwMGlqMmtzMnBrcmJvb2thIn0.Y0JIq8H_w522Dh4H_gWj0Q",
+            var tile_layer_743500d2daabd634fc882181fa24cd2b = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                 {
   "minZoom": 0,
-  "maxZoom": 22,
-  "maxNativeZoom": 22,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
   "noWrap": false,
-  "attribution": "Mapbox Satellite",
+  "attribution": "Esri",
   "subdomains": "abc",
   "detectRetina": false,
   "tms": false,
@@ -82,10 +82,10 @@
             );
         
     
-            tile_layer_eef1567b943d11ada44f39da78911044.addTo(map_8b6cf6c6e37179f112714fb6f71dccd6);
+            tile_layer_743500d2daabd634fc882181fa24cd2b.addTo(map_161425536d34caab4284dec9cd45df59);
         
     
-            var mouse_position_1bc259cac4aafc01510810e23e71e13d = new L.Control.MousePosition(
+            var mouse_position_57027c1d559647ecc6054c034baa905b = new L.Control.MousePosition(
                 {
   "position": "bottomright",
   "separator": " : ",
@@ -95,11 +95,11 @@
   "prefix": "",
 }
             );
-            mouse_position_1bc259cac4aafc01510810e23e71e13d.options["latFormatter"] =
+            mouse_position_57027c1d559647ecc6054c034baa905b.options["latFormatter"] =
                 undefined;
-            mouse_position_1bc259cac4aafc01510810e23e71e13d.options["lngFormatter"] =
+            mouse_position_57027c1d559647ecc6054c034baa905b.options["lngFormatter"] =
                 undefined;
-            map_8b6cf6c6e37179f112714fb6f71dccd6.addControl(mouse_position_1bc259cac4aafc01510810e23e71e13d);
+            map_161425536d34caab4284dec9cd45df59.addControl(mouse_position_57027c1d559647ecc6054c034baa905b);
         
 </script>
 </html>

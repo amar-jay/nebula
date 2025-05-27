@@ -71,7 +71,12 @@ setup:
 	@./scripts/setup.sh
 
 app:
-	@python -m src.example_gcs
+	@python -m src.new_control_station.app
+
+build_app:
+	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > run_app.py
+	pyinstaller --noconfirm --onefile --windowed run_app.py
+	rm run_app.py
 
 sim_server:
 	@python -m src.mq.example_zmq_server --is-simulation

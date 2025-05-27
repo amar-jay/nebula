@@ -1412,7 +1412,7 @@ class DroneControlApp(QMainWindow):
 			# print(f"Updating home marker to new position: {lat}, {lon}")
 			# print(f"Old home marker position: {pose['lat']}, {pose['lon']}")
 			# print(f"Difference: {abs(pose['lat'] - lat)}, {abs(pose['lon'] - lon)}")
-			if lat is not None and lon is not None and pose['lat']!=0 and pose['lon'] !=0 and abs(pose["lat"] - lat) > 1e-5 and abs(pose["lon"] - lon) > 1e-5:
+			if lat is not None and lon is not None and pose['lat']!=0 and pose['lon'] !=0 and abs(pose["lat"] - lat) > 1e-6 and abs(pose["lon"] - lon) > 1e-6:
 				self.dock_content.set_drone_marker(lat, lon)
 
 		# orientation

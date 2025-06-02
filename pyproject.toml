@@ -1,0 +1,28 @@
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | __pycache__
+  | .*\.pyc
+  | src/controls/__pycache__
+	| src/new_control_station/libs
+)/
+'''
+
+[tool.ruff.format]
+indent-style = "tab"
+docstring-code-format = true
+docstring-code-line-length = 20

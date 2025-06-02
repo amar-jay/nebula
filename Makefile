@@ -84,4 +84,7 @@ sim_server:
 server:
 	@python -m src.mq.example_zmq_server
 
+lint:
+	@isort .
+	@black .
 .PHONY: gz ardupilot_gz create camera_feed set_env_vars install_tmux run-dev run_sim cpu_info test_cv test_gst test_torch setup

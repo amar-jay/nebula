@@ -7,7 +7,6 @@
 - **Controls**: built for monitoring and controlling the drone.
    - **Machine Learning Integration**: For object detection and monitoring.
    - **GPS Coordinate estimation**
-   - **Orthomosaic SLAM**: #not certain
   
 ## Comprehensive Setup Instructions
 

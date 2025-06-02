@@ -11,7 +11,7 @@ ardupilot
 *.gch
 *.pch
 
-data/*
+#data/*
 # Compiled Dynamic libraries
 *.so
 *.dylib

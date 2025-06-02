@@ -75,7 +75,7 @@ app:
 
 build_app:
 	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > run_app.py
-	pyinstaller --noconfirm --onefile --windowed run_app.py
+	pyinstaller run_app.spec
 	rm run_app.py
 
 sim_server:

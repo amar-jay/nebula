@@ -55,3 +55,4 @@ gz_ws/src/ros_gz
 gz_ws/src/sdformat_urdf
 
 __pycache__
+venv

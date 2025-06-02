@@ -68,8 +68,7 @@ from src.controls.mavlink import gz
 from src.controls.mavlink.mission_types import Waypoint
 from src.mq.example_zmq_reciever import Client as ZMQClient
 from src.mq.messages import ZMQTopics
-
-from . import MapWidget
+from src.new_control_station.src.map.map_widget import MapWidget
 
 
 def PrimaryPushButton(text):

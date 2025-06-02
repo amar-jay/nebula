@@ -12,8 +12,7 @@ import zmq
 from pymavlink import mavutil
 
 from src.controls.mavlink import gz
-
-from .messages import ZMQTopics
+from src.mq.messages import ZMQTopics
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

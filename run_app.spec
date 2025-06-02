@@ -1,16 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Add this at the top
+from PyInstaller.utils.hooks import collect_data_files
 
+# Collect MAVLink dialects
+datas = collect_data_files("pymavlink", includes=[
+"venv/lib/python3.10/site-packages/pymavlink/dialects/v20/*.xml",
+#"venv/lib/python3.10/site-packages/pymavlink/dialects/v10/*.xml",
+#"venv/lib/python3.10/site-packages/pymavlink/dialects/v1.0/*.xml",
+])
 
 a = Analysis(
     ['run_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=datas + [],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['PyQt5', 'PySide2', 'PyQt6'],
     noarchive=False,
     optimize=0,
 )

@@ -31,17 +31,21 @@ git submodule update --init --recursive
 
 ### Running the Simulation
 
-1. **Run Simulation**: Use the provided script to start the Gazebo simulation.
+1. Running control software
+   a. **For Simulation**: Use the provided script to start the Gazebo simulation.
    ```bash
-   ./run_sim.sh -w <world_file.sdf>
+      ./run_sim.sh -w <world_file.sdf>
+   ```
+   b. **For Drone**: Not a stable version (Currently experimental-to check if it can work across herelink)
+   ```bash
+      python -m src.mq.example_zmq_server # running a zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
+   ```
+3. **Launch the Control Station**: Use the provided script to launch the control station interface.
+   ```bash
+      make app
    ```
 
-2. **Launch the Control Station**: Use the provided script to launch the control station interface.
-   ```bash
-   python src/control_station
-   ```
-
-3. **Launch Controls**: Use the provided script to launch the control software
+4. **Launch Controls**: Use the provided script to launch the control software
    ```bash
    python src/controls
    ```
@@ -49,11 +53,10 @@ git submodule update --init --recursive
 
 ## Technologies and Frameworks Used
 
-- **Gazebo**: A powerful simulation tool for robotics and autonomous systems.
+- **Gazebo**: A simulation tool for robotics and autonomous systems.
 - **ArduPilot**: An open-source autopilot system supporting various types of vehicles.
 - **PySide6**: Our applicaation is built with PySide6 using the qfluentwidget library (We also use a modified version of it -- not in this repo)
-- **PyTorch**: An open-source machine learning library for Python, used for integrating machine learning capabilities.
-- **YOLO**: A state-of-the-art object detection system, used for detecting and tracking objects in the simulation.
+- **YOLO**: An object detection system, used for detecting and tracking objects in the simulation.
 
 ### Commands
 ```bash

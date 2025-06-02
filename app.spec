@@ -5,12 +5,12 @@ from PyInstaller.utils.hooks import collect_data_files
 # Collect MAVLink dialects
 datas = collect_data_files("pymavlink", includes=[
 "venv/lib/python3.10/site-packages/pymavlink/dialects/v20/*.xml",
-#"venv/lib/python3.10/site-packages/pymavlink/dialects/v10/*.xml",
-#"venv/lib/python3.10/site-packages/pymavlink/dialects/v1.0/*.xml",
+"venv/lib/python3.10/site-packages/pymavlink/dialects/v10/*.xml",
+"venv/lib/python3.10/site-packages/pymavlink/dialects/v1.0/*.xml",
 ])
 
 a = Analysis(
-    ['run_app.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=datas + [],
@@ -30,7 +30,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='run_app',
+    name='app',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -1,3 +1,4 @@
+# THIS IS AN EXAMPLE OF A SCENARIO WHERE FLUENTWINDOW JUST BREAKS DOWN UNEXPECTEDLY
 import sys
 
 from PySide6.QtCore import Qt
@@ -13,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import FluentWindow, Theme, setTheme
 
-from src.new_control_station.map_widget import MapWidget
+from src.new_control_station.src.map.map_widget import MapWidget
 
 
 class MainWindow(FluentWindow, QMainWindow):

@@ -51,7 +51,7 @@ git submodule update --init --recursive
 
 - **Gazebo**: A powerful simulation tool for robotics and autonomous systems.
 - **ArduPilot**: An open-source autopilot system supporting various types of vehicles.
-- **PyQt5**: We are planning to change to PySide6
+- **PySide6**: Our applicaation is built with PySide6 using the qfluentwidget library (We also use a modified version of it -- not in this repo)
 - **PyTorch**: An open-source machine learning library for Python, used for integrating machine learning capabilities.
 - **YOLO**: A state-of-the-art object detection system, used for detecting and tracking objects in the simulation.
 

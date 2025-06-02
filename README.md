@@ -72,6 +72,5 @@ python -m src.mq.example_zmq_reciever # the client of the zmq server.
 ```
 
 ```bash
-python -m src.example_gcs # to run the Ground Control Station Application
-python -m src.example_gcs --is-simulation # to run the Ground Control Station Application in simulation mode
+make app # to run the Ground Control Station Application
 ```

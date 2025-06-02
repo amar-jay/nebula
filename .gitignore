@@ -38,6 +38,7 @@ detection/runs
 detection/yolo11n-pose.pt
 detection/**/*.pt #weights
 
+map.html
 logs
 terrain
 mav.*

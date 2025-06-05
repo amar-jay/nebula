@@ -26,6 +26,11 @@ git submodule update --remote --merge
 git submodule update --init --recursive
 ```
 
+### Install Python Packages
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage Instructions
 

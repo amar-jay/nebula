@@ -26,6 +26,16 @@ git submodule update --remote --merge
 git submodule update --init --recursive
 ```
 
+## Setup for ardupilot
+
+Follow this guide in setting up ardupilot
+- [https://ardupilot.org/dev/docs/building-setup-linux.html](https://ardupilot.org/dev/docs/building-setup-linux.html)
+
+### Install Python Packages
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage Instructions
 

@@ -12,7 +12,8 @@ usage() {
 
 # Default: no verbose flag
 VERBOSE=0
-WORLD_FILE="delivery_runway.sdf"
+# world file is the first argument
+WORLD_FILE=$1
 
 # Parse CLI options
 while getopts ":vw:" opt; do

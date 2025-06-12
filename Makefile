@@ -1,4 +1,4 @@
-WORLD=our_runway.sdf
+WORLD=delivery_runway.sdf
 #WORLD=gimbal.sdf
 MODEL=gazebo-iris
 #MODEL=iris_with_gimbal
@@ -53,8 +53,7 @@ run-dev:
 	ardupilot-gazebo-dev
 
 run_sim:
-	@./scripts/run_sim.sh
-
+	@./scripts/run_sim.sh ${WORLD}
 cpu_info:
 	@python ./scripts/cpu_info.py
 
@@ -83,6 +82,9 @@ sim_server:
 
 server:
 	@python -m src.mq.example_zmq_server
+
+recv:
+	@python -m src.mq.example_zmq_reciever
 
 lint:
 	@isort .

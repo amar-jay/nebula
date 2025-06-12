@@ -54,6 +54,7 @@ from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import SpinBox as QSpinBox
 from qfluentwidgets import (
+    SwitchButton,
     TabBar,
 )
 from qfluentwidgets import TableWidget as QTableWidget
@@ -258,7 +259,7 @@ class DroneClient(QObject):
             self.master_connection.arm()
 
         if self.connected and self.is_simulation:
-            done = self.master_connection.enable_streaming()
+            done = gz.enable_streaming()
             if not done:
                 print("❌ Failed to enable streaming.")
 
@@ -792,9 +793,9 @@ class DroneControlApp(QMainWindow):
         self.disarm_btn.clicked.connect(self._on_disarm_clicked)
         self.disarm_btn.setEnabled(False)
 
-        self.safety_btn = PrimaryPushButton("Enable Safety")
-        self.safety_btn.setCheckable(True)
-        self.safety_btn.clicked.connect(self._on_safety_clicked)
+        self.safety_btn = SwitchButton("Enabled Safety")
+        self.safety_btn.setChecked(False)
+        self.safety_btn.checkedChanged.connect(self._on_safety_clicked)
         self.safety_btn.setEnabled(True)
 
         self.takeoff_btn = QPushButton("Takeoff")
@@ -811,10 +812,10 @@ class DroneControlApp(QMainWindow):
 
         controls_row1.addWidget(self.arm_btn)
         controls_row1.addWidget(self.disarm_btn)
-        controls_row1.addWidget(self.safety_btn)
         controls_row1.addWidget(self.takeoff_btn)
         controls_row1.addWidget(self.land_btn)
         controls_row1.addWidget(self.rtl_btn)
+        controls_row1.addWidget(self.safety_btn)
 
         # Second row for goto controls
         goto_group = QGroupBox("Go to Position")
@@ -1157,8 +1158,9 @@ class DroneControlApp(QMainWindow):
     def _on_safety_clicked(self, state):
         """Handle disarm button click."""
         print(f"Safety switch state: {state}")
-        self.safety_btn.setText("Disable Safety" if state else "Enable Safety")
-        self.drone_client.master_connection.safety_switch(not state)
+        self.safety_btn.setText("Enabled Safety" if state else "Disabled Safety")
+        self.drone_client.master_connection.safety_switch(state)
+        self.safety_btn.setChecked(state)
         self.console.append_message(
             "Drone safety switch " + ("disabled" if state else "enabled"), "success"
         )
@@ -1447,24 +1449,15 @@ class DroneControlApp(QMainWindow):
             pitch = orientation.get("pitch", 0)
             yaw = orientation.get("yaw", 0)
             self.orientation_label.setText(f"R:{roll:.1f}° P:{pitch:.1f}° Y:{yaw:.1f}°")
-        # Update battery
-        battery = status.get("battery", {}).get("remaining", 0)
-        self.battery_progress.setValue(battery)
-        # Set battery progress bar color based on level
-        self.battery_progress.setStyleSheet(
-            f"QProgressBar::chunk {{ background-color: {'red' if battery <= 20 else 'orange' if battery <= 50 else 'green'}; }}"
-        )
 
-        # Update mission status
+        if status.get("mission_active", False):
+            current_wp = status.get("current_waypoint", -1) + 1
+            total_wp = status.get("total_waypoints", 0)
 
-        # if status.get("mission_active", False):
-        # 	current_wp = status.get("current_waypoint", -1) + 1
-        # 	total_wp = status.get("total_waypoints", 0)
-
-        # 	if current_wp > 0 and total_wp > 0:
-        # 		progress = int(current_wp * 100 / total_wp)
-        # 		self.mission_progress_bar.setValue(progress)
-        # 		self.mission_status_label.setText(f"Waypoint {current_wp}/{total_wp}")
+            if current_wp > 0 and total_wp > 0:
+                progress = int(current_wp * 100 / total_wp)
+                self.mission_progress_bar.setValue(progress)
+                self.mission_status_label.setText(f"Waypoint {current_wp}/{total_wp}")
 
     def _on_mission_progress(self, progress, message):
         """Handle mission progress updates."""

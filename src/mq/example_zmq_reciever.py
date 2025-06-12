@@ -190,7 +190,7 @@ def main():
         description="ZMQ Video Client with Control Interface"
     )
     parser.add_argument(
-        "--server", type=str, default="localhost", help="Server IP address"
+        "--server", type=str, default="10.42.0.189", help="Server IP address"
     )
     parser.add_argument(
         "--video-port", type=int, default=5555, help="Port for video subscription"
@@ -201,7 +201,7 @@ def main():
     args = parser.parse_args()
 
     print("ZMQ Video Client with Control Interface\n")
-    connection = ArdupilotConnection("tcp:127.0.0.1:16550")
+    connection = ArdupilotConnection("tcp:10.42.0.189:16550")
     print("ZMQ Video Client with Control Interface\n")
     client = Client(
         server_ip=args.server,

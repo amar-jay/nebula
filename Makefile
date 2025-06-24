@@ -20,6 +20,8 @@ define set_env_var_fn
 	fi
 endef
 
+app:
+	@python -m src.new_control_station.app
 
 gz:
 	gz sim -v4 -r ${WORLD} 
@@ -33,7 +35,6 @@ create:
 camera_feed:
 	gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp,encoding-name=H264 ! rtph264depay ! avdec_h264 ! videoconvert ! jpegenc ! multipartmux ! tcpserversink host=0.0.0.0 port=8080
 
-
 # Check if the variable is defined and add it to .bashrc if it's not
 set_env_vars:
 	@rm -f $(RE_SOURCE_FLAG)
@@ -44,13 +45,6 @@ set_env_vars:
 
 install_tmux: # completely unrelated to the project, but I think its useful to have
 	curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw | bash
-
-run-dev:
-	docker run -it --rm \
-	--env="DISPLAY=$DISPLAY" \
-	--volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-	--volume="$(pwd):/home/developer/matek" \
-	ardupilot-gazebo-dev
 
 run_sim:
 	@./scripts/run_sim.sh ${WORLD}
@@ -69,9 +63,6 @@ test_torch: # not sure if this is needed, only endpoint is in YOLO
 setup:
 	@./scripts/setup.sh
 
-app:
-	@python -m src.new_control_station.app
-
 build_app:
 	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > run_app.py
 	pyinstaller run_app.spec
@@ -89,4 +80,3 @@ recv:
 lint:
 	@isort .
 	@black .
-.PHONY: gz ardupilot_gz create camera_feed set_env_vars install_tmux run-dev run_sim cpu_info test_cv test_gst test_torch setup

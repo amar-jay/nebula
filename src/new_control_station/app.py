@@ -214,7 +214,7 @@ class DroneClient(QObject):
 
         self.connection_status.emit(
             True,
-            f"[MAVLink] Connected to {address}:{port} for {'Kamikaze' if is_kamikaze else 'Drone'}",
+            f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
         )
 
         # self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")

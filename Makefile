@@ -64,9 +64,9 @@ setup:
 	@./scripts/setup.sh
 
 build_app:
-	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > run_app.py
-	pyinstaller run_app.spec
-	rm run_app.py
+	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > app.py
+	pyinstaller app.spec
+	rm app.py
 
 sim_server:
 	@python -m src.mq.example_zmq_server --is-simulation
@@ -79,4 +79,4 @@ recv:
 
 lint:
 	@isort .
-	@black .
+	#@black .

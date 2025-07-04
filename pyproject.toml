@@ -16,6 +16,9 @@ exclude = '''
   | buck-out
   | build
   | __pycache__
+  | mission_planner/**/*
+  | mission_planner/*
+  | mission_planner/
   | .*\.pyc
   | src/controls/__pycache__
 	| src/new_control_station/libs

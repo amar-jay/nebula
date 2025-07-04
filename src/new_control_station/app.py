@@ -70,6 +70,9 @@ from src.controls.mavlink.mission_types import Waypoint
 from src.mq.example_zmq_reciever import Client as ZMQClient
 from src.mq.messages import ZMQTopics
 from src.new_control_station.src.map.map_widget import MapWidget
+from src.new_control_station.src.horizon.attitude_widget import AttitudeIndicator 
+from src.new_control_station.src.horizon.guage_widget import BatteryGauge, AltitudeGauge, SpeedGauge
+from src.new_control_station.src.horizon.compass_widget import CompassWidget
 
 
 def PrimaryPushButton(text):
@@ -361,9 +364,9 @@ class DroneClient(QObject):
     def _update_status_hook(self, current, done):
         self.current_waypoint_index = current
         self.mission_completed = done
-        msg = f"Moving to waypoint {current + 1}/{len(self.mission_waypoints)}"
+        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
         self.mission_progress.emit(
-            int((current + 1) * 100 / len(self.mission_waypoints)), msg
+            int((current) * 100 / len(self.mission_waypoints)), msg
         )
 
     def _update_status(self):
@@ -435,6 +438,23 @@ class MissionWaypointTable(QTableWidget):
             waypoints.append(waypoint)
         return waypoints
 
+class TelemetryDisplay(QWidget):
+    """Professional telemetry dashboard"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QHBoxLayout(self)
+        self.attitude_indicator = AttitudeIndicator()
+
+        self.battery_gauge = BatteryGauge()
+        self.altitude_gauge = AltitudeGauge()
+        
+        layout.addWidget(self.attitude_indicator)
+        layout.addWidget(self.battery_gauge)
+        layout.addWidget(self.altitude_gauge)
 
 class ConsoleOutput(QTextEdit):
     """
@@ -1013,6 +1033,31 @@ class DroneControlApp(QMainWindow):
         mission_layout.addLayout(mission_exec_layout)
         mission_layout.addLayout(mission_progress_layout)
 
+        telemetry_widget = QWidget()
+        telemetry_layout = QHBoxLayout(telemetry_widget)
+        telemetry_layout.setSpacing(20)
+        telemetry_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Telemetry display
+        attitudes = QVBoxLayout()
+        guages = QVBoxLayout()
+        self.attitude_indicator = AttitudeIndicator()
+        self.battery_gauge = BatteryGauge()
+        self.altitude_gauge = AltitudeGauge()
+        self.speed_gauge = SpeedGauge()
+        self.compass_widget = CompassWidget()
+
+
+        guages.addWidget(self.battery_gauge)
+        guages.addWidget(self.altitude_gauge)
+        guages.addWidget(self.speed_gauge)
+
+        attitudes.addWidget(self.attitude_indicator)
+        attitudes.addWidget(self.compass_widget)
+
+        telemetry_layout.addLayout(attitudes)
+        telemetry_layout.addLayout(guages)
+
         # Console output tab
         console_widget = QWidget()
         console_layout = QVBoxLayout(console_widget)
@@ -1023,8 +1068,9 @@ class DroneControlApp(QMainWindow):
 
         # Add tabs to the tab widget
         tab_widget.addTab(basic_control_widget, "🤖 Controls")
-        # tab_widget.addTab(basic_control_widget, "Basic Controls")
         tab_widget.addTab(mission_widget, "🚀 Missions")
+        tab_widget.addTab(telemetry_widget, "📡 Telemetry")
+
         # tab_widget.addTab(mission_widget, "Mission Planning")
         tab_widget.addTab(console_widget, "🧑‍💻️ Console")
         # tab_widget.addTab(console_widget, "Console")
@@ -1364,7 +1410,17 @@ class DroneControlApp(QMainWindow):
             self.console.append_message("No waypoints to upload", "warning")
             return
 
-        waypoints = self.waypoint_table.get_waypoints()
+        _waypoints = self.waypoint_table.get_waypoints()
+        waypoints = []
+        for wp in _waypoints:
+            pose = self.drone_client.initial_position
+            waypoints.append(Waypoint(
+                lat=float(pose["lat"]),
+                lon=float(pose["lon"]),
+                alt=float(pose["alt"]),
+                hold=10,
+            ))
+            waypoints.append(wp)
 
         if self.drone_client.upload_mission(waypoints):
             self.console.append_message(
@@ -1428,6 +1484,8 @@ class DroneControlApp(QMainWindow):
 
             self.position_label.setText(f"({lat:.7f},{lon:.7f})")
             self.altitude_label.setText(f"{alt:.1f}m")
+            self.altitude_gauge.set_value(alt)
+
             pose = self.drone_client.initial_position
             # print(f"Updating home marker to new position: {lat}, {lon}")
             # print(f"Old home marker position: {pose['lat']}, {pose['lon']}")
@@ -1449,6 +1507,11 @@ class DroneControlApp(QMainWindow):
             pitch = orientation.get("pitch", 0)
             yaw = orientation.get("yaw", 0)
             self.orientation_label.setText(f"R:{roll:.1f}° P:{pitch:.1f}° Y:{yaw:.1f}°")
+            self.attitude_indicator.set_attitude(pitch, roll, yaw)
+            self.compass_widget.set_heading(yaw)
+
+        self.battery_gauge.set_value(status.get('battery', 100))
+        self.speed_gauge.set_value(status.get('speed', 0))
 
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1) + 1

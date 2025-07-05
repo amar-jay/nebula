@@ -18,7 +18,7 @@ from qfluentwidgets import (
     setTheme,
 )
 
-from src.new_control_station.map_widget import MapWidget
+from src.new_control_station.src.map.map_widget import MapWidget
 
 
 def get_asset(path: str) -> str:

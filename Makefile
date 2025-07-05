@@ -23,6 +23,9 @@ endef
 app:
 	@python -m src.new_control_station.app
 
+demo_app:
+	@python -m src.new_control_station.src.main.demo
+
 gz:
 	gz sim -v4 -r ${WORLD} 
 

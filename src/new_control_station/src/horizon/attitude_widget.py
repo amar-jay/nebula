@@ -23,36 +23,36 @@ from PySide6.QtWidgets import (
 
 class AttitudeIndicator(QWidget):
     """Artificial Horizon Widget for displaying drone attitude"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(300, 300)
         self.setMaximumSize(400, 400)
-        
+
         # Attitude values in degrees
-        self.pitch = 0.0    # Nose up/down (-90 to +90)
-        self.roll = 0.0     # Wing up/down (-180 to +180)
-        self.yaw = 0.0      # Nose left/right (0 to 360)
-        
+        self.pitch = 0.0  # Nose up/down (-90 to +90)
+        self.roll = 0.0  # Wing up/down (-180 to +180)
+        self.yaw = 0.0  # Nose left/right (0 to 360)
+
         # Colors
-        self.sky_color = QColor(135, 206, 235)    # Sky blue
-        self.ground_color = QColor(139, 69, 19)   # Brown
+        self.sky_color = QColor(135, 206, 235)  # Sky blue
+        self.ground_color = QColor(139, 69, 19)  # Brown
         self.white = QColor(255, 255, 255)
         self.black = QColor(0, 0, 0)
         self.yellow = QColor(255, 255, 0)
         self.red = QColor(255, 0, 0)
-        
+
     def set_attitude(self, pitch, roll, yaw):
         """Update attitude values and redraw"""
         self.pitch = max(-90, min(90, pitch))
         self.roll = roll
         self.yaw = yaw % 360
         self.update()
-    
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        
+
         # Widget dimensions
         width = self.width()
         height = self.height()
@@ -60,147 +60,159 @@ class AttitudeIndicator(QWidget):
         center_x = width // 2
         center_y = height // 2
         radius = size // 2 - 10
-        
+
         # Save painter state
         painter.save()
-        
+
         # Move to center and apply roll rotation
         painter.translate(center_x, center_y)
         painter.rotate(self.roll)
-        
+
         # Draw sky and ground
         self._draw_horizon(painter, radius)
-        
+
         # Draw pitch ladder
         self._draw_pitch_ladder(painter, radius)
-        
+
         # Restore painter state
         painter.restore()
-        
+
         # Draw fixed aircraft symbol and frame
         self._draw_aircraft_symbol(painter, center_x, center_y, radius)
         self._draw_frame(painter, center_x, center_y, radius)
-        
+
         # Draw attitude text
         self._draw_attitude_text(painter, width, height)
-    
+
     def _draw_horizon(self, painter, radius):
         """Draw the artificial horizon (sky and ground)"""
         # Calculate horizon line offset based on pitch
         pitch_pixels = (self.pitch / 90.0) * radius
-        
+
         # Create large rectangle for sky and ground
         rect_size = radius * 3
-        
+
         # Sky (upper half)
         painter.setBrush(QBrush(self.sky_color))
         painter.setPen(Qt.NoPen)
-        painter.drawRect(-rect_size, -rect_size, rect_size * 2, rect_size + pitch_pixels)
-        
+        painter.drawRect(
+            -rect_size, -rect_size, rect_size * 2, rect_size + pitch_pixels
+        )
+
         # Ground (lower half)
         painter.setBrush(QBrush(self.ground_color))
         painter.drawRect(-rect_size, pitch_pixels, rect_size * 2, rect_size * 2)
-        
+
         # Horizon line
         painter.setPen(QPen(self.white, 3))
         painter.drawLine(-rect_size, int(pitch_pixels), rect_size, int(pitch_pixels))
-    
+
     def _draw_pitch_ladder(self, painter, radius):
         """Draw pitch reference lines"""
         painter.setPen(QPen(self.white, 2))
-        
+
         # Draw pitch lines every 10 degrees
         for angle in range(-80, 90, 10):
             if angle == 0:  # Skip horizon line
                 continue
-                
+
             y_pos = -(angle / 90.0) * radius + (self.pitch / 90.0) * radius
-            
+
             # Only draw if within visible area
             if abs(y_pos) < radius * 1.5:
                 line_width = 60 if angle % 20 == 0 else 40
-                painter.drawLine(-line_width//2, int(y_pos), line_width//2, int(y_pos))
-                
+                painter.drawLine(
+                    -line_width // 2, int(y_pos), line_width // 2, int(y_pos)
+                )
+
                 # Draw angle text for major lines
                 if angle % 20 == 0:
                     painter.setFont(QFont("Arial", 10))
                     painter.drawText(-15, int(y_pos) - 5, f"{abs(angle)}")
-    
+
     def _draw_aircraft_symbol(self, painter, center_x, center_y, radius):
         """Draw the fixed aircraft symbol in the center"""
         painter.setPen(QPen(self.yellow, 4))
-        
+
         # Central dot
         painter.setBrush(QBrush(self.yellow))
         painter.drawEllipse(center_x - 4, center_y - 4, 8, 8)
-        
+
         # Wings
         wing_length = 40
         painter.drawLine(center_x - wing_length, center_y, center_x - 8, center_y)
         painter.drawLine(center_x + 8, center_y, center_x + wing_length, center_y)
-        
+
         # Wing tips
-        painter.drawLine(center_x - wing_length, center_y, center_x - wing_length + 10, center_y - 10)
-        painter.drawLine(center_x + wing_length, center_y, center_x + wing_length - 10, center_y - 10)
-        
+        painter.drawLine(
+            center_x - wing_length, center_y, center_x - wing_length + 10, center_y - 10
+        )
+        painter.drawLine(
+            center_x + wing_length, center_y, center_x + wing_length - 10, center_y - 10
+        )
+
         # Nose indicator
         painter.drawLine(center_x, center_y - 8, center_x, center_y - 20)
-    
+
     def _draw_frame(self, painter, center_x, center_y, radius):
         """Draw the instrument frame and markings"""
         # Outer circle
         painter.setPen(QPen(self.black, 3))
         painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
-        
+        painter.drawEllipse(
+            center_x - radius, center_y - radius, radius * 2, radius * 2
+        )
+
         # Roll scale markings
         painter.setPen(QPen(self.black, 2))
         for angle in range(0, 360, 10):
             if angle in [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]:
                 length = 20 if angle % 30 == 0 else 10
-                
+
                 # Calculate position
                 rad = math.radians(angle - 90)  # -90 to start from top
                 x1 = center_x + (radius - length) * math.cos(rad)
                 y1 = center_y + (radius - length) * math.sin(rad)
                 x2 = center_x + radius * math.cos(rad)
                 y2 = center_y + radius * math.sin(rad)
-                
+
                 painter.drawLine(int(x1), int(y1), int(x2), int(y2))
-        
+
         # Roll pointer (triangle at top)
         painter.setBrush(QBrush(self.red))
         painter.setPen(QPen(self.red, 2))
-        
+
         # Calculate roll pointer position
         roll_rad = math.radians(-self.roll - 90)
         pointer_x = center_x + (radius - 15) * math.cos(roll_rad)
         pointer_y = center_y + (radius - 15) * math.sin(roll_rad)
-        
+
         # Draw triangle pointer
-        triangle = QPolygon([
-            QPoint(int(pointer_x), int(pointer_y)),
-            QPoint(int(pointer_x - 8), int(pointer_y + 15)),
-            QPoint(int(pointer_x + 8), int(pointer_y + 15))
-        ])
+        triangle = QPolygon(
+            [
+                QPoint(int(pointer_x), int(pointer_y)),
+                QPoint(int(pointer_x - 8), int(pointer_y + 15)),
+                QPoint(int(pointer_x + 8), int(pointer_y + 15)),
+            ]
+        )
         painter.drawPolygon(triangle)
-    
+
     def _draw_attitude_text(self, painter, width, height):
         """Draw attitude values as text"""
         painter.setPen(QPen(self.black, 2))
         painter.setFont(QFont("Arial", 12, QFont.Bold))
-        
+
         # Background rectangles for text
         painter.setBrush(QBrush(QColor(255, 255, 255, 200)))
-        
+
         # Pitch text
         painter.drawRect(10, 10, 100, 25)
         painter.drawText(15, 28, f"Pitch: {self.pitch:.1f}°")
-        
+
         # Roll text
         painter.drawRect(10, 40, 100, 25)
         painter.drawText(15, 58, f"Roll: {self.roll:.1f}°")
-        
+
         # Yaw text
         painter.drawRect(10, 70, 100, 25)
         painter.drawText(15, 88, f"Yaw: {self.yaw:.1f}°")
@@ -208,66 +220,65 @@ class AttitudeIndicator(QWidget):
 
 class AttitudeIndicatorDemo(QMainWindow):
     """Demo application for the attitude indicator"""
-    
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Drone Attitude Indicator")
         self.setGeometry(100, 100, 800, 600)
-        
+
         # Create central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
+
         # Create attitude indicator
         self.attitude_indicator = AttitudeIndicator()
-        
+
         # Create control sliders
         self.pitch_slider = QSlider(Qt.Horizontal)
         self.pitch_slider.setRange(-90, 90)
         self.pitch_slider.setValue(0)
         self.pitch_slider.valueChanged.connect(self.update_attitude)
-        
+
         self.roll_slider = QSlider(Qt.Horizontal)
         self.roll_slider.setRange(-180, 180)
         self.roll_slider.setValue(0)
         self.roll_slider.valueChanged.connect(self.update_attitude)
-        
+
         self.yaw_slider = QSlider(Qt.Horizontal)
         self.yaw_slider.setRange(0, 360)
         self.yaw_slider.setValue(0)
         self.yaw_slider.valueChanged.connect(self.update_attitude)
-        
+
         # Create layout
         layout = QVBoxLayout()
         layout.addWidget(self.attitude_indicator)
-        
+
         # Control panel
         controls_layout = QVBoxLayout()
-        
+
         # Pitch control
         pitch_layout = QHBoxLayout()
         pitch_layout.addWidget(QLabel("Pitch:"))
         pitch_layout.addWidget(self.pitch_slider)
         controls_layout.addLayout(pitch_layout)
-        
+
         # Roll control
         roll_layout = QHBoxLayout()
         roll_layout.addWidget(QLabel("Roll:"))
         roll_layout.addWidget(self.roll_slider)
         controls_layout.addLayout(roll_layout)
-        
+
         # Yaw control
         yaw_layout = QHBoxLayout()
         yaw_layout.addWidget(QLabel("Yaw:"))
         yaw_layout.addWidget(self.yaw_slider)
         controls_layout.addLayout(yaw_layout)
-        
+
         layout.addLayout(controls_layout)
         central_widget.setLayout(layout)
-        
+
         self.animation_step = 0
-        
-    
+
     def update_attitude(self):
         """Update attitude indicator with slider values"""
         pitch = self.pitch_slider.value()
@@ -275,11 +286,12 @@ class AttitudeIndicatorDemo(QMainWindow):
         yaw = self.yaw_slider.value()
         self.attitude_indicator.set_attitude(pitch, roll, yaw)
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
+
     # Create and show demo
     demo = AttitudeIndicatorDemo()
     demo.show()
-    
+
     sys.exit(app.exec())

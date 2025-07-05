@@ -4,25 +4,17 @@ profile = "black"
 [tool.black]
 line-length = 88
 target-version = ['py38']
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | venv
-  | _build
-  | buck-out
-  | build
-  | __pycache__
-  | mission_planner/**/*
-  | mission_planner/*
-  | mission_planner/
-  | .*\.pyc
-  | src/controls/__pycache__
-	| src/new_control_station/libs
-)/
+include = '\.pyi?$'
+extend-exclude = '''
+(
+    ^/mission_planner/
+  | ^/src/new_control_station/libs/
+  | ^/src/controls/__pycache__/
+  | ^/_build/
+  | ^/build/
+  | ^\.venv/
+  | .*\.pyc$
+)
 '''
 
 [tool.ruff.format]

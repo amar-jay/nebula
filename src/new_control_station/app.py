@@ -49,6 +49,7 @@ from qfluentwidgets import (
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import (
     ProgressBar,
+	CheckBox as QCheckBox,
 )
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
@@ -67,12 +68,17 @@ from qfluentwidgets import (
 
 from src.controls.mavlink import gz
 from src.controls.mavlink.mission_types import Waypoint
-from src.mq.example_zmq_reciever import Client as ZMQClient
+from src.mq.zmq_client import ZMQClient
 from src.mq.messages import ZMQTopics
-from src.new_control_station.src.map.map_widget import MapWidget
-from src.new_control_station.src.horizon.attitude_widget import AttitudeIndicator 
-from src.new_control_station.src.horizon.guage_widget import BatteryGauge, AltitudeGauge, SpeedGauge
+from src.new_control_station.src.horizon.attitude_widget import AttitudeIndicator
 from src.new_control_station.src.horizon.compass_widget import CompassWidget
+from src.new_control_station.src.horizon.guage_widget import (
+    AltitudeGauge,
+    BatteryGauge,
+    SpeedGauge,
+)
+from src.new_control_station.src.map.map_widget import MapWidget
+from src.new_control_station.src.camera.camera_widget import CameraWidget
 
 
 def PrimaryPushButton(text):
@@ -95,10 +101,7 @@ class DroneClient(QObject):
 
     def __init__(
         self,
-        zmq_client: ZMQClient = None,
         logger=None,
-        video_stream_window=None,
-        processed_stream_window=None,
         is_simulation=False,
     ):
         super().__init__()
@@ -111,21 +114,14 @@ class DroneClient(QObject):
         self.master_connection = None
         self.kamikaze_connection = None
         self.log = logger
-        self.zmq_client = zmq_client
-        self.video_stream_window = video_stream_window
-        self.processed_stream_window = processed_stream_window
         self.is_simulation = is_simulation
+
+        self.zmq_client = ZMQClient()
 
         # Setup status update timer
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._update_status)
         self.status_timer.setInterval(1000)  # Update every second
-
-        # Setup video stream thread
-        self.video_running = False
-        self.video_timer = QTimer(self)
-        self.video_timer.timeout.connect(self._video_stream)
-        self.video_timer.setInterval(100)  # Update every 100ms
 
     def drop_load(self):
         """Drop load command."""
@@ -187,9 +183,9 @@ class DroneClient(QObject):
             self.connected = True
 
         # Start status updates
+        self.zmq_client.start()
         self.status_timer.start()
         print("Starting status timer")
-        self.video_timer.start()
 
         if is_kamikaze:
             location = self.kamikaze_connection.get_current_gps_location()
@@ -201,19 +197,6 @@ class DroneClient(QObject):
             if location is not None:
                 lat, lon, alt = location
                 self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
-
-        # self.video_stream_window.show()
-        # self.processed_stream_window.show()
-
-        self.processed_stream_window.start()
-        self.video_stream_window.start()
-
-        # set windows frame dimensions
-        frame = self.zmq_client.get_current_frame()
-        if frame is not None:
-            sh = frame.shape
-            self.video_stream_window.setWindowSize(sh[1], sh[0])
-            self.processed_stream_window.setWindowSize(sh[1], sh[0])
 
         self.connection_status.emit(
             True,
@@ -238,11 +221,8 @@ class DroneClient(QObject):
 
         self.connected = False
 
+        self.zmq_client.stop()
         self.status_timer.stop()
-        self.video_timer.stop()
-
-        self.video_stream_window.close()
-        self.processed_stream_window.close()
 
         self.connection_status.emit(
             False,
@@ -353,14 +333,6 @@ class DroneClient(QObject):
         self.mission_progress.emit(0, "Mission cancelled")
         return True
 
-    def _video_stream(self):
-        """Thread function to handle video receiving"""
-        # Display loop for video frames and handle keyboard commands
-        self.zmq_client.get_video_stream(imshow_func=self.video_stream_window.imshow)
-        self.zmq_client.get_processed_stream(
-            imshow_func=self.processed_stream_window.imshow
-        )
-
     def _update_status_hook(self, current, done):
         self.current_waypoint_index = current
         self.mission_completed = done
@@ -393,15 +365,16 @@ class MissionWaypointTable(QTableWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setColumnCount(6)
+        self.setColumnCount(7) 
         self.setHorizontalHeaderLabels(
-            ["#", "Latitude", "Longitude", "Altitude (m)", "Hold", "Actions"]
+            ["#", "Latitude", "Longitude", "Altitude (m)", "Hold", "Auto", "Actions"]
         )
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.setEditTriggers(QTableWidget.DoubleClicked)
         self.verticalHeader().setVisible(False)
+        self.setShowGrid(True)
 
-    def add_waypoint(self, index, lat, lon, alt, hold=10):
+    def add_waypoint(self, index, lat, lon, alt, hold=10, auto=True):
         """Add a new waypoint to the table."""
         row = self.rowCount()
         self.insertRow(row)
@@ -413,13 +386,23 @@ class MissionWaypointTable(QTableWidget):
         self.setItem(row, 3, QTableWidgetItem(str(alt)))
         self.setItem(row, 4, QTableWidgetItem(str(hold)))
 
-        # Add delete button use icon
+        # Add checkbox for Auto
+        auto_checkbox = QCheckBox()
+        auto_checkbox.setChecked(auto)
+        auto_widget = QWidget()
+        auto_layout = QHBoxLayout(auto_widget)
+        auto_layout.addWidget(auto_checkbox)
+        auto_layout.setAlignment(auto_checkbox, Qt.AlignCenter)
+        auto_layout.setContentsMargins(0, 0, 0, 0)
+        self.setCellWidget(row, 5, auto_widget)
+
+        # Add delete button
         delete_btn = QPushButton("❌")
-        delete_btn.setStyleSheet("margin: 2px;")
+        delete_btn.setStyleSheet("margin: 0px;")
         delete_btn.clicked.connect(
             lambda: self.removeRow(self.indexAt(delete_btn.pos()).row())
         )
-        self.setCellWidget(row, 5, delete_btn)
+        self.setCellWidget(row, 6, delete_btn)
 
     def clear_waypoints(self):
         """Clear all waypoints from the table."""
@@ -429,32 +412,19 @@ class MissionWaypointTable(QTableWidget):
         """Get all waypoints from the table."""
         waypoints = []
         for row in range(self.rowCount()):
+            auto_widget = self.cellWidget(row, 5)
+            auto_checkbox = auto_widget.findChild(QCheckBox)
             waypoint = Waypoint(
                 lat=float(self.item(row, 1).text()),
                 lon=float(self.item(row, 2).text()),
                 alt=float(self.item(row, 3).text()),
                 hold=int(self.item(row, 4).text()),
+                auto=auto_checkbox.isChecked()
             )
             waypoints.append(waypoint)
         return waypoints
 
-class TelemetryDisplay(QWidget):
-    """Professional telemetry dashboard"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.init_ui()
-        
-    def init_ui(self):
-        layout = QHBoxLayout(self)
-        self.attitude_indicator = AttitudeIndicator()
 
-        self.battery_gauge = BatteryGauge()
-        self.altitude_gauge = AltitudeGauge()
-        
-        layout.addWidget(self.attitude_indicator)
-        layout.addWidget(self.battery_gauge)
-        layout.addWidget(self.altitude_gauge)
 
 class ConsoleOutput(QTextEdit):
     """
@@ -488,98 +458,26 @@ class ConsoleOutput(QTextEdit):
         timestamp = QApplication.instance().property("timestamp_fn")()
         self.append(f'<span style="color:{color}">[{timestamp}] {message}</span>')
 
-
-class CameraDisplay(QMainWindow):
-    def __init__(self, title="Camera Display", scale=0.5, frame_shape=(1280, 720, 3)):
-        super().__init__()
-        self.setWindowTitle(title)
-
-        self.scale = scale  # Scale factor for display
-        self.frame = None
-
-        self.orig_height, self.orig_width, self.channels = frame_shape
-
-        # Calculate display dimensions
-        self.disp_width = int(self.orig_width * self.scale)
-        self.disp_height = int(self.orig_height * self.scale)
-
-        # Set window size
-        self.setGeometry(100, 100, self.disp_width, self.disp_height)
-
-        # Create and position the label that will hold the video
-        self.label = QLabel(self)
-        self.label.setGeometry(0, 0, self.disp_width, self.disp_height)
-
-    def setWindowSize(self, width, height, channels=3):
-        """Set the window size and position."""
-        self.disp_height = int(height * self.scale)
-        self.disp_width = int(width * self.scale)
-        self.setGeometry(100, 100, self.disp_width, self.disp_height)
-        self.channels = channels
-
-        # Update the label geometry to match the new window size
-        self.label.setGeometry(0, 0, self.disp_width, self.disp_height)
-
-    def _update_frame(self):
-        if self.frame is None:
-            return
-        # First convert color space
-        frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-
-        # Then resize the frame
-        frame = cv2.resize(frame, (self.disp_width, self.disp_height))
-
-        # Calculate bytes per line based on the resized image
-        bytes_per_line = self.channels * self.disp_width
-
-        # Create QImage with the resized data
-        q_img = QImage(
-            frame.data,
-            self.disp_width,
-            self.disp_height,
-            bytes_per_line,
-            QImage.Format_RGB888,
-        )
-
-        self.label.setPixmap(QPixmap.fromImage(q_img))
-
-    def start(self):
-        # Start the timer to update frames
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._update_frame)
-        self.timer.start(100)
-
-    def imshow(self, frame):
-        self.frame = frame
-
-
 class DroneControlApp(QMainWindow):
     """
     Main application window for drone control.
     """
 
     def __init__(
-        self, client, video_stream_window, processed_stream_window, is_simulation=False
+        self, is_simulation=False
     ):
         super().__init__()
 
         # Set application properties
         QApplication.instance().setProperty("timestamp_fn", self._get_timestamp)
 
-        # external windows
-        self.video_stream_window = video_stream_window
-        self.processed_stream_window = processed_stream_window
-
-        # Initialize UI components
 
         # Initialize drone client
         self.drone_client = DroneClient(
-            zmq_client=client,
-            video_stream_window=self.video_stream_window,
-            processed_stream_window=self.processed_stream_window,
             is_simulation=is_simulation,
         )
 
+        # Initialize UI components
         self._init_ui()
         self.drone_client.set_logger(self.console.append_message)
 
@@ -931,6 +829,9 @@ class DroneControlApp(QMainWindow):
         basic_control_layout.addWidget(status_group)
         basic_control_layout.addStretch(1)
 
+		# camera display tab
+        camera_widget = CameraWidget(parent=self, video_client=self.drone_client.zmq_client)
+
         # Mission planning tab
         mission_widget = QWidget()
         mission_layout = QVBoxLayout(mission_widget)
@@ -939,9 +840,6 @@ class DroneControlApp(QMainWindow):
         mission_layout.addWidget(QLabel("Mission Waypoints:"))
         self.waypoint_table = MissionWaypointTable()
         mission_layout.addWidget(self.waypoint_table)
-
-        # Mission controls
-        mission_controls_layout = QHBoxLayout()
 
         # Add waypoint controls
         add_waypoint_group = QGroupBox("Add Waypoint")
@@ -1047,7 +945,6 @@ class DroneControlApp(QMainWindow):
         self.speed_gauge = SpeedGauge()
         self.compass_widget = CompassWidget()
 
-
         guages.addWidget(self.battery_gauge)
         guages.addWidget(self.altitude_gauge)
         guages.addWidget(self.speed_gauge)
@@ -1068,6 +965,7 @@ class DroneControlApp(QMainWindow):
 
         # Add tabs to the tab widget
         tab_widget.addTab(basic_control_widget, "🤖 Controls")
+        tab_widget.addTab(camera_widget, "📸 Camera")
         tab_widget.addTab(mission_widget, "🚀 Missions")
         tab_widget.addTab(telemetry_widget, "📡 Telemetry")
 
@@ -1391,7 +1289,7 @@ class DroneControlApp(QMainWindow):
             return
 
         try:
-            mission_data = {"waypoints": self.waypoint_table.get_waypoints()}
+            mission_data = {"waypoints": [w.__dict__ for w in self.waypoint_table.get_waypoints()]}
 
             if not file_path.endswith(".mission"):
                 file_path += ".mission"
@@ -1414,12 +1312,14 @@ class DroneControlApp(QMainWindow):
         waypoints = []
         for wp in _waypoints:
             pose = self.drone_client.initial_position
-            waypoints.append(Waypoint(
-                lat=float(pose["lat"]),
-                lon=float(pose["lon"]),
-                alt=float(pose["alt"]),
-                hold=10,
-            ))
+            waypoints.append(
+                Waypoint(
+                    lat=float(pose["lat"]),
+                    lon=float(pose["lon"]),
+                    alt=float(pose["alt"]),
+                    hold=10,
+                )
+            )
             waypoints.append(wp)
 
         if self.drone_client.upload_mission(waypoints):
@@ -1510,8 +1410,8 @@ class DroneControlApp(QMainWindow):
             self.attitude_indicator.set_attitude(pitch, roll, yaw)
             self.compass_widget.set_heading(yaw)
 
-        self.battery_gauge.set_value(status.get('battery', 100))
-        self.speed_gauge.set_value(status.get('speed', 0))
+        self.battery_gauge.set_value(status.get("battery", 100))
+        self.speed_gauge.set_value(status.get("speed", 0))
 
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1) + 1
@@ -1564,7 +1464,7 @@ class DroneControlApp(QMainWindow):
         event.accept()
 
 
-def run_app(client):
+def run_app():
     import argparse
 
     # parse command line arguments for simulation mode
@@ -1575,10 +1475,8 @@ def run_app(client):
     args = parser.parse_args()
     is_simulation = args.is_simulation
 
-    video_stream_window = CameraDisplay(title="Raw Stream")
-    processed_stream_window = CameraDisplay(title="Processed Stream")
     window = DroneControlApp(
-        client, video_stream_window, processed_stream_window, is_simulation
+        is_simulation
     )
     window.show()
 
@@ -1605,9 +1503,7 @@ def main():
     # set_theme(app)
     # Apply the palette
     """Run the drone control application."""
-    client = ZMQClient()
-    client.start()
-    run_app(client)
+    run_app()
     sys.exit(app.exec())
 
 

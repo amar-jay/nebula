@@ -79,4 +79,4 @@ recv:
 
 lint:
 	@isort .
-	#@black .
+	@black .

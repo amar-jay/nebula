@@ -68,6 +68,7 @@ from qfluentwidgets import (
 )
 
 from src.controls.mavlink import gz
+from src.controls.mavlink import ardupilot
 from src.controls.mavlink.mission_types import Waypoint
 from src.mq.messages import ZMQTopics
 from src.mq.zmq_client import ZMQClient
@@ -161,16 +162,17 @@ class DroneClient(QObject):
     def connect_to_drone(self, connection_string, is_kamikaze=False):
         """Connect to drone at the specified TCP address and port."""
 
-        if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
-            address, port = connection_string[4:].split(":")
-            port = int(port)
+        #if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
+            #address, port = connection_string[4:].split(":")
+            #port = int(port)
 
         if is_kamikaze:
-            self.kamikaze_connection = gz.ArdupilotConnection(connection_string)
+            self.kamikaze_connection = ardupilot.ArdupilotConnection(connection_string)
             self.k_connected = True
+            self.kamikaze_connection._set_mode("GUIDED")
             # self.kamikaze_connection.wait_heartbeat()
         else:
-            self.master_connection = gz.ArdupilotConnection(
+            self.master_connection = ardupilot.ArdupilotConnection(
                 connection_string=connection_string,
                 # world="delivery_runway",
                 # model_name="iris_with_stationary_gimbal",
@@ -179,6 +181,7 @@ class DroneClient(QObject):
                 # f"[MAVLink] {' '.join(map(str, message))}",
                 # ),
             )
+            self.master_connection._set_mode("GUIDED")
             self.connected = True
 
         # Start status updates
@@ -526,14 +529,14 @@ class DroneControlApp(QMainWindow):
             Action(
                 FIF.CONNECT,
                 "Serial (/dev/ttyAMA0)",
-                triggered=lambda: self._on_serial_connect_clicked(),
+                triggered=lambda: self._on_usb_connect_clicked(connection_string="/dev/ttyAMA0"),
             )
         )
         self.connect_sitl_action = self.connect_menu.addAction(
             Action(
                 FIF.CONNECT,
                 "USB (/dev/ttyUSB0)",
-                triggered=lambda: self._on_usb_connect_clicked(),
+                triggered=lambda: self._on_usb_connect_clicked(connection_string="/dev/ttyUSB0"),
             )
         )
         self.connect_btn.setMenu(self.connect_menu)
@@ -1054,44 +1057,24 @@ class DroneControlApp(QMainWindow):
                 f"Failed to connect to {address}:{port}", "error"
             )
 
-    def _on_serial_connect_clicked(self):
+    def _on_usb_connect_clicked(self, connection_string="/dev/ttyUSB0"):
         """Handle connect button click."""
 
-        serial_connection_string = "/dev/ttyAMA0"
         self.console.append_message(
-            f"Connecting to {serial_connection_string}...", "info"
+            f"Connecting to {connection_string}...", "info"
         )
-        if self.drone_client.connect_to_drone(serial_connection_string):
+        if self.drone_client.connect_to_drone(connection_string):
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
             self.arm_btn.setEnabled(True)
             self.upload_mission_btn.setEnabled(True)
             self.console.append_message(
-                f"Connected to {serial_connection_string}", "success"
+                f"Connected to {connection_string}", "success"
             )
         else:
-            self._show_error(f"Failed to connect to {serial_connection_string}")
+            self._show_error(f"Failed to connect to {connection_string}")
             self.console.append_message(
-                f"Failed to connect to {serial_connection_string}", "error"
-            )
-
-    def _on_usb_connect_clicked(self):
-        """Handle connect button click."""
-        usb_connection_string = "/dev/ttyUSB0"
-        self.console.append_message(f"Connecting to {usb_connection_string}...", "info")
-
-        if self.drone_client.connect_to_drone(usb_connection_string):
-            self.connect_btn.setEnabled(False)
-            self.disconnect_btn.setEnabled(True)
-            self.arm_btn.setEnabled(True)
-            self.upload_mission_btn.setEnabled(True)
-            self.console.append_message(
-                f"Connected to {usb_connection_string}", "success"
-            )
-        else:
-            self._show_error(f"Failed to connect to {usb_connection_string}")
-            self.console.append_message(
-                f"Failed to connect to {usb_connection_string}", "error"
+                f"Failed to connect to {connection_string}", "error"
             )
 
     def _on_disconnect_clicked(self):
@@ -1437,6 +1420,7 @@ class DroneControlApp(QMainWindow):
             self.compass_widget.set_heading(yaw)
 
         self.battery_gauge.set_value(status.get("battery", 100))
+        self.battery_progress.setValue(status.get("battery", 100))
         self.speed_gauge.set_value(status.get("speed", 0))
 
         if status.get("mission_active", False):
@@ -1521,7 +1505,7 @@ def set_theme(app):
     app.setPalette(palette)
 
 
-def _set_theme(app):
+def _set_dark_theme(app):
     palette = QPalette()
 
     # General window background
@@ -1554,11 +1538,17 @@ def _set_theme(app):
 def main():
     """Run the drone control application."""
     app = QApplication(sys.argv)
+
+    from src.new_control_station.src.login.page import LoginWindow
+
     app.setStyle("Fusion")
     set_theme(app)
     # Apply the palette
+
     window = DroneControlApp()
-    window.show()
+    w = LoginWindow(mainWindow=window)
+    w.show()
+
     sys.exit(app.exec())
 
 

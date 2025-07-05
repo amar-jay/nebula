@@ -12,8 +12,6 @@ from qfluentwidgets import (
     setTheme,
     setThemeColor,
 )
-from qfluentwidgets.window.fluent_window import FluentWindow
-
 from .Ui_LoginWindow import Ui_Form, get_asset
 
 
@@ -28,10 +26,10 @@ else:
 
 
 class LoginWindow(Window, Ui_Form):
-    def __init__(self):
+    def __init__(self, mainWindow=Window()):
         super().__init__()
         self.setupUi(self)
-        # setTheme(Theme.DARK)
+        setTheme(Theme.DARK)
         setThemeColor("#28afe9")
 
         self.setTitleBar(SplitTitleBar(self))
@@ -62,7 +60,7 @@ class LoginWindow(Window, Ui_Form):
         w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
-        self.mainWindow = Window()
+        self.mainWindow = mainWindow
         # on click on button, change the interface
         self.pushButton.clicked.connect(self.onLoginButtonClicked)
 
@@ -91,7 +89,7 @@ class LoginWindow(Window, Ui_Form):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        pixmap = QPixmap(get_asset("images/background.jpg")).scaled(
+        pixmap = QPixmap(get_asset("images/placeholder.png")).scaled(
             self.label.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
         )
         self.label.setPixmap(pixmap)

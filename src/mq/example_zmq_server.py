@@ -161,16 +161,23 @@ class ZMQServer:
         self.control_thread = None
 
         # Enable video streaming for simulation
-        # if self.is_simulation:
-        # 	print("Enabling video streaming")
-        # 	done = self.master_connection.enable_streaming()
-        # 	print("Enabling streaming")
-        # 	if not done:
-        # 		print("❌ Failed to enable streaming.")
-        # 		return False
-        # logger.info(
-        # 	f"Server initialized with video port {video_port} and control port {control_port}"
-        # )
+
+        if self.is_simulation:
+            print("Enabling video streaming")
+            done = gz.enable_streaming(
+                world="delivery_runway",
+                model_name="iris_with_stationary_gimbal",
+                camera_link="tilt_link",
+            )
+            print("Enabling streaming")
+            if not done:
+                print("❌ Failed to enable streaming.")
+                return False
+        logger.info(
+            "Server initialized with video port %d and control port %d",
+            video_port,
+            control_port,
+        )
 
     def start_capture(self) -> bool:
         """Start the video capture"""

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QSplitter,
     QStyle,
+    QTabBar,
     QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
@@ -39,6 +40,7 @@ from qfluentwidgets import (
     Action,
 )
 from qfluentwidgets import BodyLabel as QLabel
+from qfluentwidgets import CheckBox as QCheckBox
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import (
     LineEdit as QLineEdit,  # MessageBox as QMessageBox,; DoubleSpinBox as QDoubleSpinBox,; HeaderCardWidget as QGroupBox,; ProgressBar as QProgressBar,
@@ -49,7 +51,6 @@ from qfluentwidgets import (
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import (
     ProgressBar,
-	CheckBox as QCheckBox,
 )
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
@@ -68,8 +69,9 @@ from qfluentwidgets import (
 
 from src.controls.mavlink import gz
 from src.controls.mavlink.mission_types import Waypoint
-from src.mq.zmq_client import ZMQClient
 from src.mq.messages import ZMQTopics
+from src.mq.zmq_client import ZMQClient
+from src.new_control_station.src.camera.camera_widget import CameraWidget
 from src.new_control_station.src.horizon.attitude_widget import AttitudeIndicator
 from src.new_control_station.src.horizon.compass_widget import CompassWidget
 from src.new_control_station.src.horizon.guage_widget import (
@@ -78,7 +80,6 @@ from src.new_control_station.src.horizon.guage_widget import (
     SpeedGauge,
 )
 from src.new_control_station.src.map.map_widget import MapWidget
-from src.new_control_station.src.camera.camera_widget import CameraWidget
 
 
 def PrimaryPushButton(text):
@@ -102,7 +103,6 @@ class DroneClient(QObject):
     def __init__(
         self,
         logger=None,
-        is_simulation=False,
     ):
         super().__init__()
         self.connected = False
@@ -114,7 +114,6 @@ class DroneClient(QObject):
         self.master_connection = None
         self.kamikaze_connection = None
         self.log = logger
-        self.is_simulation = is_simulation
 
         self.zmq_client = ZMQClient()
 
@@ -241,11 +240,6 @@ class DroneClient(QObject):
         else:
             self.master_connection.arm()
 
-        if self.connected and self.is_simulation:
-            done = gz.enable_streaming()
-            if not done:
-                print("❌ Failed to enable streaming.")
-
         print("Drone armed successfully.")
         return True
 
@@ -336,9 +330,9 @@ class DroneClient(QObject):
     def _update_status_hook(self, current, done):
         self.current_waypoint_index = current
         self.mission_completed = done
-        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
+        msg = f"Moving to waypoint {current-1}/{len(self.mission_waypoints)}"
         self.mission_progress.emit(
-            int((current) * 100 / len(self.mission_waypoints)), msg
+            int((current - 1) * 100 / len(self.mission_waypoints)), msg
         )
 
     def _update_status(self):
@@ -365,7 +359,7 @@ class MissionWaypointTable(QTableWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setColumnCount(7) 
+        self.setColumnCount(7)
         self.setHorizontalHeaderLabels(
             ["#", "Latitude", "Longitude", "Altitude (m)", "Hold", "Auto", "Actions"]
         )
@@ -419,11 +413,10 @@ class MissionWaypointTable(QTableWidget):
                 lon=float(self.item(row, 2).text()),
                 alt=float(self.item(row, 3).text()),
                 hold=int(self.item(row, 4).text()),
-                auto=auto_checkbox.isChecked()
+                auto=auto_checkbox.isChecked(),
             )
             waypoints.append(waypoint)
         return waypoints
-
 
 
 class ConsoleOutput(QTextEdit):
@@ -458,24 +451,20 @@ class ConsoleOutput(QTextEdit):
         timestamp = QApplication.instance().property("timestamp_fn")()
         self.append(f'<span style="color:{color}">[{timestamp}] {message}</span>')
 
+
 class DroneControlApp(QMainWindow):
     """
     Main application window for drone control.
     """
 
-    def __init__(
-        self, is_simulation=False
-    ):
+    def __init__(self):
         super().__init__()
 
         # Set application properties
         QApplication.instance().setProperty("timestamp_fn", self._get_timestamp)
 
-
         # Initialize drone client
-        self.drone_client = DroneClient(
-            is_simulation=is_simulation,
-        )
+        self.drone_client = DroneClient()
 
         # Initialize UI components
         self._init_ui()
@@ -610,29 +599,18 @@ class DroneControlApp(QMainWindow):
         kamikaze_connection_layout.addWidget(self.k_disconnect_btn)
 
         # Create tab widget for different control panels
-        tab_widget = QTabWidget()
-        tab_widget.setTabPosition(QTabWidget.West)
-        tab_widget.setStyleSheet(
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabPosition(QTabWidget.West)
+        self.tab_widget.setStyleSheet(
             """
 		QTabWidget {
 			min-width: 1000px;
 			}
 		QTabWidget::pane {
 		    border-radius: 10px;
-			padding: 5px;
-			padding: 5px;
-			margin: 0px;
+			padding: 0px;
+		    margin-left: 15px;
 		}
-
-		QTabBar::tab {
-		    color: #707070;
-		    border: 1.5px solid #333;
-		    border-radius: 6px;
-		    padding: 0px 15px;
-		    margin-bottom: 5px;
-		    font-size: 11pt;
-		}
-
 
 		QTabBar::tab:left {
 		    background-color: #404040;
@@ -641,10 +619,9 @@ class DroneControlApp(QMainWindow):
 		    min-height: 20px;
 		    max-height: 100px;
 		    min-width: 30px;
-		    padding: 5px;
-		    margin-bottom: 5px;
-		    margin-right: 3px;
 		    font-size: 8pt;
+		    margin-top: 2px;
+		    margin-bottom: 2px;
 		}
 
 		QTabBar::tab:selected {
@@ -829,8 +806,10 @@ class DroneControlApp(QMainWindow):
         basic_control_layout.addWidget(status_group)
         basic_control_layout.addStretch(1)
 
-		# camera display tab
-        camera_widget = CameraWidget(parent=self, video_client=self.drone_client.zmq_client)
+        # camera display tab
+        camera_widget = CameraWidget(
+            parent=self, video_client=self.drone_client.zmq_client
+        )
 
         # Mission planning tab
         mission_widget = QWidget()
@@ -964,18 +943,36 @@ class DroneControlApp(QMainWindow):
         console_layout.addWidget(self.console)
 
         # Add tabs to the tab widget
-        tab_widget.addTab(basic_control_widget, "🤖 Controls")
-        tab_widget.addTab(camera_widget, "📸 Camera")
-        tab_widget.addTab(mission_widget, "🚀 Missions")
-        tab_widget.addTab(telemetry_widget, "📡 Telemetry")
+        self._create_tab(
+            "src/new_control_station/assets/images/controls.png",
+            "Controls",
+            basic_control_widget,
+        )
+        self._create_tab(
+            "src/new_control_station/assets/images/camera.png", "Camera", camera_widget
+        )
+        self._create_tab(
+            "src/new_control_station/assets/images/mission.png",
+            "Missions",
+            mission_widget,
+        )
+        self._create_tab(
+            "src/new_control_station/assets/images/telemetry.png",
+            "Telemetry",
+            telemetry_widget,
+        )
 
-        # tab_widget.addTab(mission_widget, "Mission Planning")
-        tab_widget.addTab(console_widget, "🧑‍💻️ Console")
-        # tab_widget.addTab(console_widget, "Console")
+        # self.tab_widget.addTab(mission_widget, "Mission Planning")
+        self._create_tab(
+            "src/new_control_station/assets/images/console.png",
+            "‍Console",
+            console_widget,
+        )
+        # self.tab_widget.addTab(console_widget, "Console")
 
         # Add widgets to main layout
         main_layout.addWidget(connection_group)
-        main_layout.addWidget(tab_widget)
+        main_layout.addWidget(self.tab_widget)
 
         # Set central widget
         self.setCentralWidget(main_widget)
@@ -1006,6 +1003,24 @@ class DroneControlApp(QMainWindow):
 
         # Create the event filter to track window state changes
         self.installEventFilter(self)
+
+    def _create_tab(self, icon_path, tooltip, widget):
+        index = self.tab_widget.addTab(widget, "")  # Add empty tab
+        # Create a rotated and centered QLabel as icon
+        pixmap = QPixmap(icon_path)
+        transform = QTransform().rotate(0)
+        rotated_pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
+        icon_label = QLabel()
+        icon_label.setPixmap(
+            rotated_pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setFixedSize(40, 40)  # Ensure it's nicely contained
+        self.tab_widget.setTabToolTip(index, tooltip)
+        self.tab_widget.tabBar().setTabText(index, "")  # Remove text
+        self.tab_widget.tabBar().setTabButton(
+            index, QTabBar.ButtonPosition.LeftSide, icon_label
+        )
 
     def _get_timestamp(self):
         """Get a formatted timestamp for console messages."""
@@ -1088,8 +1103,8 @@ class DroneControlApp(QMainWindow):
         self.console.append_message("Disconnected from drone", "info")
 
     def _on_arm_clicked(self):
-        print("Arm button clicked")
         """Handle arm button click."""
+        print("Arm button clicked")
         if self.drone_client.arm():
             print("Drone armed successfully")
             self.console.append_message("Drone armed", "success")
@@ -1196,7 +1211,7 @@ class DroneControlApp(QMainWindow):
             return
 
         try:
-            with open(file_path, "r") as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 mission_data = json.load(file)
 
             self.waypoint_table.clear_waypoints()
@@ -1211,7 +1226,7 @@ class DroneControlApp(QMainWindow):
                 )
 
             self.console.append_message(f"Loaded mission from {file_path}", "success")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self._show_error(f"Failed to load mission: {str(e)}")
             self.console.append_message(f"Failed to load mission: {str(e)}", "error")
 
@@ -1289,16 +1304,18 @@ class DroneControlApp(QMainWindow):
             return
 
         try:
-            mission_data = {"waypoints": [w.__dict__ for w in self.waypoint_table.get_waypoints()]}
+            mission_data = {
+                "waypoints": [w.__dict__ for w in self.waypoint_table.get_waypoints()]
+            }
 
             if not file_path.endswith(".mission"):
                 file_path += ".mission"
 
-            with open(file_path, "w") as file:
+            with open(file_path, "w", encoding="utf-8") as file:
                 json.dump(mission_data, file, indent=2)
 
             self.console.append_message(f"Saved mission to {file_path}", "success")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self._show_error(f"Failed to save mission: {str(e)}")
             self.console.append_message(f"Failed to save mission: {str(e)}", "error")
 
@@ -1321,6 +1338,15 @@ class DroneControlApp(QMainWindow):
                 )
             )
             waypoints.append(wp)
+
+        waypoints.append(
+            Waypoint(
+                lat=float(pose["lat"]),
+                lon=float(pose["lon"]),
+                alt=float(pose["alt"]),
+                hold=10,
+            )
+        )
 
         if self.drone_client.upload_mission(waypoints):
             self.console.append_message(
@@ -1348,7 +1374,7 @@ class DroneControlApp(QMainWindow):
         else:
             self.console.append_message("Failed to cancel mission", "error")
 
-    def _on_connection_status_changed(self, connected, message):
+    def _on_connection_status_changed(self, connected, _):
         """Handle connection status changes."""
         if connected:
             self.connection_status_label.setText("Connected")
@@ -1464,46 +1490,75 @@ class DroneControlApp(QMainWindow):
         event.accept()
 
 
-def run_app():
-    import argparse
-
-    # parse command line arguments for simulation mode
-    parser = argparse.ArgumentParser(description="Drone Control Center")
-    parser.add_argument(
-        "--is-simulation", action="store_true", help="Run in simulation mode"
-    )
-    args = parser.parse_args()
-    is_simulation = args.is_simulation
-
-    window = DroneControlApp(
-        is_simulation
-    )
-    window.show()
-
-
 def set_theme(app):
     palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(240, 240, 240))
-    palette.setColor(QPalette.WindowText, Qt.black)
-    palette.setColor(QPalette.Base, QColor(255, 255, 255))
-    palette.setColor(QPalette.AlternateBase, QColor(245, 245, 245))
-    palette.setColor(QPalette.Text, Qt.black)
-    palette.setColor(QPalette.Button, QColor(240, 240, 240))
-    palette.setColor(QPalette.ButtonText, Qt.black)
-    palette.setColor(QPalette.Link, QColor(0, 100, 200))
-    palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+
+    # Window background (slate gray)
+    palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    palette.setColor(QPalette.WindowText, Qt.white)
+
+    # Text entry backgrounds (dark gray)
+    palette.setColor(QPalette.Base, QColor(42, 42, 42))
+    palette.setColor(QPalette.AlternateBase, QColor(66, 66, 66))
+    palette.setColor(QPalette.Text, Qt.white)
+
+    # Buttons
+    palette.setColor(QPalette.Button, QColor(60, 60, 60))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+
+    # Hyperlinks
+    palette.setColor(QPalette.Link, QColor(42, 130, 218))  # Nice blue
+
+    # Highlights
+    palette.setColor(QPalette.Highlight, QColor(90, 140, 200))  # Muted blue
     palette.setColor(QPalette.HighlightedText, Qt.white)
+
+    # Disabled states
+    disabled_color = QColor(120, 120, 120)
+    palette.setColor(QPalette.Disabled, QPalette.Text, disabled_color)
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, disabled_color)
+
+    app.setPalette(palette)
+
+
+def _set_theme(app):
+    palette = QPalette()
+
+    # General window background
+    palette.setColor(QPalette.Window, QColor(30, 30, 30))
+    palette.setColor(QPalette.WindowText, Qt.white)
+
+    # Text entry background
+    palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    palette.setColor(QPalette.AlternateBase, QColor(40, 40, 40))
+    palette.setColor(QPalette.Text, Qt.white)
+
+    # Buttons
+    palette.setColor(QPalette.Button, QColor(45, 45, 45))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+
+    # Hyperlinks
+    palette.setColor(QPalette.Link, QColor(0, 122, 204))
+
+    # Selection colors
+    palette.setColor(QPalette.Highlight, QColor(38, 79, 120))  # Soft blue
+    palette.setColor(QPalette.HighlightedText, Qt.white)
+
+    # Disabled state
+    palette.setColor(QPalette.Disabled, QPalette.Text, QColor(128, 128, 128))
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(128, 128, 128))
 
     app.setPalette(palette)
 
 
 def main():
+    """Run the drone control application."""
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    # set_theme(app)
+    set_theme(app)
     # Apply the palette
-    """Run the drone control application."""
-    run_app()
+    window = DroneControlApp()
+    window.show()
     sys.exit(app.exec())
 
 

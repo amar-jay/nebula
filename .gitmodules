@@ -10,3 +10,12 @@
 [submodule "src/ardupilot_gazebo"]
 	path = src/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl
+[submodule "src/new_control_station/libs/PyQt-Fluent-Widgets"]
+	path = src/new_control_station/libs/PyQt-Fluent-Widgets
+	url = https://github.com/amar-jay/PyQt-Fluent-Widgets
+[submodule "src/new_control_station/libs/PyQt-Frameless-Window"]
+	path = src/new_control_station/libs/PyQt-Frameless-Window
+	url = https://github.com/amar-jay/PyQt-Frameless-Window
+[submodule "src/new_control_station/libs/PySide6-Fluent-Widgets-plugin"]
+	path = src/new_control_station/libs/PySide6-Fluent-Widgets-plugin
+	url = https://github.com/amar-jay/PySide6-Fluent-Widgets-plugin

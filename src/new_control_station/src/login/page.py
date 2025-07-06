@@ -12,6 +12,7 @@ from qfluentwidgets import (
     setTheme,
     setThemeColor,
 )
+
 from .Ui_LoginWindow import Ui_Form, get_asset
 
 

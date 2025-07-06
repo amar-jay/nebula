@@ -67,8 +67,7 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink import gz
-from src.controls.mavlink import ardupilot
+from src.controls.mavlink import ardupilot, gz
 from src.controls.mavlink.mission_types import Waypoint
 from src.mq.messages import ZMQTopics
 from src.mq.zmq_client import ZMQClient
@@ -162,9 +161,9 @@ class DroneClient(QObject):
     def connect_to_drone(self, connection_string, is_kamikaze=False):
         """Connect to drone at the specified TCP address and port."""
 
-        #if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
-            #address, port = connection_string[4:].split(":")
-            #port = int(port)
+        # if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
+        # address, port = connection_string[4:].split(":")
+        # port = int(port)
 
         if is_kamikaze:
             self.kamikaze_connection = ardupilot.ArdupilotConnection(connection_string)
@@ -529,14 +528,18 @@ class DroneControlApp(QMainWindow):
             Action(
                 FIF.CONNECT,
                 "Serial (/dev/ttyAMA0)",
-                triggered=lambda: self._on_usb_connect_clicked(connection_string="/dev/ttyAMA0"),
+                triggered=lambda: self._on_usb_connect_clicked(
+                    connection_string="/dev/ttyAMA0"
+                ),
             )
         )
         self.connect_sitl_action = self.connect_menu.addAction(
             Action(
                 FIF.CONNECT,
                 "USB (/dev/ttyUSB0)",
-                triggered=lambda: self._on_usb_connect_clicked(connection_string="/dev/ttyUSB0"),
+                triggered=lambda: self._on_usb_connect_clicked(
+                    connection_string="/dev/ttyUSB0"
+                ),
             )
         )
         self.connect_btn.setMenu(self.connect_menu)
@@ -1060,17 +1063,13 @@ class DroneControlApp(QMainWindow):
     def _on_usb_connect_clicked(self, connection_string="/dev/ttyUSB0"):
         """Handle connect button click."""
 
-        self.console.append_message(
-            f"Connecting to {connection_string}...", "info"
-        )
+        self.console.append_message(f"Connecting to {connection_string}...", "info")
         if self.drone_client.connect_to_drone(connection_string):
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
             self.arm_btn.setEnabled(True)
             self.upload_mission_btn.setEnabled(True)
-            self.console.append_message(
-                f"Connected to {connection_string}", "success"
-            )
+            self.console.append_message(f"Connected to {connection_string}", "success")
         else:
             self._show_error(f"Failed to connect to {connection_string}")
             self.console.append_message(

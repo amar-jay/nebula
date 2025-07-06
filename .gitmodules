@@ -16,6 +16,6 @@
 [submodule "src/new_control_station/libs/PyQt-Frameless-Window"]
 	path = src/new_control_station/libs/PyQt-Frameless-Window
 	url = https://github.com/amar-jay/PyQt-Frameless-Window
-[submodule "src/new_control_station/libs/PySide6-Fluent-Widgets-plugin"]
-	path = src/new_control_station/libs/PySide6-Fluent-Widgets-plugin
+[submodule "src/new_control_station/libs/PySide6-Fluent-Widgets-plguin"]
+  path = src/new_control_station/libs/PySide6-Fluent-Widgets-plguin
 	url = https://github.com/amar-jay/PySide6-Fluent-Widgets-plugin

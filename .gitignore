@@ -58,5 +58,5 @@ gz_ws/src/sdformat_urdf
 mission_planner
 __pycache__
 venv
-src/new_control_station/libs/
-src/new_control_station/libs/**/*
+recordings/
+world_files/

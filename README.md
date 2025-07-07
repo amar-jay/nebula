@@ -1,4 +1,15 @@
-# MATEK
+<p align="center">
+  <a href="https://github.com/amar-jay/nebula">
+    <img src="./src/new_control_station/assets/images/logo.png" height="96">
+    <h3 align="center">Nebula</h3>
+  </a>
+</p>
+
+<p align="center">
+An application system consisting of an edge server and a desktop client (built with PySide and pymavlink), communicating over ZeroMQ to control the <strong>Nebula Team’s Teknofest 2025</strong> drone, featuring ArduPilot integration and planned image-based package loading.
+</p>
+
+<br/>
 
 [![Watch the video](https://img.youtube.com/vi/ZF_N-Vu7Tik/maxresdefault.jpg)](https://www.youtube.com/watch?v=ZF_N-Vu7Tik)
 

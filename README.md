@@ -1,5 +1,7 @@
 # MATEK
 
+[![Watch the video](https://img.youtube.com/vi/ZF_N-Vu7Tik/maxresdefault.jpg)](https://www.youtube.com/watch?v=ZF_N-Vu7Tik)
+
 ### Features
 
 - **Control Station**: built for monitoring and controlling the drone.

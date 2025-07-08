@@ -51,6 +51,7 @@ from qfluentwidgets import (
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import (
     ProgressBar,
+	MessageBox,
 )
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
@@ -184,9 +185,11 @@ class DroneClient(QObject):
             self.connected = True
 
         # Start status updates
+        print("Starting ZMQ client...")
         self.zmq_client.start()
+        print("ZMQ client started")
+        print("Starting status timer...")
         self.status_timer.start()
-        print("Starting status timer")
 
         if is_kamikaze:
             location = self.kamikaze_connection.get_current_gps_location()
@@ -232,31 +235,29 @@ class DroneClient(QObject):
 
     def arm(self, is_kamikaze=False):
         """Arm the drone."""
-        print("Arming drone...")
         if not self.connected:
             return False
 
-        print("Arming drone...")
+        self.log("Arming drone...")
         if is_kamikaze:
             self.kamikaze_connection.arm()
         else:
             self.master_connection.arm()
 
-        print("Drone armed successfully.")
+        self.log("Drone armed successfully.")
         return True
 
     def disarm(self):
         """Disarm the drone."""
         if not self.connected:
             return False
-        print("_ Disarming drone...")
 
         # Check if the drone is armed from the status update
         armed = self.status.get("armed", False)
         if not armed:
             self.log("Disarming a unarmed or not flying drone")
             return False
-        print("Disarming drone...")
+        self.log("Disarming drone...")
         self.master_connection.disarm()
         return True
 
@@ -266,7 +267,7 @@ class DroneClient(QObject):
         if not self.connected or not armed:
             return False
 
-        print("Taking off...")
+        self.log("Taking off...")
         self.master_connection.takeoff(altitude)
         return True
 
@@ -292,8 +293,8 @@ class DroneClient(QObject):
         if relative:
             lat += self.initial_position["lat"]
             lon += self.initial_position["lon"]
-        print(f"Moving to coordinates: {lat}, {lon}, {alt} (relative={relative})")
-        print("Initial position:", self.initial_position)
+        self.log(f"Moving to coordinates: {lat}, {lon}, {alt} (relative={relative})")
+        self.log(f"Initial position: {self.initial_position}")
 
         self.master_connection.goto_waypointv2(lat, lon, alt)
 
@@ -332,9 +333,9 @@ class DroneClient(QObject):
     def _update_status_hook(self, current, done):
         self.current_waypoint_index = current
         self.mission_completed = done
-        msg = f"Moving to waypoint {current-1}/{len(self.mission_waypoints)}"
+        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
         self.mission_progress.emit(
-            int((current - 1) * 100 / len(self.mission_waypoints)), msg
+            int((current) * 100 / len(self.mission_waypoints)), msg
         )
 
     def _update_status(self):
@@ -505,6 +506,7 @@ class DroneControlApp(QMainWindow):
         self.tcp_port_input = QSpinBox()
         self.tcp_port_input.setRange(1, 65535)
         self.tcp_port_input.setValue(14550)
+        self.tcp_port_input.setSingleStep(1000)
 
         self.connect_btn = PrimaryPushButton("Connect")
         self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
@@ -573,9 +575,6 @@ class DroneControlApp(QMainWindow):
         select_waypoint.clicked.connect(lambda: self.map_event("set_waypoint"))
         clear_all_btn = QPushButton("Clear All")
         clear_all_btn.clicked.connect(lambda: self.map_event("clear_all"))
-        undo_btn = QPushButton("Undo")
-        choose_field_btn = QPushButton("Choose Field")
-        choose_field_btn.clicked.connect(lambda: self.map_event("choose_field"))
         sync_btn = PrimaryPushButton("Sync")
         sync_btn.clicked.connect(lambda: self.map_event("sync"))
 
@@ -583,8 +582,6 @@ class DroneControlApp(QMainWindow):
         map_btn_layout.addWidget(select_area_btn)
         map_btn_layout.addWidget(select_waypoint)
         map_btn_layout.addWidget(clear_all_btn)
-        map_btn_layout.addWidget(undo_btn)
-        map_btn_layout.addWidget(choose_field_btn)
         map_btn_layout.addWidget(sync_btn)
 
         connection_layout.addWidget(main_connection_group)
@@ -669,7 +666,7 @@ class DroneControlApp(QMainWindow):
         # kamikaze - red
         self.kamikaze_btn = PrimaryPushButton("Kamikaze")
         style_sheet = self.kamikaze_btn.styleSheet()
-        style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}"
+        style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}\nPrimaryPushButton::hover {background-color: #B22222; color: white; border: 1px solid red;}"
         self.kamikaze_btn.setStyleSheet(style_sheet)
 
         controller_row.addWidget(self.drop_load_btn)
@@ -694,10 +691,10 @@ class DroneControlApp(QMainWindow):
         self.disarm_btn.clicked.connect(self._on_disarm_clicked)
         self.disarm_btn.setEnabled(False)
 
-        self.safety_btn = SwitchButton("Enabled Safety")
+        self.safety_btn = QCheckBox("Safety Switch")
         self.safety_btn.setChecked(False)
-        self.safety_btn.checkedChanged.connect(self._on_safety_clicked)
-        self.safety_btn.setEnabled(True)
+        self.safety_btn.stateChanged.connect(self._on_safety_clicked)
+        self.safety_btn.setEnabled(False)
 
         self.takeoff_btn = QPushButton("Takeoff")
         self.takeoff_btn.clicked.connect(self._on_takeoff_clicked)
@@ -716,7 +713,6 @@ class DroneControlApp(QMainWindow):
         controls_row1.addWidget(self.takeoff_btn)
         controls_row1.addWidget(self.land_btn)
         controls_row1.addWidget(self.rtl_btn)
-        controls_row1.addWidget(self.safety_btn)
 
         # Second row for goto controls
         goto_group = QGroupBox("Go to Position")
@@ -756,12 +752,14 @@ class DroneControlApp(QMainWindow):
 
         # Add takeoff altitude spinner
         takeoff_layout = QHBoxLayout()
+        takeoff_layout.addWidget(self.safety_btn)
+        takeoff_layout.addStretch()
         takeoff_layout.addWidget(QLabel("Takeoff Altitude (m):"))
+		# add spacer
         self.takeoff_alt_input = QDoubleSpinBox()
         self.takeoff_alt_input.setRange(1, 100)
         self.takeoff_alt_input.setValue(5.0)
         takeoff_layout.addWidget(self.takeoff_alt_input)
-        takeoff_layout.addStretch()
 
         # Add all controls to the layout
         control_layout.addLayout(controls_row1)
@@ -1049,6 +1047,7 @@ class DroneControlApp(QMainWindow):
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
             self.arm_btn.setEnabled(True)
+            self.safety_btn.setEnabled(True)
             self.upload_mission_btn.setEnabled(True)
             self.console.append_message(f"Connected to {address}:{port}", "success")
             # Set home marker on the map
@@ -1068,6 +1067,7 @@ class DroneControlApp(QMainWindow):
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
             self.arm_btn.setEnabled(True)
+            self.safety_btn.setEnabled(True)
             self.upload_mission_btn.setEnabled(True)
             self.console.append_message(f"Connected to {connection_string}", "success")
         else:
@@ -1086,9 +1086,9 @@ class DroneControlApp(QMainWindow):
 
     def _on_arm_clicked(self):
         """Handle arm button click."""
-        print("Arm button clicked")
+        self.console.append_message("Arming drone...", "info")
         if self.drone_client.arm():
-            print("Drone armed successfully")
+            self.console.append_message("Arming drone successful", "success")
             self.console.append_message("Drone armed", "success")
             self.takeoff_btn.setEnabled(True)
             self.start_mission_btn.setEnabled(True)
@@ -1098,8 +1098,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_safety_clicked(self, state):
         """Handle disarm button click."""
-        print(f"Safety switch state: {state}")
-        self.safety_btn.setText("Enabled Safety" if state else "Disabled Safety")
+        self.console.append_message(f"Safety switch state: {state}")
         self.drone_client.master_connection.safety_switch(state)
         self.safety_btn.setChecked(state)
         self.console.append_message(
@@ -1238,10 +1237,10 @@ class DroneControlApp(QMainWindow):
         elif event == "clear_all":
             self.waypoint_table.clear_waypoints()
             self.dock_content.page().runJavaScript("clearAll();")
-        elif event == "undo_waypoint":
-            self.dock_content.page().runJavaScript("undoWaypoint();")
-        elif event == "choose_field":
-            self.dock_content.page().runJavaScript("chooseField();")
+        # elif event == "undo_waypoint":
+        #     self.dock_content.page().runJavaScript("undoWaypoint();")
+        # elif event == "choose_field":
+        #     self.dock_content.page().runJavaScript("chooseField();")
         elif event == "sync":
             self.dock_content.page().runJavaScript("setMission('ddd');")
             self.dock_content.page().runJavaScript("setPosition();")
@@ -1360,8 +1359,10 @@ class DroneControlApp(QMainWindow):
         """Handle connection status changes."""
         if connected:
             self.connection_status_label.setText("Connected")
+            self.arm_btn.setEnabled(True)
         else:
             self.connection_status_label.setText("Disconnected")
+            self.arm_btn.setEnabled(False)
             self._disable_control_buttons()
 
     def _on_drone_status_update(self, status):
@@ -1372,6 +1373,7 @@ class DroneControlApp(QMainWindow):
 
         is_armemd = status.get("armed", False)
         self.armed_status_label.setText("Armed" if is_armemd else "Disarmed")
+        self.safety_btn.setEnabled(self.drone_client.connected)
         self.arm_btn.setEnabled(not is_armemd)
         self.disarm_btn.setEnabled(is_armemd)
         self.takeoff_btn.setEnabled(is_armemd)
@@ -1423,7 +1425,7 @@ class DroneControlApp(QMainWindow):
         self.speed_gauge.set_value(status.get("speed", 0))
 
         if status.get("mission_active", False):
-            current_wp = status.get("current_waypoint", -1) + 1
+            current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
 
             if current_wp > 0 and total_wp > 0:
@@ -1465,7 +1467,12 @@ class DroneControlApp(QMainWindow):
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
-        """Handle window close event."""
+        if self.drone_client.connected:
+            msg = MessageBox("Confirm Exit", "The drone is still connected. Are you sure you want to exit?", self)
+            if not msg.exec():
+                event.ignore()
+                return
+
         self.dock.setVisible(False)
         time.sleep(0.1)  # Allow time for dock to hide
         if self.drone_client.connected:
@@ -1545,6 +1552,7 @@ def main():
     # Apply the palette
 
     window = DroneControlApp()
+    # window.show()
     w = LoginWindow(mainWindow=window)
     w.show()
 

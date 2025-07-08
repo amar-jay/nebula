@@ -77,6 +77,9 @@ sim_server:
 server:
 	@python -m src.mq.example_zmq_server
 
+sim_server2:
+	@python -m src.mq.example_zmq_server2 --is-simulation
+
 recv:
 	@python -m src.mq.example_zmq_reciever
 

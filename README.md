@@ -1,89 +1,87 @@
-# MATEK
+<p align="center">
+  <a href="https://github.com/amar-jay/nebula">
+    <img src="./src/new_control_station/assets/images/logo.png" height="96">
+    <h3 align="center">Nebula</h3>
+  </a>
+</p>
 
-### Features
+<p align="center">
+An application system consisting of an edge server and a desktop client (built with PySide and pymavlink), communicating over ZeroMQ to control the <strong>Nebula Team's Teknofest 2025</strong> drone, featuring ArduPilot integration and planned image-based package loading.
+</p>
 
-- **Control Station**: built for monitoring and controlling the drone.
-- **Gazebo Simulation**: Gazebo and ArduPilot
-- **Controls**: built for monitoring and controlling the drone.
-   - **Machine Learning Integration**: For object detection and monitoring.
-   - **GPS Coordinate estimation**
-  
-## Comprehensive Setup Instructions
+## Demo
+
+[![Watch the video](https://img.youtube.com/vi/ZF_N-Vu7Tik/maxresdefault.jpg)](https://www.youtube.com/watch?v=ZF_N-Vu7Tik)
+
+## Features
+
+- **Control Station**: Built for monitoring and controlling the drone
+- **Gazebo Simulation**: Gazebo and ArduPilot integration
+- **Machine Learning Integration**: Object detection and monitoring with YOLO
+- **GPS Coordinate Estimation**: Precise positioning and navigation
+- **Controls**: Monitoring and controlling interface
+
+## Technologies Used
+
+- **Gazebo**: Simulation tool for robotics and autonomous systems
+- **ArduPilot**: Open-source autopilot system supporting various types of vehicles
+- **PySide6**: Desktop application built with PySide6 using QFluentWidget library
+- **YOLO**: Object detection system for identifying and tracking objects
+- **ZeroMQ**: High-performance messaging library for asynchronous communication between edge server and desktop application
+
+## Installation
 
 ### Prerequisites
 
 - **Operating System**: Ubuntu 22.04 or later
-- **Dependencies**: Git, Python, Gazebo, ArduPilot, PyTorch, OpenCV
+- **Hardware**: CUDA-enabled GPU for accelerated processing
 
-### Cloning the Repository
+### Setup
 
-This project uses **Git submodules**, so make sure to follow the correct steps when cloning and setting up the repository.
+1. **Clone the repository** (uses Git submodules):
+   ```bash
+   git clone --recurse-submodules https://github.com/amar-jay/nebula.git
+   cd nebula
+   git submodule update --remote --merge
+   git submodule update --init --recursive
+   ```
 
-```bash
-git clone --recurse-submodules https://github.com/amar-jay/nebula.git
-cd nebula
-git submodule update --remote --merge
-git submodule update --init --recursive
-```
+2. **Setup ArduPilot**:
+   - Follow [ArduPilot Linux setup guide](https://ardupilot.org/dev/docs/building-setup-linux.html)
+   - Follow [Gazebo and GStreamer setup guide](https://ardupilot.org/dev/docs/sitl-with-gazebo.html#sitl-with-gazebo)
 
-## Setup for ardupilot
+3. **Install Python packages**:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
 
-Follow this guide in setting up ardupilot
-- [https://ardupilot.org/dev/docs/building-setup-linux.html](https://ardupilot.org/dev/docs/building-setup-linux.html)
-
-### Install Python Packages
-
-```bash
-pip install -r requirements.txt
-```
-
-## Usage Instructions
+## Usage
 
 ### Running the Simulation
 
-1. Running control software
-   a. **For Simulation**: Use the provided script to start the Gazebo simulation.
+1. **Start simulation**:
    ```bash
-      ./run_sim.sh -w <world_file.sdf>
-   ```
-   b. **For Drone**: Not a stable version (Currently experimental-to check if it can work across herelink)
-   ```bash
-      python -m src.mq.example_zmq_server # running a zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
-   ```
-3. **Launch the Control Station**: Use the provided script to launch the control station interface.
-   ```bash
-      make app
+   make run_sim
    ```
 
-4. **Launch Controls**: Use the provided script to launch the control software
+2. **Launch Control Station**:
    ```bash
-   python src/controls
+   make app
    ```
 
+3. **Launch Controls** (optional):
+   ```bash
+    make sim_server  # for real drone use `make server`
+   ```
 
-## Technologies and Frameworks Used
+### Running with Real Drone
 
-- **Gazebo**: A simulation tool for robotics and autonomous systems.
-- **ArduPilot**: An open-source autopilot system supporting various types of vehicles.
-- **PySide6**: Our applicaation is built with PySide6 using the qfluentwidget library (We also use a modified version of it -- not in this repo)
-- **YOLO**: An object detection system, used for detecting and tracking objects in the simulation.
-
-### Commands
-```bash
-python3 -m src.controls.mavlink.gz # test gazebo simulation and video streaming
-```
+**Note**: Currently experimental - to check if it can work across herelink
 
 ```bash
-python -m src.mq.example_zmq_server # running an example zmq server where pymavlink is ported over TCP and actions and video frames sent over ZMQ
-
-python -m src.mq.example_zmq_server --is-simulation # this is the simulation version of the zmq server
-```
-
-
-```bash
-python -m src.mq.example_zmq_reciever # the client of the zmq server.
-```
-
-```bash
-make app # to run the Ground Control Station Application
+make server
+make app
 ```

@@ -1,7 +1,7 @@
 import sys
+from typing import Optional
 
 import cv2
-from typing import Optional
 import numpy as np
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen, QPixmap
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import PushButton as QPushButton
+
 from src.mq.zmq_client import ZMQClient
 
 
@@ -27,7 +28,7 @@ def ConnectButton(text):
 class CameraWidget(QWidget):
     """Custom camera widget matching the drone control app style"""
 
-    def __init__(self, parent=None, video_client:Optional[ZMQClient]=None):
+    def __init__(self, parent=None, video_client: Optional[ZMQClient] = None):
         super().__init__(parent)
         self.current_frame = None
         self.is_connected = False
@@ -153,7 +154,7 @@ class CameraWidget(QWidget):
     def show_placeholder(self):
         """Show placeholder when camera is not connected"""
         placeholder = QPixmap(
-			"src/new_control_station/assets/images/logo.png_"
+            "src/new_control_station/assets/images/logo.png_"
         )  # Path to your image asset
 
         if placeholder.isNull():
@@ -219,7 +220,7 @@ class CameraWidget(QWidget):
 
     def disconnect_camera(self):
         """Disconnect from camera"""
-        self.video_client.video_thread.stop()
+        # self.video_client.video_thread.stop()
         if self.is_recording:
             self.stop_recording()
 
@@ -233,6 +234,7 @@ class CameraWidget(QWidget):
 
     @Slot(np.ndarray)
     def update_frame(self, frame):
+        print("Updating camera frame display")
         """Update camera frame display"""
         if self.is_connected and (frame is not None):
             self.current_frame = frame.copy()
@@ -287,7 +289,10 @@ class CameraWidget(QWidget):
             )
 
             # Setup video writer
-            frame_size = (self.current_frame.shape[1], self.current_frame.shape[0])  # (width, height)
+            frame_size = (
+                self.current_frame.shape[1],
+                self.current_frame.shape[0],
+            )  # (width, height)
 
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             self.video_writer = cv2.VideoWriter(
@@ -336,6 +341,7 @@ class CameraWidget(QWidget):
         if self.video_writer:
             self.video_writer.release()
         event.accept()
+
 
 # Example usage and testing
 if __name__ == "__main__":

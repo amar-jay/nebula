@@ -197,7 +197,6 @@ class ZMQClient:
         return self.current_processed_frame
 
 
-from PySide6.QtCore import QTimer
 from PySide6.QtGui import QImage, QPixmap
 
 # Usage example in a PySide6 application:
@@ -248,7 +247,7 @@ def main():
     window.show()
 
     # Run the application
-    sys.exit(app.exec())
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

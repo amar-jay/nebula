@@ -46,12 +46,12 @@ from qfluentwidgets import (
     LineEdit as QLineEdit,  # MessageBox as QMessageBox,; DoubleSpinBox as QDoubleSpinBox,; HeaderCardWidget as QGroupBox,; ProgressBar as QProgressBar,
 )
 from qfluentwidgets import (
+    MessageBox,
     NavigationInterface,
 )
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import (
     ProgressBar,
-	MessageBox,
 )
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
@@ -169,7 +169,7 @@ class DroneClient(QObject):
         if is_kamikaze:
             self.kamikaze_connection = ardupilot.ArdupilotConnection(connection_string)
             self.k_connected = True
-            self.kamikaze_connection._set_mode("GUIDED")
+            self.kamikaze_connection.set_mode("GUIDED")
             # self.kamikaze_connection.wait_heartbeat()
         else:
             self.master_connection = ardupilot.ArdupilotConnection(
@@ -181,7 +181,7 @@ class DroneClient(QObject):
                 # f"[MAVLink] {' '.join(map(str, message))}",
                 # ),
             )
-            self.master_connection._set_mode("GUIDED")
+            self.master_connection.set_mode("GUIDED")
             self.connected = True
 
         # Start status updates
@@ -755,7 +755,7 @@ class DroneControlApp(QMainWindow):
         takeoff_layout.addWidget(self.safety_btn)
         takeoff_layout.addStretch()
         takeoff_layout.addWidget(QLabel("Takeoff Altitude (m):"))
-		# add spacer
+        # add spacer
         self.takeoff_alt_input = QDoubleSpinBox()
         self.takeoff_alt_input.setRange(1, 100)
         self.takeoff_alt_input.setValue(5.0)
@@ -1468,7 +1468,11 @@ class DroneControlApp(QMainWindow):
 
     def closeEvent(self, event):
         if self.drone_client.connected:
-            msg = MessageBox("Confirm Exit", "The drone is still connected. Are you sure you want to exit?", self)
+            msg = MessageBox(
+                "Confirm Exit",
+                "The drone is still connected. Are you sure you want to exit?",
+                self,
+            )
             if not msg.exec():
                 event.ignore()
                 return

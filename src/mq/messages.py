@@ -20,6 +20,8 @@ class ZMQTopics(Enum):
     STATUS = 5
     VIDEO = 6
     PROCESSED_VIDEO = 7
+    HELIPAD_GPS = 8
+    TANK_GPS = 9
 
 
 class VincFuncs:

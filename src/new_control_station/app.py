@@ -28,8 +28,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressBar,
-    QSplitter,
-    QStyle,
     QTabBar,
     QTableWidgetItem,
     QTabWidget,
@@ -47,19 +45,11 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import (
     MessageBox,
-    NavigationInterface,
 )
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
-from qfluentwidgets import (
-    ProgressBar,
-)
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import SpinBox as QSpinBox
-from qfluentwidgets import (
-    SwitchButton,
-    TabBar,
-)
 from qfluentwidgets import TableWidget as QTableWidget
 from qfluentwidgets import TextEdit as QTextEdit
 from qfluentwidgets import (
@@ -68,7 +58,7 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink import ardupilot, gz
+from src.controls.mavlink import ardupilot
 from src.controls.mavlink.mission_types import Waypoint
 from src.mq.messages import ZMQTopics
 from src.mq.zmq_client import ZMQClient
@@ -268,7 +258,7 @@ class DroneClient(QObject):
             return False
 
         self.log("Taking off...")
-        self.master_connection.takeoff(altitude)
+        self.master_connection.takeoff(altitude, wait_time=0.1)
         return True
 
     def land(self):
@@ -1556,9 +1546,9 @@ def main():
     # Apply the palette
 
     window = DroneControlApp()
-    # window.show()
-    w = LoginWindow(mainWindow=window)
-    w.show()
+    window.show()
+    # w = LoginWindow(mainWindow=window)
+    # w.show()
 
     sys.exit(app.exec())
 

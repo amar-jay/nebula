@@ -1,3 +1,9 @@
+camera:
+  intrinsics: [205.46962738, 0.0, 320.0, 0.0, 205.46965599, 240.0, 0.0, 0.0, 1.0]
+  distortion: [0.1, -0.05, 0.01, 0.01]
+  
+
+
 drone_control_system:
   drone:
     max_altitude: 120

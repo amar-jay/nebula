@@ -9,52 +9,69 @@ from typing import Tuple
 import cv2
 import numpy as np
 import zmq
-from pymavlink import mavutil
 
-from src.controls.mavlink import gz
+from src.controls.mavlink import gz, ardupilot
+from src.controls.detection import yolo
+from src.controls.mavlink import mission_types
 from src.mq.messages import ZMQTopics
+
+parser = argparse.ArgumentParser(
+    description="ZMQ Video Server with Control Interface"
+)
+parser.add_argument(
+    "--is-simulation", action="store_true", help="Run in simulation mode"
+)
+
+parser.add_argument(
+    "--video-port", type=int, default=5555, help="Port for video publishing"
+)
+parser.add_argument(
+    "--control-port", type=int, default=5556, help="Port for control commands"
+)
+parser.add_argument(
+    "--video-source", default=0, help="Video source (device ID or file path)"
+)
+args = parser.parse_args()
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("zmq-video-server")
 
+IS_SIMULATION = args.is_simulation
 
 # Configuration
-serial_port = "/dev/ttyUSB0"  # Change to your serial port
-baud_rate = 57600  # Change to your baud rate
-tcp_host = "0.0.0.0"  # Listen on all interfaces
-tcp_port = 16550  # Standard MAVLink port
+if IS_SIMULATION:
+	CONNECTION_STRING = "udp:127.0.0.1:14550"
+else:
+	CONNECTION_STRING = "/dev/ttyUSB0"  # Change to your serial port
+
+#BAUD_RATE = 57600  # Change to your baud rate
+TCP_HOST = "0.0.0.0"  # Listen on all interfaces
+TCP_PORT = 16550  # Standard MAVLink port
+
+try:
+	connection = ardupilot.ArdupilotConnection(connection_string=CONNECTION_STRING)
+except ConnectionError:
+	logger.error(f"Failed to connect to MAVLink at {CONNECTION_STRING}.")
+	exit(1)
+
+logger.info("mavlink connection established")
 
 # List to keep track of client connections
 clients = []
 clients_lock = threading.Lock()
 
-# Connect to the drone via serial
-print(f"Connecting to serial port {serial_port}...")
-try:
-    serial_connection = mavutil.mavlink_connection(
-        # serial_port,
-        # baud=baud_rate,
-        "udp:127.0.0.1:14550",
-        source_system=255,  # Using 255 for GCS
-    )
-except Exception as e:
-    print(f"Error connecting to serial port")
-    exit(1)
-print("Serial connection established")
-
-
 # Set up TCP server
 tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-tcp_server.bind((tcp_host, tcp_port))
+tcp_server.bind((TCP_HOST, TCP_PORT))
 tcp_server.listen(5)  # Allow up to 5 connections
-print(f"TCP server listening on {tcp_host}:{tcp_port}")
+logger.info(f"TCP server listening on {TCP_HOST}:{TCP_PORT}")
 
 
 def handle_client(client_socket, client_address):
-    print(f"New client connected: {client_address}")
+    logger.info(f"New client connected: {client_address}")
 
     try:
         while True:
@@ -65,15 +82,15 @@ def handle_client(client_socket, client_address):
                     break  # Client disconnected
 
                 # Forward from TCP client to serial
-                serial_connection.write(data)
+                connection.master.write(data)
             except Exception as e:
-                print(f"Error reading from client {client_address}: {e}")
+                logger.error(f"Error reading from client {client_address}: {e}")
                 break
     finally:
         with clients_lock:
             clients.remove(client_socket)
         client_socket.close()
-        print(f"Client disconnected: {client_address}")
+        logger.info(f"Client disconnected: {client_address}")
 
 
 def accept_clients():
@@ -89,7 +106,7 @@ def accept_clients():
             )
             client_thread.start()
         except Exception as e:
-            print(f"Error accepting client: {e}")
+            logger.error(f"Error accepting client: {e}")
             time.sleep(1)  # Avoid CPU spinning on error
 
 
@@ -97,7 +114,7 @@ def forward_from_serial_to_tcp():
     while True:
         try:
             # Wait for a message from the serial connection
-            msg = serial_connection.recv_match(blocking=True)
+            msg = connection.master.recv_match(blocking=True)
             if msg is not None:
                 # Convert the message back to bytes
                 msg_bytes = msg.get_msgbuf()
@@ -120,7 +137,7 @@ def forward_from_serial_to_tcp():
                         except:
                             pass
         except Exception as e:
-            print(f"Error in serial to TCP forwarding: {e}")
+            logger.error(f"Error in serial to TCP forwarding: {e}")
             time.sleep(0.1)  # Avoid CPU spinning on error
 
 
@@ -137,7 +154,6 @@ class ZMQServer:
         control_port: Port for receiving control commands
         video_source: Camera device ID or video file path
         """
-        self.is_simulation = is_simulation
         self.context = zmq.Context()
 
         # Video publisher socket (PUB-SUB pattern)
@@ -160,19 +176,38 @@ class ZMQServer:
         self.video_thread = None
         self.control_thread = None
 
+        self.object_classes = ["helipad", "tank" if IS_SIMULATION else "real_tank"]
+
         # Enable video streaming for simulation
 
-        if self.is_simulation:
-            print("Enabling video streaming")
+        if IS_SIMULATION:
+            logger.info("Enabling video streaming")
             done = gz.enable_streaming(
                 world="delivery_runway",
                 model_name="iris_with_stationary_gimbal",
                 camera_link="tilt_link",
             )
-            print("Enabling streaming")
+            logger.info("Enabling streaming")
             if not done:
-                print("❌ Failed to enable streaming.")
-                return False
+                logger.error("❌ Failed to enable streaming.")
+                return
+            camera_intrinsics = gz.get_camera_intrinsics(
+				model_name="iris_with_stationary_gimbal",
+				camera_link="tilt_link",
+				world="delivery_runway",
+			)
+        else:
+            camera_intrinsics = mission_types.get_camera_intrinsics()
+
+        if camera_intrinsics is None:
+            logger.error("❌ Failed to get camera intrinsics.")
+            return
+        camera_intrinsics = camera_intrinsics.get("camera_intrinsics", None)
+
+        self.tracker = yolo.YoloObjectTracker(
+			K=camera_intrinsics,
+			model_path="src/controls/detection/best.pt",
+	    )
         logger.info(
             "Server initialized with video port %d and control port %d",
             video_port,
@@ -182,7 +217,7 @@ class ZMQServer:
     def start_capture(self) -> bool:
         """Start the video capture"""
         try:
-            if self.is_simulation:
+            if IS_SIMULATION:
                 self.cap = gz.GazeboVideoCapture()
             else:
                 self.cap = cv2.VideoCapture(self.video_source)
@@ -231,7 +266,20 @@ class ZMQServer:
             self.video_socket.send_multipart([topic, encoded_frame])
 
             # send the processed frame to the serial connection
-            processed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            drone_position = connection.get_current_gps_location(relative=False)
+            curr_position = (drone_position[0], drone_position[1], drone_position[2][1])
+            drone_attitude = connection.get_current_attitude()
+            processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
+                frame=frame,
+                drone_gps=curr_position,
+                drone_attitude=drone_attitude,
+                ground_level_masl=drone_position[2][1] - drone_position[2][0],
+                object_classes=self.object_classes,
+            )
+            self.gps_coordinates = gps_coords
+            self.pixel_coordinates = pixel_coords
+
+			# Encode the processed frame
             topic, processed_encoded_frame = self.encode_frame(
                 processed_frame, _type="processed"
             )
@@ -275,9 +323,19 @@ class ZMQServer:
 
         elif command == ZMQTopics.STATUS.name:
             return f"ACK: Hook is {self.hook_state}"
+        elif command == ZMQTopics.HELIPAD_GPS.name:
+            if hasattr(self, 'gps_coordinates'):
+                return f"ACK>{self.gps_coordinates['helipad']}"
+            else:
+                return "NACK: No GPS data available"
+        elif command == ZMQTopics.TANK_GPS.name:
+            if hasattr(self, 'gps_coordinates'):
+                return f'ACK>{self.gps_coordinates["tank" if IS_SIMULATION else "real_tank"]}'
+            else:
+                return "NACK: No GPS data available"
 
         else:
-            print(f"Unknown command: {command}")
+            logger.error(f"Unknown command: {command}")
             return "NACK: Unknown command"
 
     def control_receiver_loop(self):
@@ -338,23 +396,6 @@ class ZMQServer:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="ZMQ Video Server with Control Interface"
-    )
-    parser.add_argument(
-        "--is-simulation", action="store_true", help="Run in simulation mode"
-    )
-
-    parser.add_argument(
-        "--video-port", type=int, default=5555, help="Port for video publishing"
-    )
-    parser.add_argument(
-        "--control-port", type=int, default=5556, help="Port for control commands"
-    )
-    parser.add_argument(
-        "--video-source", default=0, help="Video source (device ID or file path)"
-    )
-    args = parser.parse_args()
 
     # Convert video_source to int if it's a number
     try:
@@ -390,7 +431,7 @@ def main():
         server.stop()
         # Clean up
         tcp_server.close()
-        serial_connection.close()
+        connection.close()
         with clients_lock:
             for client in clients:
                 try:

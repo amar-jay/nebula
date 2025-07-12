@@ -1,9 +1,11 @@
+import warnings
 import sys
+import traceback
 from typing import Optional
 
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -14,15 +16,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
+from qfluentwidgets import PrimaryPushButton
 from qfluentwidgets import PushButton as QPushButton
+from qfluentwidgets import (
+    Action,
+)
+from qfluentwidgets import RoundMenu as QMenu
+from qfluentwidgets import FluentIcon as FIF
 
 from src.mq.zmq_client import ZMQClient
 
 
-def ConnectButton(text):
-    btn = _PrimaryPushButton(text)
-    return btn
 
 
 class CameraWidget(QWidget):
@@ -80,21 +84,41 @@ class CameraWidget(QWidget):
         control_layout.setSpacing(10)
 
         # Connect button
-        self.connect_btn = ConnectButton("Connect")
-        self.connect_btn.setFixedSize(100, 35)
-        self.connect_btn.clicked.connect(self.toggle_connection)
+        self.connect_btn = PrimaryPushButton("Connect")
+        #self.connect_btn.setFixedSize(100, 35)
+        self.connect_menu = QMenu("Connect", self)
+        self.connect_action = self.connect_menu.addAction(
+            Action(
+                FIF.CONNECT,
+                "Raw Video Feed",
+                triggered=lambda: self.connect_camera(_type="raw")
+            )
+        )
+        # self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
+        self.tcp_connect_action = self.connect_menu.addAction(
+            Action(
+                FIF.CONNECT,
+                "Processed Video Feed",
+                triggered=lambda: self.connect_camera(_type="processed"),
+            )
+        )
+        self.connect_btn.setMenu(self.connect_menu)
+
+        self.disconnect_btn = QPushButton("Disconnect")
+        #self.disconnect_btn.setFixedSize(100, 35)
+        self.disconnect_btn.clicked.connect(self.disconnect_camera)
 
         # Record button
         self.record_btn = QPushButton("🔴")
         self.record_btn.setToolTip("Start/Stop Recording")
-        self.record_btn.setFixedSize(50, 35)
+        self.record_btn.setFixedWidth(50)
         self.record_btn.clicked.connect(self.toggle_recording)
         self.record_btn.setEnabled(False)
 
         # Pause button
         self.pause_btn = QPushButton("⏸️")
         self.pause_btn.setToolTip("Pause/Resume Recording")
-        self.pause_btn.setFixedSize(50, 35)
+        self.pause_btn.setFixedWidth(50)
         self.pause_btn.clicked.connect(self.toggle_pause)
         self.pause_btn.setEnabled(False)
 
@@ -110,6 +134,7 @@ class CameraWidget(QWidget):
 
         # Add controls to layout
         control_layout.addWidget(self.connect_btn)
+        control_layout.addWidget(self.disconnect_btn)
         control_layout.addWidget(self.record_btn)
         control_layout.addWidget(self.pause_btn)
         control_layout.addStretch()
@@ -195,26 +220,36 @@ class CameraWidget(QWidget):
 
         self.camera_label.setPixmap(placeholder)
 
-    def toggle_connection(self):
-        """Toggle camera connection"""
-        if not self.is_connected:
-            self.connect_camera()
-        else:
-            self.disconnect_camera()
+    def _disconnect_camera_signals(self):
+        """Safely disconnect both frame signals."""
+        thread = self.video_client.video_thread
+        for signal in [thread.frame_received, thread.processed_frame_received]:
+          with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            signal.disconnect(self.update_frame)
 
-    def connect_camera(self):
+    def connect_camera(self, _type: str = "raw"):
         """Connect to camera"""
         try:
-            self.video_client.video_thread.processed_frame_received.connect(
-                self.update_frame
-            )
-
             self.video_client.start()
 
+            self._disconnect_camera_signals()
+
+            if _type == "raw":
+              self.video_client.video_thread.frame_received.connect(
+                  self.update_frame
+              )
+            else:
+              self.video_client.video_thread.processed_frame_received.connect(
+                  self.update_frame
+              )
+
+
             self.is_connected = True
-            self.connect_btn.setText("Disconnect")
             self.record_btn.setEnabled(True)
             self.status_label.setText("Camera Connected")
+            self.disconnect_btn.setEnabled(True)
+            self.connect_btn.setEnabled(False)
 
         except Exception as e:
             print(f"Error connecting to camera: {e}")
@@ -223,6 +258,7 @@ class CameraWidget(QWidget):
     def disconnect_camera(self):
         """Disconnect from camera"""
         # self.video_client.video_thread.stop()
+        self._disconnect_camera_signals()
         if self.is_recording:
             self.stop_recording()
 
@@ -233,10 +269,11 @@ class CameraWidget(QWidget):
         self.status_label.setText("Camera Disconnected")
 
         self.show_placeholder()
+        self.disconnect_btn.setEnabled(False)
+        self.connect_btn.setEnabled(True)
 
     @Slot(np.ndarray)
     def update_frame(self, frame):
-        print("Updating camera frame display")
         """Update camera frame display"""
         if self.is_connected and (frame is not None):
             self.current_frame = frame.copy()

@@ -6,6 +6,7 @@ import queue
 import socket
 import threading
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
@@ -30,6 +31,7 @@ logger = logging.getLogger("zmq-video-server")
 class FrameData:
     """Data structure for frame processing"""
 
+    mode: str  # default is "UNKNOWN"
     frame: np.ndarray
     timestamp: float
     drone_position: Tuple[float, float, float]
@@ -50,7 +52,7 @@ class ProcessedResult:
 class AsyncFrameProcessor:
     """Asynchronous frame processor that doesn't block the main video loop"""
 
-    def __init__(self, tracker, object_classes, max_workers=2):
+    def __init__(self, tracker: yolo.YoloObjectTracker, object_classes, max_workers=2):
         self.tracker = tracker
         self.object_classes = object_classes
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -78,6 +80,7 @@ class AsyncFrameProcessor:
             self.processing_queue.put_nowait(frame_data)
             return True
         except queue.Full:
+            logger.warning("Processing queue is full, dropping oldest frame")
             return False
 
     def get_result(self) -> Optional[ProcessedResult]:
@@ -131,6 +134,18 @@ class AsyncFrameProcessor:
             object_classes=self.object_classes,
         )
 
+        try:
+          processed_frame = self.tracker.write_on_frame(
+              frame=processed_frame,
+              gps_coords=gps_coords,
+              pixel_coords=pixel_coords,
+              object_classes=self.object_classes,
+              mode=frame_data.mode,
+          )
+        except Exception:
+            logger.error(f"Error writing on frame in _process_frame: {traceback.format_exc()}")
+            processed_frame = frame_data.frame.copy()
+
         return ProcessedResult(
             processed_frame=processed_frame,
             gps_coordinates=gps_coords,
@@ -150,7 +165,7 @@ class MAVLinkProxy:
         self.tcp_port = tcp_port
         self.connection = None
         self.tcp_server = None
-        self.clients = []
+        self.clients: list[socket.socket] = []
         self.clients_lock = threading.Lock()
         self.running = False
 
@@ -188,24 +203,27 @@ class MAVLinkProxy:
             for client in self.clients:
                 try:
                     client.close()
-                except:
-                    pass
+                except Exception:
+                    logger.warning("Failed to close client socket")
             self.clients.clear()
 
-    def get_drone_data(self) -> Tuple[Tuple[float, float, float], Any, float]:
+    def get_drone_data(self) -> Tuple[Tuple[float, float, float, str], Any, float]:
         """Get current drone position, attitude, and ground level"""
         if not self.connection:
-            return (0.0, 0.0, 0.0), None, 0.0
+            return None
+            # return (0.0, 0.0, 0.0), None, 0.0, "UNKNOWN"
 
         try:
             drone_position = self.connection.get_current_gps_location(relative=False)
             curr_position = (drone_position[0], drone_position[1], drone_position[2][1])
             drone_attitude = self.connection.get_current_attitude()
             ground_level = drone_position[2][1] - drone_position[2][0]
-            return curr_position, drone_attitude, ground_level
+            mode = self.connection.get_mode()
+            return curr_position, drone_attitude, ground_level, mode
         except Exception as e:
             logger.warning(f"Failed to get drone data: {e}")
-            return (0.0, 0.0, 0.0), None, 0.0
+            return None
+            # return (0.0, 0.0, 0.0), None, 0.0, "UNKNOWN"
 
     def _accept_clients(self):
         while self.running:
@@ -257,7 +275,7 @@ class MAVLinkProxy:
                     msg_bytes = msg.get_msgbuf()
 
                     with self.clients_lock:
-                        disconnected_clients = []
+                        disconnected_clients:list[socket.socket] = []
                         for client in self.clients:
                             try:
                                 client.send(msg_bytes)
@@ -278,8 +296,8 @@ class MAVLinkProxy:
                 time.sleep(0.1)
 
 
-class ImprovedZMQServer:
-    """Improved ZMQ server with better architecture"""
+class ZMQServer:
+    """ZMQ server that publishes video and handles control commands"""
 
     def __init__(
         self,
@@ -402,7 +420,17 @@ class ImprovedZMQServer:
 
                 # Submit frame for processing (non-blocking)
                 if frame_count % process_every_n_frames == 0:
-                    drone_pos, drone_att, ground_level = mavlink_proxy.get_drone_data()
+                    data = mavlink_proxy.get_drone_data()
+                    if data is None:
+                        logger.warning("No drone data available, skipping frame processing")
+                        await asyncio.sleep(0.1)
+                        continue
+                    (
+                        drone_pos,
+                        drone_att,
+                        ground_level,
+                        mode,
+                    ) = data
 
                     frame_data = FrameData(
                         frame=frame.copy(),
@@ -410,6 +438,7 @@ class ImprovedZMQServer:
                         drone_position=drone_pos,
                         drone_attitude=drone_att,
                         ground_level=ground_level,
+                        mode=mode,
                     )
 
                     # Submit for processing (non-blocking)
@@ -420,8 +449,10 @@ class ImprovedZMQServer:
                 result = self.frame_processor.get_result()
                 if result:
                     # Update latest coordinates
-                    self.latest_gps_coordinates = result.gps_coordinates
-                    self.latest_pixel_coordinates = result.pixel_coordinates
+                    if result.gps_coordinates is not None:
+                        self.latest_gps_coordinates = result.gps_coordinates
+                    if result.pixel_coordinates is not None:
+                        self.latest_pixel_coordinates = result.pixel_coordinates
 
                     # Send processed frame
                     topic, encoded_frame = self._encode_frame(
@@ -439,10 +470,10 @@ class ImprovedZMQServer:
                     fps_timer = time.time()
 
                 # Small sleep to prevent CPU overload
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(0.5)
 
             except Exception as e:
-                logger.error(f"Error in video loop: {e}")
+                logger.error("Error in video loop:\n%s", traceback.format_exc())
                 await asyncio.sleep(0.1)
 
         # Cleanup
@@ -550,7 +581,7 @@ class ImprovedZMQServer:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Improved ZMQ Video Server")
+    parser = argparse.ArgumentParser(description="ZMQ Video Server")
     parser.add_argument(
         "--is-simulation", action="store_true", help="Run in simulation mode"
     )
@@ -589,7 +620,7 @@ async def main():
             return
 
     # Initialize server
-    server = ImprovedZMQServer(
+    server = ZMQServer(
         video_port=args.video_port,
         control_port=args.control_port,
         video_source=args.video_source,

@@ -2,7 +2,6 @@ import json
 import sys
 import time
 
-import cv2
 from pymavlink import mavutil
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import (
@@ -37,6 +36,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     Action,
 )
+from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import BodyLabel as QLabel
 from qfluentwidgets import CheckBox as QCheckBox
 from qfluentwidgets import FluentIcon as FIF
@@ -48,7 +48,6 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import PushButton as QPushButton
-from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import SpinBox as QSpinBox
 from qfluentwidgets import TableWidget as QTableWidget
 from qfluentwidgets import TextEdit as QTextEdit
@@ -157,13 +156,14 @@ class DroneClient(QObject):
         # port = int(port)
 
         if is_kamikaze:
-            self.kamikaze_connection = ardupilot.ArdupilotConnection(connection_string)
+            self.kamikaze_connection = ardupilot.ArdupilotConnection(connection_string, logger=self.log)
             self.k_connected = True
             self.kamikaze_connection.set_mode("GUIDED")
             # self.kamikaze_connection.wait_heartbeat()
         else:
             self.master_connection = ardupilot.ArdupilotConnection(
                 connection_string=connection_string,
+                logger= self.log,
                 # world="delivery_runway",
                 # model_name="iris_with_stationary_gimbal",
                 # camera_link="tilt_link",
@@ -175,10 +175,10 @@ class DroneClient(QObject):
             self.connected = True
 
         # Start status updates
-        print("Starting ZMQ client...")
+        self.log("Starting ZMQ client...")
         self.zmq_client.start()
-        print("ZMQ client started")
-        print("Starting status timer...")
+        self.log("ZMQ client started")
+        self.log("Starting status timer...")
         self.status_timer.start()
 
         if is_kamikaze:

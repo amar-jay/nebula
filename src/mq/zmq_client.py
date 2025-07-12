@@ -5,6 +5,10 @@ import cv2
 import numpy as np
 import zmq
 from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QImage, QPixmap
+
+# Usage example in a PySide6 application:
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
 logger = logging.getLogger(__name__)
 
@@ -197,10 +201,6 @@ class ZMQClient:
         return self.current_processed_frame
 
 
-from PySide6.QtGui import QImage, QPixmap
-
-# Usage example in a PySide6 application:
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
 
 class VideoWindow(QMainWindow):

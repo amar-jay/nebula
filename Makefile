@@ -72,7 +72,7 @@ build_app:
 	rm app.py
 
 sim_server:
-	@python -m src.mq.example_zmq_server --is-simulation
+	@python -m src.mq.zmq_server --is-simulation
 
 server:
 	@python -m src.mq.example_zmq_server

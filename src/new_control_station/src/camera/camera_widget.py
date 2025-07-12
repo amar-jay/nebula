@@ -205,7 +205,9 @@ class CameraWidget(QWidget):
     def connect_camera(self):
         """Connect to camera"""
         try:
-            self.video_client.video_thread.frame_received.connect(self.update_frame)
+            self.video_client.video_thread.processed_frame_received.connect(
+                self.update_frame
+            )
 
             self.video_client.start()
 

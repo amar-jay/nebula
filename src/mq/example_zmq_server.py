@@ -10,14 +10,11 @@ import cv2
 import numpy as np
 import zmq
 
-from src.controls.mavlink import gz, ardupilot
 from src.controls.detection import yolo
-from src.controls.mavlink import mission_types
+from src.controls.mavlink import ardupilot, gz, mission_types
 from src.mq.messages import ZMQTopics
 
-parser = argparse.ArgumentParser(
-    description="ZMQ Video Server with Control Interface"
-)
+parser = argparse.ArgumentParser(description="ZMQ Video Server with Control Interface")
 parser.add_argument(
     "--is-simulation", action="store_true", help="Run in simulation mode"
 )
@@ -42,19 +39,19 @@ IS_SIMULATION = args.is_simulation
 
 # Configuration
 if IS_SIMULATION:
-	CONNECTION_STRING = "udp:127.0.0.1:14550"
+    CONNECTION_STRING = "udp:127.0.0.1:14550"
 else:
-	CONNECTION_STRING = "/dev/ttyUSB0"  # Change to your serial port
+    CONNECTION_STRING = "/dev/ttyUSB0"  # Change to your serial port
 
-#BAUD_RATE = 57600  # Change to your baud rate
+# BAUD_RATE = 57600  # Change to your baud rate
 TCP_HOST = "0.0.0.0"  # Listen on all interfaces
 TCP_PORT = 16550  # Standard MAVLink port
 
 try:
-	connection = ardupilot.ArdupilotConnection(connection_string=CONNECTION_STRING)
+    connection = ardupilot.ArdupilotConnection(connection_string=CONNECTION_STRING)
 except ConnectionError:
-	logger.error(f"Failed to connect to MAVLink at {CONNECTION_STRING}.")
-	exit(1)
+    logger.error(f"Failed to connect to MAVLink at {CONNECTION_STRING}.")
+    exit(1)
 
 logger.info("mavlink connection established")
 
@@ -177,6 +174,7 @@ class ZMQServer:
         self.control_thread = None
 
         self.object_classes = ["helipad", "tank" if IS_SIMULATION else "real_tank"]
+        self.prev_attitude = None
 
         # Enable video streaming for simulation
 
@@ -192,10 +190,10 @@ class ZMQServer:
                 logger.error("❌ Failed to enable streaming.")
                 return
             camera_intrinsics = gz.get_camera_intrinsics(
-				model_name="iris_with_stationary_gimbal",
-				camera_link="tilt_link",
-				world="delivery_runway",
-			)
+                model_name="iris_with_stationary_gimbal",
+                camera_link="tilt_link",
+                world="delivery_runway",
+            )
         else:
             camera_intrinsics = mission_types.get_camera_intrinsics()
 
@@ -205,9 +203,9 @@ class ZMQServer:
         camera_intrinsics = camera_intrinsics.get("camera_intrinsics", None)
 
         self.tracker = yolo.YoloObjectTracker(
-			K=camera_intrinsics,
-			model_path="src/controls/detection/best.pt",
-	    )
+            K=camera_intrinsics,
+            model_path="src/controls/detection/best.pt",
+        )
         logger.info(
             "Server initialized with video port %d and control port %d",
             video_port,
@@ -267,8 +265,20 @@ class ZMQServer:
 
             # send the processed frame to the serial connection
             drone_position = connection.get_current_gps_location(relative=False)
+            if drone_position is None:
+                logger.error("Failed to get drone GPS position")
+                continue
             curr_position = (drone_position[0], drone_position[1], drone_position[2][1])
             drone_attitude = connection.get_current_attitude()
+            if drone_attitude is None and self.prev_attitude is None:
+                logger.error("Failed to get drone attitude")
+                continue
+            if drone_attitude is None:
+                drone_attitude = self.prev_attitude
+                logger.warning("Using previous attitude as current attitude")
+            else:
+                logger.info(f"Current attitude: {drone_attitude}")
+
             processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
                 frame=frame,
                 drone_gps=curr_position,
@@ -279,7 +289,7 @@ class ZMQServer:
             self.gps_coordinates = gps_coords
             self.pixel_coordinates = pixel_coords
 
-			# Encode the processed frame
+            # Encode the processed frame
             topic, processed_encoded_frame = self.encode_frame(
                 processed_frame, _type="processed"
             )
@@ -324,12 +334,12 @@ class ZMQServer:
         elif command == ZMQTopics.STATUS.name:
             return f"ACK: Hook is {self.hook_state}"
         elif command == ZMQTopics.HELIPAD_GPS.name:
-            if hasattr(self, 'gps_coordinates'):
+            if hasattr(self, "gps_coordinates"):
                 return f"ACK>{self.gps_coordinates['helipad']}"
             else:
                 return "NACK: No GPS data available"
         elif command == ZMQTopics.TANK_GPS.name:
-            if hasattr(self, 'gps_coordinates'):
+            if hasattr(self, "gps_coordinates"):
                 return f'ACK>{self.gps_coordinates["tank" if IS_SIMULATION else "real_tank"]}'
             else:
                 return "NACK: No GPS data available"

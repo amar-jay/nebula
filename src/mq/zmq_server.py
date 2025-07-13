@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 import traceback
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
@@ -24,8 +25,9 @@ from src.mq.messages import ZMQTopics
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("zmq-video-server")
+logger = logging.getLogger("zmq-server")
 
+IMAGE_QUALITY = 80  # JPEG quality for video frames
 
 @dataclass
 class FrameData:
@@ -44,8 +46,8 @@ class ProcessedResult:
     """Result of frame processing"""
 
     processed_frame: np.ndarray
-    gps_coordinates: Dict[str, Any]
-    pixel_coordinates: Dict[str, Any]
+    gps_coordinates: Dict[str, Tuple[float, float]]
+    pixel_coordinates: Dict[str, Tuple[int, int]]
     timestamp: float
 
 
@@ -247,7 +249,7 @@ class MAVLinkProxy:
                     logger.error("Error accepting client: %s", e)
                     time.sleep(1)
 
-    def _handle_client(self, client_socket, client_address):
+    def _handle_client(self, client_socket: socket.socket, client_address: tuple):
         try:
             while self.running:
                 try:
@@ -392,10 +394,10 @@ class ZMQServer:
 
     def _encode_frame(
         self, frame: np.ndarray, topic_prefix: str = ""
-    ) -> Tuple[bytes, bytes]:
+    ) -> Tuple[bytes, bytes]: #TODO: use a more efficient implementation in the future
         """Encode frame to JPEG"""
         topic = f"{topic_prefix}video".encode()
-        _, jpeg_frame = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        _, jpeg_frame = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, IMAGE_QUALITY])
         return topic, jpeg_frame.tobytes()
 
     async def _video_publisher_loop(self, mavlink_proxy: MAVLinkProxy):
@@ -497,7 +499,8 @@ class ZMQServer:
                     message = await self.control_socket.recv_string()
                     response = self._handle_command(message)
                     await self.control_socket.send_string(response)
-                    logger.info(f"Command: {message} -> Response: {response}")
+                    if "NACK" not in message:
+                      logger.info(f"Command: {message} -> Response: {response}")
 
             except Exception as e:
                 logger.error(f"Error in control receiver: {e}")
@@ -527,13 +530,15 @@ class ZMQServer:
             return f"ACK: Hook is {self.hook_state}"
         elif command == ZMQTopics.HELIPAD_GPS.name:
             if self.latest_gps_coordinates and "helipad" in self.latest_gps_coordinates:
-                return f"ACK>{self.latest_gps_coordinates['helipad']}"
+                coords = self.latest_gps_coordinates['helipad']
+                return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
         elif command == ZMQTopics.TANK_GPS.name:
             tank_key = "tank" if self.is_simulation else "real_tank"
             if self.latest_gps_coordinates and tank_key in self.latest_gps_coordinates:
-                return f"ACK>{self.latest_gps_coordinates[tank_key]}"
+                coords = self.latest_gps_coordinates[tank_key]
+                return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
         else:

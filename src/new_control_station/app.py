@@ -2,13 +2,11 @@ import json
 import sys
 import time
 
-from pymavlink import mavutil
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
     QIcon,
-    QImage,
     QPainter,
     QPalette,
     QPixmap,
@@ -99,6 +97,8 @@ class DroneClient(QObject):
         self.k_connected = False
         self.initial_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
         self.k_current_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
+        self.helipad_gps = None
+        self.tank_gps = None
         self.mission_waypoints = []
         self.current_waypoint_index = -1
         self.master_connection = None
@@ -129,6 +129,45 @@ class DroneClient(QObject):
         msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD)
         self.log(msg)
         return
+    def fetch_helipad_gps(self)-> bool: 
+        """Fetch the helipad GPS coordinates."""
+        if self.master_connection is None:
+            return False
+
+        helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS)
+        helipad_gps = helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
+        helipad_gps = helipad_gps.split(",") if helipad_gps else None
+        if helipad_gps and len(helipad_gps) == 2:
+            print(f"Helipad GPS: {helipad_gps}")
+            try:
+                lat = float(helipad_gps[0])
+                lon = float(helipad_gps[1])
+                self.helipad_gps = (lat, lon)
+                return True
+            except ValueError:
+                self.log("Invalid helipad GPS format")
+                print("Invalid helipad GPS format")
+                return False
+
+    def fetch_tank_gps(self)-> bool: 
+        """Fetch the tank GPS coordinates."""
+        if self.master_connection is None:
+            return False
+
+        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS)
+        tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
+        tank_gps = tank_gps.split(",") if tank_gps else None
+
+        if tank_gps and len(tank_gps) == 2:
+            print(f"Tank GPS: {tank_gps}")
+            try:
+                lat = float(tank_gps[0])
+                lon = float(tank_gps[1])
+                self.tank_gps = (lat, lon)
+                return True
+            except ValueError:
+                self.log("Invalid tank GPS format")
+                print("Invalid tank GPS format")
 
     def raise_hook(self):
         """Raise hook command."""
@@ -333,6 +372,8 @@ class DroneClient(QObject):
     def _update_status(self):
         """Update and emit drone status information."""
         status = self.master_connection.get_status()
+        self.fetch_helipad_gps()
+        self.fetch_tank_gps()
 
         if hasattr(self, "mission_completed"):
             if self.master_connection.monitor_mission_progress(
@@ -343,6 +384,8 @@ class DroneClient(QObject):
         else:
             self.mission_progress.emit(0, "Mission not started")
 
+        status["helipad_gps"] = self.helipad_gps
+        status["tank_gps"] = self.tank_gps
         self.drone_status_update.emit(status)
         self.status = status
 
@@ -771,6 +814,8 @@ class DroneControlApp(QMainWindow):
         self.position_label = QLabel("N/A")
         self.altitude_label = QLabel("N/A")
         self.orientation_label = QLabel("N/A")
+        self.helipad_gps_label = QLabel("N/A")
+        self.tank_gps_label = QLabel("N/A")
         self.mode_label = QLabel("N/A")
         self.mode_label.setStyleSheet("color: #0078d4;")
         self.battery_progress = QProgressBar()
@@ -791,12 +836,18 @@ class DroneControlApp(QMainWindow):
         status_layout.addWidget(self.orientation_label, 2, 1)
         status_layout.addWidget(QLabel("Position:"), 2, 2)
         status_layout.addWidget(self.position_label, 2, 3)
+
+        status_layout.addWidget(QLabel("Helipad GPS:"), 3, 0)
+        status_layout.addWidget(self.helipad_gps_label, 3, 1)
+        status_layout.addWidget(QLabel("Tank GPS:"), 3, 2)
+        status_layout.addWidget(self.tank_gps_label, 3, 3)
+
         _label = QLabel("Mode:")
         _label.setStyleSheet("color: #0078d4;")
-        status_layout.addWidget(_label, 3, 0)
-        status_layout.addWidget(self.mode_label, 3, 1)
-        status_layout.addWidget(QLabel("Battery:"), 3, 2)
-        status_layout.addWidget(self.battery_progress, 3, 3, 1, 2)
+        status_layout.addWidget(_label, 4, 0)
+        status_layout.addWidget(self.mode_label, 4, 1)
+        status_layout.addWidget(QLabel("Battery:"), 4, 2)
+        status_layout.addWidget(self.battery_progress, 4, 3, 1, 2)
 
         # Add status group to basic control layout
         basic_control_layout.addWidget(status_group)
@@ -1384,7 +1435,7 @@ class DroneControlApp(QMainWindow):
             lon = position.get("lon", 0)
             alt = position.get("alt", 0)
 
-            self.position_label.setText(f"({lat:.7f},{lon:.7f})")
+            self.position_label.setText(f"({lat},{lon})")
             self.altitude_label.setText(f"{alt:.1f}m")
             self.altitude_gauge.set_value(alt)
 
@@ -1415,6 +1466,14 @@ class DroneControlApp(QMainWindow):
         self.battery_gauge.set_value(status.get("battery", 100))
         self.battery_progress.setValue(status.get("battery", 100))
         self.speed_gauge.set_value(status.get("speed", 0))
+
+        # Helipad GPS and kamikaze GPS
+        helipad_gps = status.get("helipad_gps", None)
+        if helipad_gps:
+          self.helipad_gps_label.setText(f"({helipad_gps[0]:.7f}, {helipad_gps[1]:.7f})")
+        tank_gps = status.get("tank_gps", None)
+        if tank_gps:
+          self.tank_gps_label.setText(f"({tank_gps[0]:.7f}, {tank_gps[1]:.7f})")
 
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1)

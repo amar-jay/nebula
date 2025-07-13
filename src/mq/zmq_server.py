@@ -116,12 +116,12 @@ class AsyncFrameProcessor:
                             pass
 
                 except Exception as e:
-                    logger.warning(f"Frame processing failed: {e}")
+                    logger.warning("Frame processing failed: %s", e)
 
             except queue.Empty:
                 continue
             except Exception as e:
-                logger.error(f"Error in frame processor worker: {e}")
+                logger.error("Error in frame processor worker: %s", e)
                 time.sleep(0.1)
 
     def _process_frame(self, frame_data: FrameData) -> ProcessedResult:
@@ -135,15 +135,18 @@ class AsyncFrameProcessor:
         )
 
         try:
-          processed_frame = self.tracker.write_on_frame(
-              frame=processed_frame,
-              gps_coords=gps_coords,
-              pixel_coords=pixel_coords,
-              object_classes=self.object_classes,
-              mode=frame_data.mode,
-          )
+            processed_frame = self.tracker.write_on_frame(
+                frame=processed_frame,
+                curr_gps=frame_data.drone_position,
+                gps_coords=gps_coords,
+                pixel_coords=pixel_coords,
+                mode=frame_data.mode,
+                object_classes=self.object_classes,
+            )
         except Exception:
-            logger.error(f"Error writing on frame in _process_frame: {traceback.format_exc()}")
+            logger.error(
+                "Error writing on frame in _process_frame: %s", traceback.format_exc()
+            )
             processed_frame = frame_data.frame.copy()
 
         return ProcessedResult(
@@ -177,7 +180,7 @@ class MAVLinkProxy:
             )
             logger.info("MAVLink connection established")
         except ConnectionError:
-            logger.error(f"Failed to connect to MAVLink at {self.connection_string}")
+            logger.error("Failed to connect to MAVLink at %s", self.connection_string)
             raise
 
         # Set up TCP server
@@ -185,7 +188,7 @@ class MAVLinkProxy:
         self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.tcp_server.bind((self.tcp_host, self.tcp_port))
         self.tcp_server.listen(5)
-        logger.info(f"TCP server listening on {self.tcp_host}:{self.tcp_port}")
+        logger.info("TCP server listening on %s:%d", self.tcp_host, self.tcp_port)
 
         self.running = True
 
@@ -221,7 +224,7 @@ class MAVLinkProxy:
             mode = self.connection.get_mode()
             return curr_position, drone_attitude, ground_level, mode
         except Exception as e:
-            logger.warning(f"Failed to get drone data: {e}")
+            logger.warning("Failed to get drone data: %s", e)
             return None
             # return (0.0, 0.0, 0.0), None, 0.0, "UNKNOWN"
 
@@ -231,7 +234,7 @@ class MAVLinkProxy:
                 client_socket, client_address = self.tcp_server.accept()
                 with self.clients_lock:
                     self.clients.append(client_socket)
-                logger.info(f"New client connected: {client_address}")
+                logger.info("New client connected: %s", client_address)
 
                 # Handle client in separate thread
                 threading.Thread(
@@ -241,7 +244,7 @@ class MAVLinkProxy:
                 ).start()
             except Exception as e:
                 if self.running:
-                    logger.error(f"Error accepting client: {e}")
+                    logger.error("Error accepting client: %s", e)
                     time.sleep(1)
 
     def _handle_client(self, client_socket, client_address):
@@ -275,7 +278,7 @@ class MAVLinkProxy:
                     msg_bytes = msg.get_msgbuf()
 
                     with self.clients_lock:
-                        disconnected_clients:list[socket.socket] = []
+                        disconnected_clients: list[socket.socket] = []
                         for client in self.clients:
                             try:
                                 client.send(msg_bytes)
@@ -384,7 +387,7 @@ class ZMQServer:
             return True
 
         except Exception as e:
-            logger.error(f"Error initializing video capture: {e}")
+            logger.error("Error initializing video capture: %s", e)
             return False
 
     def _encode_frame(
@@ -422,7 +425,9 @@ class ZMQServer:
                 if frame_count % process_every_n_frames == 0:
                     data = mavlink_proxy.get_drone_data()
                     if data is None:
-                        logger.warning("No drone data available, skipping frame processing")
+                        logger.warning(
+                            "No drone data available, skipping frame processing"
+                        )
                         await asyncio.sleep(0.1)
                         continue
                     (
@@ -472,7 +477,7 @@ class ZMQServer:
                 # Small sleep to prevent CPU overload
                 await asyncio.sleep(0.5)
 
-            except Exception as e:
+            except Exception:
                 logger.error("Error in video loop:\n%s", traceback.format_exc())
                 await asyncio.sleep(0.1)
 
@@ -532,7 +537,7 @@ class ZMQServer:
             else:
                 return "NACK: No GPS data available"
         else:
-            logger.error(f"Unknown command: {command}")
+            logger.error("Unknown command: %s", command)
             return "NACK: Unknown command"
 
     async def start(self, mavlink_proxy: MAVLinkProxy):

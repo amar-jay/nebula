@@ -201,8 +201,6 @@ class ZMQClient:
         return self.current_processed_frame
 
 
-
-
 class VideoWindow(QMainWindow):
     def __init__(self):
         super().__init__()

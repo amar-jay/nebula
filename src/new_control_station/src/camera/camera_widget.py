@@ -1,6 +1,6 @@
-import warnings
 import sys
 import traceback
+import warnings
 from typing import Optional
 
 import cv2
@@ -16,17 +16,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import PrimaryPushButton
-from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import (
     Action,
 )
-from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import FluentIcon as FIF
+from qfluentwidgets import (
+    PrimaryPushButton,
+)
+from qfluentwidgets import PushButton as QPushButton
+from qfluentwidgets import RoundMenu as QMenu
 
 from src.mq.zmq_client import ZMQClient
-
-
 
 
 class CameraWidget(QWidget):
@@ -85,13 +85,13 @@ class CameraWidget(QWidget):
 
         # Connect button
         self.connect_btn = PrimaryPushButton("Connect")
-        #self.connect_btn.setFixedSize(100, 35)
+        # self.connect_btn.setFixedSize(100, 35)
         self.connect_menu = QMenu("Connect", self)
         self.connect_action = self.connect_menu.addAction(
             Action(
                 FIF.CONNECT,
                 "Raw Video Feed",
-                triggered=lambda: self.connect_camera(_type="raw")
+                triggered=lambda: self.connect_camera(_type="raw"),
             )
         )
         # self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
@@ -105,7 +105,7 @@ class CameraWidget(QWidget):
         self.connect_btn.setMenu(self.connect_menu)
 
         self.disconnect_btn = QPushButton("Disconnect")
-        #self.disconnect_btn.setFixedSize(100, 35)
+        # self.disconnect_btn.setFixedSize(100, 35)
         self.disconnect_btn.clicked.connect(self.disconnect_camera)
 
         # Record button
@@ -224,9 +224,9 @@ class CameraWidget(QWidget):
         """Safely disconnect both frame signals."""
         thread = self.video_client.video_thread
         for signal in [thread.frame_received, thread.processed_frame_received]:
-          with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            signal.disconnect(self.update_frame)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                signal.disconnect(self.update_frame)
 
     def connect_camera(self, _type: str = "raw"):
         """Connect to camera"""
@@ -236,14 +236,11 @@ class CameraWidget(QWidget):
             self._disconnect_camera_signals()
 
             if _type == "raw":
-              self.video_client.video_thread.frame_received.connect(
-                  self.update_frame
-              )
+                self.video_client.video_thread.frame_received.connect(self.update_frame)
             else:
-              self.video_client.video_thread.processed_frame_received.connect(
-                  self.update_frame
-              )
-
+                self.video_client.video_thread.processed_frame_received.connect(
+                    self.update_frame
+                )
 
             self.is_connected = True
             self.record_btn.setEnabled(True)

@@ -13,7 +13,7 @@ name: Deploy Site
 on:
   push:
     paths:
-      - "docs/**"
+      - "docs/docs/**"
       - "docs/mkdocs.yml"
     branches:
       - master

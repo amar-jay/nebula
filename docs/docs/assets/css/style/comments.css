@@ -1,0 +1,176 @@
+:root{
+  --mastodon-comment-indent: 40px;
+  --mastodon-comment-border-radius: .2rem;
+  
+  --mastodon-comment-bg-color: #181821;
+  --mastodon-comment-border-color: #313144;
+  
+  --mastodon-comment-username-color: #fff;
+  --mastodon-comment-usertag-color: #9c9cc9;
+  
+  --mastodon-comment-date-color: #606984;
+  --mastodon-comment-link-color: #8c8dff;
+  --mastodon-comment-hashtag-color: #d9e1e8;
+  
+  --mastodon-comment-status-inactive: #606984;
+  --mastodon-comment-status-inactive__hover: #707b97;
+  --mastodon-comment-status-inactive-bg__hover: rgba(96,105,132,.15);
+  
+  --mastodon-comment-status-replies--active: #448aff;
+  --mastodon-comment-status-favourite--active: #ca8f04;
+  --mastodon-comment-status-reblog--active: #8c8dff;
+}
+
+[data-md-color-scheme="default"] :root {
+  --mastodon-comment-bg-color: #fff;
+  --mastodon-comment-border-color: #c0cdd9;
+  
+  --mastodon-comment-username-color: #000;
+  --mastodon-comment-usertag-color: #282c37;
+  
+  --mastodon-comment-date-color: #444b5d;
+  --mastodon-comment-link-color: #3a3bff;
+  --mastodon-comment-hashtag-color: #3a3bff;
+  
+  --mastodon-comment-status-inactive__hover: #51596f;
+}
+
+@media only screen and (max-width: 1024px){
+  :root{
+    --mastodon-comment-indent: 20px;
+  }
+}
+
+@media only screen and (max-width: 640px){
+  :root{
+    --mastodon-comment-indent: 0px;
+  }
+}
+
+.mastodon-comment{
+  background-color: var(--mastodon-comment-bg-color);
+  border-radius: var(--mastodon-comment-border-radius);
+  border: 1px var(--mastodon-comment-border-color) solid;
+  padding: 20px;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.mastodon-comment p{
+  margin-bottom: 0px;
+}
+
+.mastodon-comment .content{
+  margin: 15px 20px 15px 0;
+}
+
+.mastodon-comment .content p:first-child{
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.mastodon-comment .content a {
+  color: var(--mastodon-comment-link-color);
+}
+
+.mastodon-comment .content a:hover {
+  text-decoration: underline;
+}
+
+.mastodon-comment .attachments{
+  max-width: 0px 10px;
+}
+
+.mastodon-comment .attachments > *{
+  max-width: 0px 10px;
+}
+
+.mastodon-comment .author{
+  padding-top: 0;
+  display: flex;
+}
+
+.mastodon-comment .author a{
+  text-decoration: none;
+}
+
+.mastodon-comment .author .avatar img{
+  margin-right: 1rem;
+  min-width: 60px;
+  border-radius: 5px;
+}
+
+.mastodon-comment .author .details{
+  display: flex;
+  flex-direction: column;
+}
+
+.mastodon-comment .author .details .name{
+  font-weight: bold;
+  color: var(--mastodon-comment-username-color);
+}
+
+a.name:hover {
+  text-decoration: underline;
+}
+
+a.mention.hashtag {
+  color: var(--mastodon-comment-hashtag-color);
+}
+
+.mastodon-comment .author .details .user{
+  color: var(--mastodon-comment-usertag-color);
+}
+
+.mastodon-comment .status-date {
+  border-bottom: 1px solid var(--mastodon-comment-border-color);
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+
+.mastodon-comment .status-date .date {
+  font-size: small;
+  color: var(--mastodon-comment-date-color);
+}
+
+.mastodon-comment .status-date .date:hover{
+  color: var(--mastodon-comment-date-color);
+  text-decoration: underline;
+}
+
+.mastodon-comment .status > div{
+  display: inline-block;
+  margin-right: 15px;
+}
+
+.mastodon-comment .status a{
+  color: var(--mastodon-comment-status-inactive);
+  text-decoration: none;
+  
+  padding: .2rem;
+  border-radius: .2rem;
+}
+
+.mastodon-comment .status a:hover {
+  color: var(--mastodon-comment-status-inactive__hover);
+  background-color: var(--mastodon-comment-status-inactive-bg__hover);
+  transition: all .2s ease-out;
+}
+
+.mastodon-comment .status .replies.active *{
+  color: var(--mastodon-comment-status-replies--active);
+}
+
+.mastodon-comment .status .reblogs.active a{
+  color: var(--mastodon-comment-status-reblog--active);
+}
+
+.mastodon-comment .status .favourites.active a{
+  color: var(--mastodon-comment-status-favourite--active);
+}
+
+.mastodon-comment .status svg{
+  margin: 0 0.2rem;
+  vertical-align: middle;
+}

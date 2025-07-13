@@ -1,0 +1,10 @@
+{% if config.extra.share %}
+  {% for share in config.extra.share %}
+    {% set title = page.title | urlencode %}
+    {% set url = share.link | replace("{url}", page.canonical_url) | replace("{title}", title) %}
+    {% set icon = share.icon | d("material/share") %}
+    <a href="{{ url }}" class="md-button md-button__social {{ share.class | d('md-button--primary') }}" title="{{ share.title | d('Share this Post!') }}" target="_blank" rel="nofollow">
+      {% include ".icons/" ~ icon ~ ".svg" %}
+    </a>
+  {% endfor %}
+{% endif %}

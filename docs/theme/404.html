@@ -1,0 +1,20 @@
+{% extends "main.html" %}
+
+{% block content %}
+  <h1>404 Page not found</h1>
+  
+  <div class="admonition quote">
+    <p>
+			404 errors are like a rabbit hole, you never know how deep they go.
+    </p>
+		<p>But don't worry, we will find our way back to the surface.</p>
+
+  </div>
+  
+  <a href="/" class="md-button">
+    <span class="twemoji">
+        {% include ".icons/octicons/chevron-left-16.svg" %}
+    </span>
+    Back to main page
+  </a>
+{% endblock %}

@@ -33,6 +33,9 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     Action,
+    MessageBoxBase,
+    SubtitleLabel,
+    CaptionLabel,
 )
 from qfluentwidgets import BodyLabel as QLabel
 from qfluentwidgets import CheckBox as QCheckBox
@@ -129,16 +132,19 @@ class DroneClient(QObject):
         msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD)
         self.log(msg)
         return
-    def fetch_helipad_gps(self)-> bool: 
+
+    def fetch_helipad_gps(self) -> bool:
         """Fetch the helipad GPS coordinates."""
         if self.master_connection is None:
             return False
 
         helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS)
-        helipad_gps = helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
+        helipad_gps = (
+            helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
+        )
         helipad_gps = helipad_gps.split(",") if helipad_gps else None
         if helipad_gps and len(helipad_gps) == 2:
-            print(f"Helipad GPS: {helipad_gps}")
+            #print(f"Helipad GPS: {helipad_gps}")
             try:
                 lat = float(helipad_gps[0])
                 lon = float(helipad_gps[1])
@@ -149,7 +155,7 @@ class DroneClient(QObject):
                 print("Invalid helipad GPS format")
                 return False
 
-    def fetch_tank_gps(self)-> bool: 
+    def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
         if self.master_connection is None:
             return False
@@ -159,7 +165,7 @@ class DroneClient(QObject):
         tank_gps = tank_gps.split(",") if tank_gps else None
 
         if tank_gps and len(tank_gps) == 2:
-            print(f"Tank GPS: {tank_gps}")
+            #print(f"Tank GPS: {tank_gps}")
             try:
                 lat = float(tank_gps[0])
                 lon = float(tank_gps[1])
@@ -215,12 +221,12 @@ class DroneClient(QObject):
             self.master_connection.set_mode("GUIDED")
             self.connected = True
 
-        # Start status updates
-        self.log("Starting ZMQ client...")
-        self.zmq_client.start()
-        self.log("ZMQ client started")
-        self.log("Starting status timer...")
-        self.status_timer.start()
+            # Start status updates
+            self.log("Starting ZMQ client...")
+            self.zmq_client.start()
+            self.log("ZMQ client started")
+            self.log("Starting status timer...")
+            self.status_timer.start()
 
         if is_kamikaze:
             location = self.kamikaze_connection.get_current_gps_location()
@@ -233,10 +239,10 @@ class DroneClient(QObject):
                 lat, lon, alt = location
                 self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
 
-        self.connection_status.emit(
-            True,
-            f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
-        )
+            self.connection_status.emit(
+                True,
+                f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
+            )
 
         # self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
         return True
@@ -254,15 +260,16 @@ class DroneClient(QObject):
             self.master_connection.close()
             self.master_connection = None
 
-        self.connected = False
+            self.connected = False
 
-        self.zmq_client.stop()
-        self.status_timer.stop()
 
-        self.connection_status.emit(
-            False,
-            f"[MAVLink] Disconnecting from drone",
-        )
+            self.zmq_client.stop()
+            self.status_timer.stop()
+
+            self.connection_status.emit(
+                False,
+                f"[MAVLink] Disconnecting from drone",
+            )
 
     def arm(self, is_kamikaze=False):
         """Arm the drone."""
@@ -361,6 +368,18 @@ class DroneClient(QObject):
         self.mission_progress.emit(0, "Mission cancelled")
         return True
 
+    def kamikaze(self):
+        if not self.k_connected:
+            self.log("Kamikaze connection not established")
+            return False
+        gps = self.status.get("tank_gps", None)
+        if gps is None:
+            self.log("Target GPS not available", "error")
+            return False
+        self.kamikaze_connection.goto_kamikaze(lat=gps[0], lon=gps[1])
+        self.log("Kamikaze mode activated", "success")
+        return True
+
     def _update_status_hook(self, current, done):
         self.current_waypoint_index = current
         self.mission_completed = done
@@ -379,13 +398,15 @@ class DroneClient(QObject):
             if self.master_connection.monitor_mission_progress(
                 _update_status_hook=self._update_status_hook
             ):
-                self.mission.progress.emit(100, "Mission completed")
+                self.mission_progress.emit(100, "Mission completed")
                 delattr(self, "mission_completed")
         else:
             self.mission_progress.emit(0, "Mission not started")
 
         status["helipad_gps"] = self.helipad_gps
         status["tank_gps"] = self.tank_gps
+
+        status["kamikaze_gps"] = self.kamikaze_connection.get_current_gps_location() if self.k_connected else None
         self.drone_status_update.emit(status)
         self.status = status
 
@@ -456,6 +477,49 @@ class MissionWaypointTable(QTableWidget):
             waypoints.append(waypoint)
         return waypoints
 
+class KamikazeConfirmationBox(MessageBoxBase):
+    """ Confirmation dialog for kamikaze mode activation """
+    def __init__(self, latitude=0.0, longitude=0.0, parent=None):
+        super().__init__(parent)
+        self.latitude = latitude
+        self.longitude = longitude
+        
+        # Title
+        self.titleLabel = SubtitleLabel('Kamikaze Mode Confirmation')
+        
+        # Warning message
+        self.messageLabel = QLabel(
+            "Are you sure you want to activate kamikaze mode? "
+            "This will make the drone fly to the last known GPS coordinates."
+        )
+        self.messageLabel.setWordWrap(True)
+        
+        # Coordinates display
+        self.coordsLabel = CaptionLabel(f"Target Coordinates: {latitude:.6f}, {longitude:.6f}")
+        self.coordsLabel.setTextColor("#666666", QColor(102, 102, 102))
+        
+        # Warning icon/text
+        self.warningLabel = CaptionLabel("⚠️ This action cannot be undone!")
+        self.warningLabel.setTextColor("#cf1010", QColor(255, 28, 32))
+        
+        # Add widgets to layout
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.messageLabel)
+        self.viewLayout.addWidget(self.coordsLabel)
+        self.viewLayout.addWidget(self.warningLabel)
+        
+        # Set minimum width
+        self.widget.setMinimumWidth(400)
+
+def showKamikazeConfirmation(window, latitude=0.0, longitude=0.0):
+    """ Show kamikaze mode confirmation dialog """
+    w = KamikazeConfirmationBox(latitude, longitude, window)
+    if w.exec():
+        print(f"Kamikaze mode activated for coordinates: {latitude}, {longitude}")
+        return True
+    else:
+        print("Kamikaze mode cancelled")
+        return False
 
 class ConsoleOutput(QTextEdit):
     """
@@ -587,16 +651,17 @@ class DroneControlApp(QMainWindow):
 
         self.k_tcp_address_input = QLineEdit()
         self.k_tcp_address_input.setPlaceholderText("127.0.0.1")
+        self.k_tcp_address_input.setText("127.0.0.1")
         self.k_tcp_address_input.setToolTip("Enter the kamikaze drone's IP address")
         self.k_tcp_port_input = QSpinBox()
         self.k_tcp_port_input.setRange(1, 65535)
         self.k_tcp_port_input.setValue(14560)
 
         self.k_connect_btn = QPushButton("Connect")
-        self.k_connect_btn.clicked.connect(self._on_connect_clicked)
+        self.k_connect_btn.clicked.connect(lambda: self._on_kamikaze_connect_clicked())
 
         self.k_disconnect_btn = QPushButton("Disconnect")
-        self.k_disconnect_btn.clicked.connect(self._on_disconnect_clicked)
+        self.k_disconnect_btn.clicked.connect(self._on_kamikaze_disconnect_clicked)
         self.k_disconnect_btn.setEnabled(False)
 
         self.map_btn_group = QGroupBox("Map Controls")
@@ -703,6 +768,7 @@ class DroneControlApp(QMainWindow):
         style_sheet = self.kamikaze_btn.styleSheet()
         style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}\nPrimaryPushButton::hover {background-color: #B22222; color: white; border: 1px solid red;}"
         self.kamikaze_btn.setStyleSheet(style_sheet)
+        self.kamikaze_btn.clicked.connect(self._on_kamikaze_clicked)
 
         controller_row.addWidget(self.drop_load_btn)
         controller_row.addWidget(self.pick_load_btn)
@@ -1075,6 +1141,49 @@ class DroneControlApp(QMainWindow):
 
         return datetime.now().strftime("%H:%M:%S")
 
+    def _on_kamikaze_connect_clicked(self, _type="udp"):
+        """Handle connect button click."""
+        address = self.k_tcp_address_input.text()
+        port = self.k_tcp_port_input.value()
+
+        if not address or not port:
+            self._show_error("Please enter a valid TCP address and port")
+            return
+
+        self.console.append_message(f"Connecting to {_type}:{address}:{port}", "info")
+        connection_string = f"{_type}:{address}:{port}"
+        if self.drone_client.connect_to_drone(connection_string, is_kamikaze=True):
+            # Set target marker on the map
+            pose = self.drone_client.k_current_position
+            print(f"Setting kamikaze marker at {pose}")
+            self.dock_content.set_kamikaze_marker(pose["lat"], pose["lon"])
+            self.k_connect_btn.setEnabled(False)
+            self.k_disconnect_btn.setEnabled(True)
+            self.console.append_message(
+                f"Connected to kamikaze drone at {address}:{port}", "success"
+            )
+        else:
+            self._show_error(f"Failed to connect to {address}:{port}")
+            self.console.append_message(
+                f"Failed to connect to {address}:{port}", "error"
+            )
+
+    def _on_kamikaze_clicked(self):
+        # dialog to confirm kamikaze
+        # reply = QMessageBox.question(
+        #     self,
+        #     "Kamikaze Confirmation",
+        #     "Are you sure you want to activate kamikaze mode? This will make the drone fly to the last known GPS coordinates.",
+        #     QMessageBox.Yes | QMessageBox.No,
+        #     QMessageBox.No,
+        # )
+        result = showKamikazeConfirmation(self)
+        #, self.drone_client.k_current_position["lat"], self.drone_client.k_current_position["lon"])
+        if result == QMessageBox.Yes:
+            self.console.append_message("Activating kamikaze mode...", "warning")
+            # Call kamikaze method on drone client
+            self.drone_client.kamikaze()
+
     def _on_connect_clicked(self, _type="udp"):
         """Handle connect button click."""
         address = self.tcp_address_input.text()
@@ -1121,12 +1230,19 @@ class DroneControlApp(QMainWindow):
 
     def _on_disconnect_clicked(self):
         """Handle disconnect button click."""
-        self.drone_client.disconnect()
+        self.drone_client.disconnect(is_kamikaze=False)
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
         self._disable_control_buttons()
         self.console.append_message("Disconnected from drone", "info")
 
+    def _on_kamikaze_disconnect_clicked(self):
+        """Handle disconnect button click."""
+        self.drone_client.disconnect(is_kamikaze=True)
+        self.k_connect_btn.setEnabled(True)
+        self.k_disconnect_btn.setEnabled(False)
+        self._disable_control_buttons()
+        self.console.append_message("Disconnected from kamikaze drone", "info")
     def _on_arm_clicked(self):
         """Handle arm button click."""
         self.console.append_message("Arming drone...", "info")
@@ -1402,10 +1518,8 @@ class DroneControlApp(QMainWindow):
         """Handle connection status changes."""
         if connected:
             self.connection_status_label.setText("Connected")
-            self.arm_btn.setEnabled(True)
         else:
             self.connection_status_label.setText("Disconnected")
-            self.arm_btn.setEnabled(False)
             self._disable_control_buttons()
 
     def _on_drone_status_update(self, status):
@@ -1470,10 +1584,16 @@ class DroneControlApp(QMainWindow):
         # Helipad GPS and kamikaze GPS
         helipad_gps = status.get("helipad_gps", None)
         if helipad_gps:
-          self.helipad_gps_label.setText(f"({helipad_gps[0]:.7f}, {helipad_gps[1]:.7f})")
+            self.helipad_gps_label.setText(
+                f"({helipad_gps[0]:.7f}, {helipad_gps[1]:.7f})"
+            )
         tank_gps = status.get("tank_gps", None)
         if tank_gps:
-          self.tank_gps_label.setText(f"({tank_gps[0]:.7f}, {tank_gps[1]:.7f})")
+            self.tank_gps_label.setText(f"({tank_gps[0]:.7f}, {tank_gps[1]:.7f})")
+            self.dock_content.set_target_marker(tank_gps[0], tank_gps[1])
+        kamikaze_gps = status.get("kamikaze_gps", None)
+        if kamikaze_gps:
+            self.dock_content.set_kamikaze_marker(kamikaze_gps[0], kamikaze_gps[1])
 
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1)

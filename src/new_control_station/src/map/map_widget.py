@@ -38,6 +38,7 @@ target_marker_base64 = icon_to_base64(
     "src/new_control_station/assets/images/target.png"
 )
 home_icon_base64 = icon_to_base64("src/new_control_station/assets/images/home.png")
+kamikaze_icon_base64 = icon_to_base64("src/new_control_station/assets/images/kamikaze.png")
 
 
 def custom_code(location, map_variable_name):
@@ -50,6 +51,7 @@ def custom_code(location, map_variable_name):
         uav_icon_base64,
         target_marker_base64,
         mobileuser_marker_base64,
+        kamikaze_icon_base64,
         home_icon_base64,
         f"{location[0]},{location[1]}",
     )
@@ -173,10 +175,13 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
     def set_drone_marker(self, lat, lon):
         return self.page().runJavaScript(f"updateUavMarker({[lat, lon]});")
 
+    def set_kamikaze_marker(
+        self, lat, lon
+    ):  # TODO: set the kamikaze marker later for now it is same as drone marker
+        return self.page().runJavaScript(f"updateKamikazeMarker({[lat, lon]});")
+
     def set_target_marker(self, lat, lon):
-        return self.page().runJavaScript(
-            f"var homeMarker = L.marker({[lat, lon]},{{icon: targetIcon,}},).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
-        )
+        return self.page().runJavaScript(f"updateTargetMarker({[lat, lon]});")
 
     def set_home_marker(self, lat, lon):
         print(f"Setting home marker at: {lat}, {lon}")

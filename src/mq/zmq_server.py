@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import json
 import logging
 import queue
 import socket
 import threading
 import time
 import traceback
-import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
@@ -28,6 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger("zmq-server")
 
 IMAGE_QUALITY = 80  # JPEG quality for video frames
+
 
 @dataclass
 class FrameData:
@@ -394,10 +395,12 @@ class ZMQServer:
 
     def _encode_frame(
         self, frame: np.ndarray, topic_prefix: str = ""
-    ) -> Tuple[bytes, bytes]: #TODO: use a more efficient implementation in the future
+    ) -> Tuple[bytes, bytes]:  # TODO: use a more efficient implementation in the future
         """Encode frame to JPEG"""
         topic = f"{topic_prefix}video".encode()
-        _, jpeg_frame = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, IMAGE_QUALITY])
+        _, jpeg_frame = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, IMAGE_QUALITY]
+        )
         return topic, jpeg_frame.tobytes()
 
     async def _video_publisher_loop(self, mavlink_proxy: MAVLinkProxy):
@@ -500,7 +503,7 @@ class ZMQServer:
                     response = self._handle_command(message)
                     await self.control_socket.send_string(response)
                     if "NACK" not in message:
-                      logger.info(f"Command: {message} -> Response: {response}")
+                        logger.info(f"Command: {message} -> Response: {response}")
 
             except Exception as e:
                 logger.error(f"Error in control receiver: {e}")
@@ -530,7 +533,7 @@ class ZMQServer:
             return f"ACK: Hook is {self.hook_state}"
         elif command == ZMQTopics.HELIPAD_GPS.name:
             if self.latest_gps_coordinates and "helipad" in self.latest_gps_coordinates:
-                coords = self.latest_gps_coordinates['helipad']
+                coords = self.latest_gps_coordinates["helipad"]
                 return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"

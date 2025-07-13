@@ -78,6 +78,11 @@ var userIcon = L.icon({
     iconSize: [40, 40],
     });
 
+var kamikazeIcon = L.icon({
+    iconUrl: 'data:image/png;base64,%s', 
+    iconSize: [40, 40],
+    });
+
 var homeIcon = L.icon({
     iconUrl: 'data:image/png;base64,%s', 
     iconSize: [40, 40],
@@ -104,6 +109,8 @@ if (isNaN(inp_initial_location[0]) || isNaN(inp_initial_location[1])){
 
 let pos_marker;
 let uav_marker;
+let target_marker;
+let kamikaze_marker;
 function moveMarkerByClick(e) {
     console.log("p", e.latlng.lat + "," +e.latlng.lng);
     if (pos_marker) {
@@ -124,6 +131,26 @@ function updateUavMarker(loc) {
     }
 }
 
+function updateTargetMarker(loc) {
+    map.flyTo(loc);
+    if (target_marker) {
+        target_marker.setLatLng({lat: loc[0], lng: loc[1]});
+    } else {
+        target_marker = L.marker(loc, {
+            icon: targetIcon,
+        }).addTo(map);
+    }
+}
+function updateKamikazeMarker(loc) {
+    map.flyTo(loc);
+    if (kamikaze_marker) {
+        kamikaze_marker.setLatLng({lat: loc[0], lng: loc[1]});
+    } else {
+        kamikaze_marker = L.marker(loc, {
+            icon: kamikazeIcon,
+        }).addTo(map);
+    }
+}
 function undoWaypoint() {
     if(waypoints.length >0)
         waypoints.pop().remove();

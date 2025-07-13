@@ -12,11 +12,11 @@ name: Deploy Site
 
 on:
   push:
-    paths:
-      - "docs/docs/**"
-      - "docs/mkdocs.yml"
-    branches:
-      - master
+    # paths:
+    #   - "docs/docs/**"
+    #   - "docs/mkdocs.yml"
+    # branches:
+    #   - main
     #
     # If your repository would have releases should you uncomment the below lines
     # in order to ignore pushes caused by newly created releases.

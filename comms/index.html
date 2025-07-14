@@ -12,7 +12,7 @@
         <meta name="author" content="amarjay">
       
       
-        <link rel="canonical" href="https://nebula.amarjay.com/comms/">
+        <link rel="canonical" href="https://amar-jay.github.io/nebula/comms/">
       
       
         <link rel="prev" href="../gcs/">
@@ -177,13 +177,13 @@
   <meta name="theme-color" content="#757575">
   
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://nebula.amarjay.com/comms/" />
-  <meta property="og:image" content="https://nebula.amarjay.com//assets/img/favicons/android-chrome-512x512.png" />
+  <meta property="og:url" content="https://amar-jay.github.io/nebula/comms/" />
+  <meta property="og:image" content="https://amar-jay.github.io/nebula//assets/img/favicons/android-chrome-512x512.png" />
   <meta property="og:image:type" content="image/png" />
   
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:creator" content="Andre_601" />
-  <meta name="twitter:image" content="https://nebula.amarjay.com//assets/img/favicons/android-chrome-512x512.png" />
+  <meta name="twitter:image" content="https://amar-jay.github.io/nebula//assets/img/favicons/android-chrome-512x512.png" />
 
   <meta name="robots" content="noarchive" />
 
@@ -328,13 +328,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/AmarJay/nubula" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/amar-jay/nebula" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.999.747A11.974 11.974 0 0 0 0 12.75c0 2.254.635 4.465 1.833 6.376L11.837 6.19c.072-.092.251-.092.323 0l4.178 5.402h-2.992l.065.239h3.113l.882 1.138h-3.674l.103.374h3.86l.777 1.003h-4.358l.135.483h4.593l.695.894h-5.038l.165.589h5.326l.609.785h-5.717l.182.65h6.038l.562.727h-6.397l.183.65h6.717A12 12 0 0 0 24 12.75 11.977 11.977 0 0 0 11.999.747m3.654 19.104.182.65h5.326c.173-.204.353-.433.513-.65zm.385 1.377.18.65h3.563c.233-.198.485-.428.712-.65zm.383 1.377.182.648h1.203c.356-.204.685-.412 1.042-.648z"/></svg>
   </div>
   <div class="md-source__repository">
-    amar-jay/nubula
+    amar-jay/nebula
   </div>
 </a>
       </div>
@@ -493,13 +493,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/AmarJay/nubula" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/amar-jay/nebula" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.999.747A11.974 11.974 0 0 0 0 12.75c0 2.254.635 4.465 1.833 6.376L11.837 6.19c.072-.092.251-.092.323 0l4.178 5.402h-2.992l.065.239h3.113l.882 1.138h-3.674l.103.374h3.86l.777 1.003h-4.358l.135.483h4.593l.695.894h-5.038l.165.589h5.326l.609.785h-5.717l.182.65h6.038l.562.727h-6.397l.183.65h6.717A12 12 0 0 0 24 12.75 11.977 11.977 0 0 0 11.999.747m3.654 19.104.182.65h5.326c.173-.204.353-.433.513-.65zm.385 1.377.18.65h3.563c.233-.198.485-.428.712-.65zm.383 1.377.182.648h1.203c.356-.204.685-.412 1.042-.648z"/></svg>
   </div>
   <div class="md-source__repository">
-    amar-jay/nubula
+    amar-jay/nebula
   </div>
 </a>
     </div>
@@ -1911,7 +1911,7 @@
 <p>Instead of relying on ROS, we developed our own message-passing architecture, building it from the ground up in <strong>Python</strong>, using <a href="https://zeromq.org/">ZeroMQ (ZMQ)</a> as our communication backbone.</p>
 <p>ZMQ proved to be a perfect fit: lightweight, flexible, and highly intuitive once you understand its socket types. It abstracts away the messiness of raw sockets and provides robust patterns for distributed systems: <strong>Push/Pull</strong>, <strong>Request/Reply</strong>, and the one we eventually settled on—<strong>Publisher/Subscriber</strong>.</p>
 <p>Our first experiment used the Push-Pull pattern, which worked in theory given the single-producer/single-consumer relationship between ground station and drone. But in practice, it was brittle. The pull side could block or desynchronize if messages came too fast or if one side rebooted. We switched to the <strong>Pub-Sub</strong> model, which offered better decoupling, built-in topic filtering, and resilience to restarts. Inspired by the canonical examples in <a href="https://zguide.zeromq.org/docs/chapter1/">The ZeroMQ Guide</a>, we implemented our own topic-based channels for video frames, command messages, and telemetry.</p>
-<p><a class="glightbox" href="../../assets/img/comms-zmq-flow.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Pub-Sub Architecture" src="../../assets/img/comms-zmq-flow.svg" /></a></p>
+<p><a class="glightbox" href="../assets/img/comms-zmq-flow.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Pub-Sub Architecture" src="../assets/img/comms-zmq-flow.svg" /></a></p>
 <h3 id="message-format">Message Format<a class="headerlink" href="#message-format" title="Permanent link">&para;</a></h3>
 <p>We kept things simple. No protobufs. No custom serializers. All messages are passed as UTF-8 encoded strings. On the subscriber end, we parse them using Python’s built-in split on delimiters where appropriate. This gave us the flexibility to iterate quickly without locking ourselves into a rigid schema.</p>
 <h3 id="server-concurrency-evolution">Server Concurrency Evolution<a class="headerlink" href="#server-concurrency-evolution" title="Permanent link">&para;</a></h3>
@@ -1959,7 +1959,7 @@
 <hr />
 <h2 id="general-communication-architecture">General Communication Architecture<a class="headerlink" href="#general-communication-architecture" title="Permanent link">&para;</a></h2>
 <p>The following diagram illustrates the high-level structure of the Nebula Drone's communication system. It emphasizes how concurrency and asynchronicity are handled on both the drone's edge server and the GUI client.</p>
-<p><a class="glightbox" href="../../assets/img/comms_.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Communication Architecture" src="../../assets/img/comms_.svg" /></a></p>
+<p><a class="glightbox" href="../assets/img/comms_.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Communication Architecture" src="../assets/img/comms_.svg" /></a></p>
 <hr />
 <h2 id="asynchronous-frame-processing">Asynchronous Frame Processing<a class="headerlink" href="#asynchronous-frame-processing" title="Permanent link">&para;</a></h2>
 <p>Our <strong><code>AsyncFrameProcessor</code></strong> ensures that object detection never interrupts the live video stream. When we call <code>start()</code>, it spins up a daemon worker thread that watches a small input queue. Each incoming <code>FrameData</code> is submitted to a <code>ThreadPoolExecutor</code> (we default to 2 threads/workers), and must complete within 500 ms to maintain responsiveness. Once processed, results enter a second queue; if that fills, we discard the oldest result so only fresh frames propagate.</p>
@@ -2048,7 +2048,7 @@
 <h3 id="lifecycle-management">Lifecycle Management<a class="headerlink" href="#lifecycle-management" title="Permanent link">&para;</a></h3>
 <p>When <code>start()</code> is called, we bind our PUB and REP sockets, start the frame processor, set <code>running = True</code>, and launch both loops via <code>asyncio.gather</code>. A subsequent <code>stop()</code> clears the flag, halts the processor, closes sockets, and terminates the ZeroMQ context.</p>
 <p>This is the complete lifecycle management of this server, ensuring it can be cleanly started and stopped without leaving dangling threads or sockets.</p>
-<p><a class="glightbox" href="../../assets/img/comms-async-flow.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Lifecycle Management" src="../../assets/img/comms-async-flow.svg" /></a></p>
+<p><a class="glightbox" href="../assets/img/comms-async-flow.svg" data-type="image" data-width="auto" data-height="auto" data-desc-position="bottom"><img alt="Lifecycle Management" src="../assets/img/comms-async-flow.svg" /></a></p>
 
 <!-- Was this page helpful? -->
 

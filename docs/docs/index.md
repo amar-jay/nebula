@@ -64,7 +64,7 @@ hide:
 
 
 <div class="" markdown style="padding: 0 1em 0 1em;">
-[LICENSE](LICENSE.md) | [Issue Tracker](https://github.com/amar-jay/nebula/issues)
+[LICENSE](#) | [Issue Tracker](https://github.com/amar-jay/nebula/issues)
 </div>
 
 ---

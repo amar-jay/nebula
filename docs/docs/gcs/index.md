@@ -152,4 +152,4 @@ This diagram illustrates the interaction between the Ground Control Station, the
 
 ## Next Steps
 
-This documentation covers the **UI and client structure** of Nebula Ground Station. For a deeper understanding of the drone-to-ground communication stack, consult the [`/comms/`](/comms/) directory. There, you'll find detailed implementations of the **ZMQClient**, serialization strategies, and supporting modules used to integrate this interface with the airborne hardware.
+This documentation covers the **UI and client structure** of Nebula Ground Station. For a deeper understanding of the drone-to-ground communication stack, consult the [`/comms/`](../comms/index.md) directory. There, you'll find detailed implementations of the **ZMQClient**, serialization strategies, and supporting modules used to integrate this interface with the airborne hardware.

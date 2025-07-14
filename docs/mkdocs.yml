@@ -1,15 +1,16 @@
 site_name: 'Nebula Docs'
 site_description: 'Nebula 2025 Drone System Documentation'
 site_author: 'Amar Jay'
-site_url: 'https://nebula.amarjay.com'
+site_url: 'https://amar-jay.github.io/nebula'
+
 
 copyright: |
   &copy; Amar Jay
 
 docs_dir: docs/
 
-repo_name: amar-jay/nubula
-repo_url: https://github.com/AmarJay/nubula
+repo_name: amar-jay/nebula
+repo_url: https://github.com/amar-jay/nebula
 
 theme:
   name: 'material'

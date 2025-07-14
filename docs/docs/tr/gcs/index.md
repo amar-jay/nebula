@@ -150,4 +150,4 @@ Bu şema, Yer Kontrol İstasyonu, drone'un arka uç sistemleri ve Nebula 2025 mi
 
 ## Sonraki Adımlar
 
-Bu dokümantasyon, Nebula Yer Kontrol İstasyonu'nun **kullanıcı arayüzü ve istemci yapısını** kapsar. Drone-yer iletişim yığını hakkında daha derin bir anlayış için [`/comms/`](/comms/) dizinine başvurabilirsiniz. Burada, **ZMQClient**'ın detaylı uygulamaları, serileştirme stratejileri ve bu arayüzün hava donanımıyla entegrasyonunu sağlayan destek modülleri bulunur.
+Bu dokümantasyon, Nebula Yer Kontrol İstasyonu'nun **kullanıcı arayüzü ve istemci yapısını** kapsar. Drone-yer iletişim yığını hakkında daha derin bir anlayış için [`/comms/`](../comms/index.md) dizinine başvurabilirsiniz. Burada, **ZMQClient**'ın detaylı uygulamaları, serileştirme stratejileri ve bu arayüzün hava donanımıyla entegrasyonunu sağlayan destek modülleri bulunur.

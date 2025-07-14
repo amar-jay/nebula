@@ -36,7 +36,7 @@ hide:
     - Asyncio görev yöneticisi  
     - MAVLink protokol implementasyonu  
     
-    [:octicons-arrow-right-24: Modül Dokümantasyonu](comms/index.md)
+    [:octicons-arrow-right-24: Modül Dokümantasyonu](../comms/index.md)
 
 -   ### :material-brain: Görüntü İşleme
     ----
@@ -48,7 +48,7 @@ hide:
     - OpenCV ön işleme  
     - GPS tahmin sistemi  
     
-    [:octicons-arrow-right-24: Modül Dokümantasyonu](vision/index.md)
+    [:octicons-arrow-right-24: Modül Dokümantasyonu](../vision/index.md)
 
 -   ### :material-airplane: Simülasyon
     ----
@@ -60,12 +60,12 @@ hide:
     - ArduPilot SITL  
     - Sensör emülasyonu  
     
-    [:octicons-arrow-right-24: Modül Dokümantasyonu](simulation/index.md)
+    [:octicons-arrow-right-24: Modül Dokümantasyonu](../simulation/index.md)
 </div>
 
 
 <div class="" markdown style="padding: 0 1em 0 1em;">
-[LİSANS](LICENSE.md) | [Hata Takipçisi](https://github.com/amar-jay/nebula/issues)
+[LİSANS](#) | [Hata Takipçisi](https://github.com/amar-jay/nebula/issues)
 </div>
 
 ## Proje Genel Bakış

@@ -31,7 +31,7 @@ ZMQ proved to be a perfect fit: lightweight, flexible, and highly intuitive once
 
 Our first experiment used the Push-Pull pattern, which worked in theory given the single-producer/single-consumer relationship between ground station and drone. But in practice, it was brittle. The pull side could block or desynchronize if messages came too fast or if one side rebooted. We switched to the **Pub-Sub** model, which offered better decoupling, built-in topic filtering, and resilience to restarts. Inspired by the canonical examples in [The ZeroMQ Guide](https://zguide.zeromq.org/docs/chapter1/), we implemented our own topic-based channels for video frames, command messages, and telemetry.
 
-![Pub-Sub Architecture](../../assets/img/comms-zmq-flow.svg)
+![Pub-Sub Architecture](../assets/img/comms-zmq-flow.svg)
 
 ### Message Format
 
@@ -93,7 +93,7 @@ This architecture has been reliable during flights, supporting both control comm
 
 The following diagram illustrates the high-level structure of the Nebula Drone's communication system. It emphasizes how concurrency and asynchronicity are handled on both the drone's edge server and the GUI client.
 
-![Communication Architecture](../../assets/img/comms_.svg)
+![Communication Architecture](../assets/img/comms_.svg)
 
 ---
 
@@ -190,4 +190,4 @@ When `start()` is called, we bind our PUB and REP sockets, start the frame proce
 
 This is the complete lifecycle management of this server, ensuring it can be cleanly started and stopped without leaving dangling threads or sockets.
 
-![Lifecycle Management](../../assets/img/comms-async-flow.svg)
+![Lifecycle Management](../assets/img/comms-async-flow.svg)

@@ -82,8 +82,8 @@ Bu dokümantasyon, [Teknofest 2025 Drone Yarışması](https://www.teknofest.org
 
 [Teknofest](https://www.teknofest.org), Türkiye'nin önde gelen havacılık ve teknoloji festivalidir. Çoklu mühendislik disiplinlerinde yarışma kategorileri bulunur. 10 üyeli ekibimiz bu sistemi, otonom paket teslimi ve nesne tanıma görevlerine odaklanan drone yarışması kategorisi için geliştirmiştir.
 
-### Teknik Yazılım Liderliği
-Dokümantasyon ve sistem mimarisi [amarjay](https://github.com/amar-jay) tarafından yönetilmektedir
+<!-- ### Teknik Yazılım Liderliği
+Dokümantasyon ve sistem mimarisi [amarjay](https://github.com/amar-jay) tarafından yönetilmektedir -->
 
 ---
 

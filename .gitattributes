@@ -1,3 +1,6 @@
 data/simulation.csv filter=lfs diff=lfs merge=lfs -text
 data/helipad_training_data.csv filter=lfs diff=lfs merge=lfs -text
 data/multi_stabilization_test.csv filter=lfs diff=lfs merge=lfs -text
+src/controls/assets/frames_only_helipad.zip filter=lfs diff=lfs merge=lfs -text
+src/controls/assets/input_video2.mp4 filter=lfs diff=lfs merge=lfs -text
+src/controls/assets/input_video.mp4 filter=lfs diff=lfs merge=lfs -text

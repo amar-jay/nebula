@@ -1,6 +1,3 @@
-[submodule "src/controls"]
-	path = src/controls
-	url = https://github.com/amar-jay/controls
 [submodule "src/ardupilot_gazebo"]
 	path = src/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl

@@ -298,7 +298,7 @@ class VideoStreamViewer(QMainWindow):
         
         # RTSP Settings
         conn_layout.addWidget(QLabel("RTSP URL:"), 0, 0)
-        self.rtsp_url_edit = QLineEdit("rtsp://localhost:8554/live")
+        self.rtsp_url_edit = QLineEdit("rtsp://localhost:8554/raw")
         conn_layout.addWidget(self.rtsp_url_edit, 0, 1)
         
         # ZMQ Settings

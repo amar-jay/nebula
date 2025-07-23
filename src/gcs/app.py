@@ -206,13 +206,27 @@ def showKamikazeConfirmation(parent, drone_client:DroneClient):
     if w.exec():
       drone_client.kamikaze_connection.arm()
       time.sleep(2)
-      drone_client.kamikaze_connection.takeoff(10)
-      time.sleep(10)
-      drone_client.kamikaze_connection.goto_kamikaze(40.9589112, 29.1359169)
-    #     if w.use_main_drone:
-    #     else:
-    #       drone_client.kamikaze_connection.goto_kamikaze(*drone_client.tank_gps)
-    #     return True
+      drone_client.kamikaze_connection.takeoff(5)
+      # message box to tell to wait
+      m = MessageBox(
+        "Kamikaze",
+        "Kamikaze in Progress. Click OK if ready to LAND",
+        parent,
+      )
+
+      time.sleep(5)
+      drone_client.kamikaze_connection.goto_kamikaze(40.9588559, 29.1357784)
+      if m.exec():
+        m = MessageBox(
+          "Kamikaze",
+          "Landing in Progress",
+          parent,
+        )
+        m.exec()
+        drone_client.kamikaze_connection.repeat_relay(10)
+        drone_client.kamikaze_connection.set_mode("LAND")
+
+      return True
     else:
         print("Kamikaze mode cancelled")
         return False

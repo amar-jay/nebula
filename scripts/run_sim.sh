@@ -24,8 +24,9 @@ while getopts ":vw:" opt; do
   esac
 done
 
-ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.95903888690079,29.135350967589982,0,0 --model JSON --console" # --instance=1 --out=udp:127.0.0.1:14550"
-MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console --instance=1 --out=udp:127.0.0.1:14580"
+ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.95903888690079,29.135350967589982,0,0 --model JSON --console --instance=0" # --instance=1 --out=udp:127.0.0.1:14550"
+MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.9590514,29.1355062,0,0 --model JSON --console --instance=1"           # --instance=1 --out=udp:127.0.0.1:14550"
+#MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console --instance=1"
 #ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console"
 
 # Name of the tmux session

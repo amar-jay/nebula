@@ -21,7 +21,6 @@ def main():
         cv2.CAP_ANY,  # Auto detect
         cv2.CAP_V4L,  # V4L/V4L2
         cv2.CAP_V4L2,  # V4L2
-        cv2.CAP_FIREWIRE,  # IEEE 1394 drivers
         cv2.CAP_GSTREAMER,  # GStreamer
         cv2.CAP_FFMPEG,  # FFMPEG
     ]
@@ -45,7 +44,7 @@ def main():
             error = str(e)
 
         status = "✅ Available" if is_available else "❌ Not available"
-        print(f"{backend}: {status}")
+        print(f"{backend_names[idx]}: {status}")
 
     # Check if GStreamer is available specifically
     print("\n----- GStreamer Support -----")
@@ -105,7 +104,7 @@ def test_camera(backend=None, index=0, pipeline=None):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    print(f"Resolution: {width}x{height}")
+    print(f"\nResolution: {width}x{height}")
     print(f"FPS: {fps}")
 
     ret, _ = cap.read()

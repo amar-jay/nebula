@@ -8,7 +8,7 @@ Displays pitch, roll, and yaw angles with artificial horizon
 import math
 import sys
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygon
 from PySide6.QtWidgets import (
     QApplication,
@@ -26,7 +26,7 @@ class AttitudeIndicator(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(300, 300)
+        self.setMinimumSize(250, 250)
         self.setMaximumSize(400, 400)
 
         # Attitude values in degrees
@@ -36,7 +36,7 @@ class AttitudeIndicator(QWidget):
 
         # Colors
         self.sky_color = QColor(135, 206, 235)  # Sky blue
-        self.ground_color = QColor(139, 69, 19)  # Brown
+        self.ground_color = QColor(179, 169, 19)  # Brown
         self.white = QColor(255, 255, 255)
         self.black = QColor(0, 0, 0)
         self.yellow = QColor(255, 255, 0)
@@ -128,7 +128,7 @@ class AttitudeIndicator(QWidget):
                 # Draw angle text for major lines
                 if angle % 20 == 0:
                     painter.setFont(QFont("Arial", 10))
-                    painter.drawText(-15, int(y_pos) - 5, f"{abs(angle)}")
+                    painter.drawText(-15, int(y_pos) + 3, f"{abs(angle)}")
 
     def _draw_aircraft_symbol(self, painter, center_x, center_y, radius):
         """Draw the fixed aircraft symbol in the center"""
@@ -197,24 +197,25 @@ class AttitudeIndicator(QWidget):
         )
         painter.drawPolygon(triangle)
 
-    def _draw_attitude_text(self, painter, width, height):
+    def _draw_attitude_text(self, painter: QPainter, width, height):
         """Draw attitude values as text"""
         painter.setPen(QPen(self.black, 2))
-        painter.setFont(QFont("Arial", 12, QFont.Bold))
+        painter.setFont(QFont("Arial", 8, QFont.Bold))
+        painter.setOpacity(0.6)
 
         # Background rectangles for text
         painter.setBrush(QBrush(QColor(255, 255, 255, 200)))
 
         # Pitch text
-        painter.drawRect(10, 10, 100, 25)
+        painter.drawRect(10, 10, 75, 25)
         painter.drawText(15, 28, f"Pitch: {self.pitch:.1f}°")
 
         # Roll text
-        painter.drawRect(10, 40, 100, 25)
+        painter.drawRect(10, 40, 75, 25)
         painter.drawText(15, 58, f"Roll: {self.roll:.1f}°")
 
         # Yaw text
-        painter.drawRect(10, 70, 100, 25)
+        painter.drawRect(10, 70, 75, 25)
         painter.drawText(15, 88, f"Yaw: {self.yaw:.1f}°")
 
 
@@ -224,7 +225,7 @@ class AttitudeIndicatorDemo(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Drone Attitude Indicator")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 100, 300)
 
         # Create central widget
         central_widget = QWidget()

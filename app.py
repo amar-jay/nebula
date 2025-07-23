@@ -1,4 +1,4 @@
-from src.new_control_station.app import main
+from src.gcs.app import main
 
 if __name__ == "__main__":
     main()

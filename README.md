@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/amar-jay/nebula">
-    <img src="./src/new_control_station/assets/images/logo.png" height="96">
+    <img src="./src/gcs/assets/images/logo.png" height="96">
     <h3 align="center">Nebula</h3>
   </a>
 </p>
@@ -40,10 +40,7 @@ An application system consisting of an edge server and a desktop client (built w
 
 1. **Clone the repository** (uses Git submodules):
    ```bash
-   git clone --recurse-submodules https://github.com/amar-jay/nebula.git
-   cd nebula
-   git submodule update --remote --merge
-   git submodule update --init --recursive
+   git clone https://github.com/amar-jay/nebula.git --recursive
    ```
 
 2. **Setup ArduPilot**:

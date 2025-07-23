@@ -8,7 +8,7 @@ include = '\.pyi?$'
 extend-exclude = '''
 (
     ^/mission_planner/
-  | ^/src/new_control_station/libs/
+  | ^/src/gcs/libs/
   | ^/src/controls/__pycache__/
   | ^/_build/
   | ^/build/

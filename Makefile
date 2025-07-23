@@ -21,10 +21,10 @@ define set_env_var_fn
 endef
 
 app:
-	@python -m src.new_control_station.app
+	@python -m src.gcs.app
 
 demo_app:
-	@python -m src.new_control_station.src.main.demo
+	@python -m src.gcs.src.main.demo
 
 gz:
 	gz sim -v4 -r ${WORLD} 
@@ -36,7 +36,16 @@ create:
 	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1
 
 camera_feed:
-	gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp,encoding-name=H264 ! rtph264depay ! avdec_h264 ! videoconvert ! jpegenc ! multipartmux ! tcpserversink host=0.0.0.0 port=8080
+	#gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp,encoding-name=H264 ! rtph264depay ! avdec_h264 ! videoconvert ! jpegenc ! multipartmux ! tcpserversink host=0.0.0.0 port=8080
+	#! autovideosink
+	gst-launch-1.0 -v udpsrc port=5600 \
+	! application/x-rtp,encoding-name=H264 \
+	! rtph264depay \
+	! avdec_h264 \
+	! videoconvert \
+	! videorate \
+	! video/x-raw,framerate=30/1 \
+	! autovideosink
 
 # Check if the variable is defined and add it to .bashrc if it's not
 set_env_vars:
@@ -49,7 +58,7 @@ set_env_vars:
 install_tmux: # completely unrelated to the project, but I think its useful to have
 	curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw | bash
 
-run_sim:
+gz_sim:
 	@./scripts/run_sim.sh ${WORLD}
 cpu_info:
 	@python ./scripts/cpu_info.py
@@ -67,15 +76,18 @@ setup:
 	@./scripts/setup.sh
 
 build_app:
-	printf "from src.new_control_station.app import main\nif __name__ == '__main__':\n    main()\n" > app.py
+	printf "from src.gcs.app import main\nif __name__ == '__main__':\n    main()\n" > app.py
 	pyinstaller app.spec
 	rm app.py
+
+test_fps:
+	python -m scripts.check_fps
 
 sim_server:
 	@python -m src.mq.zmq_server --is-simulation
 
 server:
-	@python -m src.mq.example_zmq_server
+	@python -m src.mq.zmq_server
 
 sim_server2:
 	@python -m src.mq.example_zmq_server2 --is-simulation
@@ -86,3 +98,9 @@ recv:
 lint:
 	@isort .
 	@black .
+
+telem:
+	mavproxy.py --master=/dev/ttyUSB0 --baudrate=57600 --console --out=udp:127.0.0.1:14550
+
+k_telem:
+	mavproxy.py --master=/dev/ttyUSB0 --baudrate=57600 --console --out=udp:127.0.0.1:14560

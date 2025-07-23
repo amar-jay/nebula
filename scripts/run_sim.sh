@@ -24,7 +24,8 @@ while getopts ":vw:" opt; do
   esac
 done
 
-ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.95903888690079,29.135350967589982,0,0 --model JSON --console"
+ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.95903888690079,29.135350967589982,0,0 --model JSON --console" # --instance=1 --out=udp:127.0.0.1:14550"
+MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console --instance=1 --out=udp:127.0.0.1:14580"
 #ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console"
 
 # Name of the tmux session
@@ -57,6 +58,8 @@ fi
 # Start session and name the window
 tmux new-session -d -s $SESSION -n gazebo "$GAZEBO_CMD"
 tmux split-window -h -t $SESSION "$ARDU_CMD"
+
+# tmux split-window -v -t $SESSION:.1 "$MINI_ARDU_CMD"
 
 # Rename second pane's window (if ArduPilot tries to rename)
 tmux select-pane -t $SESSION:.1

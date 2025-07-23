@@ -1,8 +1,9 @@
 import json
 import sys
+import re
 import time
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -33,11 +34,11 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     Action,
-    MessageBoxBase,
-    SubtitleLabel,
-    CaptionLabel,
 )
 from qfluentwidgets import BodyLabel as QLabel
+from qfluentwidgets import (
+    CaptionLabel,
+)
 from qfluentwidgets import CheckBox as QCheckBox
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import (
@@ -45,11 +46,15 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import (
     MessageBox,
+    MessageBoxBase,
 )
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 from qfluentwidgets import SpinBox as QSpinBox
+from qfluentwidgets import (
+    SubtitleLabel,
+)
 from qfluentwidgets import TableWidget as QTableWidget
 from qfluentwidgets import TextEdit as QTextEdit
 from qfluentwidgets import (
@@ -58,19 +63,17 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink import ardupilot
 from src.controls.mavlink.mission_types import Waypoint
-from src.mq.messages import ZMQTopics
-from src.mq.zmq_client import ZMQClient
-from src.new_control_station.src.camera.camera_widget import CameraWidget
-from src.new_control_station.src.horizon.attitude_widget import AttitudeIndicator
-from src.new_control_station.src.horizon.compass_widget import CompassWidget
-from src.new_control_station.src.horizon.guage_widget import (
+from src.gcs.drone_client import DroneClient
+from src.gcs.src.camera.camera_widget import CameraWidget
+from src.gcs.src.horizon.attitude_widget import AttitudeIndicator
+from src.gcs.src.horizon.compass_widget import CompassWidget
+from src.gcs.src.horizon.guage_widget import (
     AltitudeGauge,
     BatteryGauge,
     SpeedGauge,
 )
-from src.new_control_station.src.map.map_widget import MapWidget
+from src.gcs.src.map.map_widget import MapWidget
 
 
 def PrimaryPushButton(text):
@@ -80,335 +83,6 @@ def PrimaryPushButton(text):
     style_sheet += "\nPrimaryPushButton {min-width: 50px; padding: 5px 10px;}"
     btn.setStyleSheet(style_sheet)
     return btn
-
-
-class DroneClient(QObject):
-    """
-    Mock drone client that will be replaced with actual implementation.
-    """
-
-    drone_status_update = Signal(dict)
-    connection_status = Signal(bool, str)
-    mission_progress = Signal(int, str)
-
-    def __init__(
-        self,
-        logger=None,
-    ):
-        super().__init__()
-        self.connected = False
-        self.k_connected = False
-        self.initial_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
-        self.k_current_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
-        self.helipad_gps = None
-        self.tank_gps = None
-        self.mission_waypoints = []
-        self.current_waypoint_index = -1
-        self.master_connection = None
-        self.kamikaze_connection = None
-        self.log = logger
-
-        self.zmq_client = ZMQClient()
-
-        # Setup status update timer
-        self.status_timer = QTimer(self)
-        self.status_timer.timeout.connect(self._update_status)
-        self.status_timer.setInterval(1000)  # Update every second
-
-    def drop_load(self):
-        """Drop load command."""
-        if self.master_connection is None:
-            return False
-
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_LOAD)
-        self.log(msg)
-        return
-
-    def pick_load(self):
-        """Pick load command."""
-        if self.master_connection is None:
-            return False
-
-        msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD)
-        self.log(msg)
-        return
-
-    def fetch_helipad_gps(self) -> bool:
-        """Fetch the helipad GPS coordinates."""
-        if self.master_connection is None:
-            return False
-
-        helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS)
-        helipad_gps = (
-            helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
-        )
-        helipad_gps = helipad_gps.split(",") if helipad_gps else None
-        if helipad_gps and len(helipad_gps) == 2:
-            #print(f"Helipad GPS: {helipad_gps}")
-            try:
-                lat = float(helipad_gps[0])
-                lon = float(helipad_gps[1])
-                self.helipad_gps = (lat, lon)
-                return True
-            except ValueError:
-                self.log("Invalid helipad GPS format")
-                print("Invalid helipad GPS format")
-                return False
-
-    def fetch_tank_gps(self) -> bool:
-        """Fetch the tank GPS coordinates."""
-        if self.master_connection is None:
-            return False
-
-        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS)
-        tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
-        tank_gps = tank_gps.split(",") if tank_gps else None
-
-        if tank_gps and len(tank_gps) == 2:
-            #print(f"Tank GPS: {tank_gps}")
-            try:
-                lat = float(tank_gps[0])
-                lon = float(tank_gps[1])
-                self.tank_gps = (lat, lon)
-                return True
-            except ValueError:
-                self.log("Invalid tank GPS format")
-                print("Invalid tank GPS format")
-
-    def raise_hook(self):
-        """Raise hook command."""
-        if self.master_connection is None:
-            return False
-
-        msg = self.zmq_client.send_command(ZMQTopics.RAISE_HOOK)
-        self.log(msg)
-        return
-
-    def drop_hook(self):
-        """Drop hook command."""
-        if self.master_connection is None:
-            return False
-
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_HOOK)
-        self.log(msg)
-        return
-
-    def connect_to_drone(self, connection_string, is_kamikaze=False):
-        """Connect to drone at the specified TCP address and port."""
-
-        # if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
-        # address, port = connection_string[4:].split(":")
-        # port = int(port)
-
-        if is_kamikaze:
-            self.kamikaze_connection = ardupilot.ArdupilotConnection(
-                connection_string, logger=self.log
-            )
-            self.k_connected = True
-            self.kamikaze_connection.set_mode("GUIDED")
-            # self.kamikaze_connection.wait_heartbeat()
-        else:
-            self.master_connection = ardupilot.ArdupilotConnection(
-                connection_string=connection_string,
-                logger=self.log,
-                # world="delivery_runway",
-                # model_name="iris_with_stationary_gimbal",
-                # camera_link="tilt_link",
-                # logger=lambda *message: self.log(
-                # f"[MAVLink] {' '.join(map(str, message))}",
-                # ),
-            )
-            self.master_connection.set_mode("GUIDED")
-            self.connected = True
-
-            # Start status updates
-            self.log("Starting ZMQ client...")
-            self.zmq_client.start()
-            self.log("ZMQ client started")
-            self.log("Starting status timer...")
-            self.status_timer.start()
-
-        if is_kamikaze:
-            location = self.kamikaze_connection.get_current_gps_location()
-            if location is not None:
-                lat, lon, alt = location
-                self.k_current_position = {"lat": lat, "lon": lon, "alt": alt}
-        else:
-            location = self.master_connection.get_current_gps_location()
-            if location is not None:
-                lat, lon, alt = location
-                self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
-
-            self.connection_status.emit(
-                True,
-                f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
-            )
-
-        # self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
-        return True
-
-    def set_logger(self, logger):
-        self.log = logger
-
-    def disconnect(self, is_kamikaze=False):
-        """Disconnect from the drone."""
-
-        if is_kamikaze and self.kamikaze_connection is not None:
-            self.kamikaze_connection.close()
-            self.kamikaze_connection = None
-        elif self.master_connection is not None:
-            self.master_connection.close()
-            self.master_connection = None
-
-            self.connected = False
-
-
-            self.zmq_client.stop()
-            self.status_timer.stop()
-
-            self.connection_status.emit(
-                False,
-                f"[MAVLink] Disconnecting from drone",
-            )
-
-    def arm(self, is_kamikaze=False):
-        """Arm the drone."""
-        if not self.connected:
-            return False
-
-        self.log("Arming drone...")
-        if is_kamikaze:
-            self.kamikaze_connection.arm()
-        else:
-            self.master_connection.arm()
-
-        self.log("Drone armed successfully.")
-        return True
-
-    def disarm(self):
-        """Disarm the drone."""
-        if not self.connected:
-            return False
-
-        # Check if the drone is armed from the status update
-        armed = self.status.get("armed", False)
-        if not armed:
-            self.log("Disarming a unarmed or not flying drone")
-            return False
-        self.log("Disarming drone...")
-        self.master_connection.disarm()
-        return True
-
-    def takeoff(self, altitude):
-        """Take off to the specified altitude."""
-        armed = self.status.get("armed", False)
-        if not self.connected or not armed:
-            return False
-
-        self.log("Taking off...")
-        self.master_connection.takeoff(altitude, wait_time=0.1)
-        return True
-
-    def land(self):
-        """Land the drone."""
-        if not self.connected:
-            return False
-
-        self.master_connection.land()
-        return True
-
-    def return_to_home(self):
-        """Return to launch location."""
-        if not self.connected:
-            return False
-
-        self.master_connection.return_to_launch()
-        return True
-
-    def goto_coordinates(self, lat, lon, alt, relative=False):
-        """Move to the specified coordinates."""
-        # armed = self.status.get("armed", False)
-        if relative:
-            lat += self.initial_position["lat"]
-            lon += self.initial_position["lon"]
-        self.log(f"Moving to coordinates: {lat}, {lon}, {alt} (relative={relative})")
-        self.log(f"Initial position: {self.initial_position}")
-
-        self.master_connection.goto_waypointv2(lat, lon, alt)
-
-        self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
-        return True
-
-    def upload_mission(self, waypoints):
-        """Upload a mission with waypoints."""
-        if not self.connected:
-            return False
-
-        self.mission_waypoints = waypoints
-        self.master_connection.upload_mission(waypoints)
-        return True
-
-    def start_mission(self):
-        """Start the uploaded mission."""
-        if not self.mission_waypoints:
-            return False
-
-        self.current_waypoint_index = 0
-        self.mission_completed = False
-
-        self.master_connection.start_mission()
-        self.mission_progress.emit(0, "Mission started")
-
-        return True
-
-    def cancel_mission(self):
-        """Cancel the current mission."""
-        self.master_connection.clear_mission()
-        self.current_waypoint_index = -1
-        self.mission_progress.emit(0, "Mission cancelled")
-        return True
-
-    def kamikaze(self):
-        if not self.k_connected:
-            self.log("Kamikaze connection not established")
-            return False
-        gps = self.status.get("tank_gps", None)
-        if gps is None:
-            self.log("Target GPS not available", "error")
-            return False
-        self.kamikaze_connection.goto_kamikaze(lat=gps[0], lon=gps[1])
-        self.log("Kamikaze mode activated", "success")
-        return True
-
-    def _update_status_hook(self, current, done):
-        self.current_waypoint_index = current
-        self.mission_completed = done
-        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
-        self.mission_progress.emit(
-            int((current) * 100 / len(self.mission_waypoints)), msg
-        )
-
-    def _update_status(self):
-        """Update and emit drone status information."""
-        status = self.master_connection.get_status()
-        self.fetch_helipad_gps()
-        self.fetch_tank_gps()
-
-        if hasattr(self, "mission_completed"):
-            if self.master_connection.monitor_mission_progress(
-                _update_status_hook=self._update_status_hook
-            ):
-                self.mission_progress.emit(100, "Mission completed")
-                delattr(self, "mission_completed")
-        else:
-            self.mission_progress.emit(0, "Mission not started")
-
-        status["helipad_gps"] = self.helipad_gps
-        status["tank_gps"] = self.tank_gps
-
-        status["kamikaze_gps"] = self.kamikaze_connection.get_current_gps_location() if self.k_connected else None
-        self.drone_status_update.emit(status)
-        self.status = status
 
 
 class MissionWaypointTable(QTableWidget):
@@ -461,9 +135,9 @@ class MissionWaypointTable(QTableWidget):
         """Clear all waypoints from the table."""
         self.setRowCount(0)
 
-    def get_waypoints(self):
+    def get_waypoints(self) -> list[Waypoint]:
         """Get all waypoints from the table."""
-        waypoints = []
+        waypoints: list[Waypoint] = []
         for row in range(self.rowCount()):
             auto_widget = self.cellWidget(row, 5)
             auto_checkbox = auto_widget.findChild(QCheckBox)
@@ -477,49 +151,72 @@ class MissionWaypointTable(QTableWidget):
             waypoints.append(waypoint)
         return waypoints
 
+
 class KamikazeConfirmationBox(MessageBoxBase):
-    """ Confirmation dialog for kamikaze mode activation """
-    def __init__(self, latitude=0.0, longitude=0.0, parent=None):
+    """Confirmation dialog for kamikaze mode activation"""
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.latitude = latitude
-        self.longitude = longitude
-        
+        self.latitude = 0.0
+        self.longitude = 0.0
+
         # Title
-        self.titleLabel = SubtitleLabel('Kamikaze Mode Confirmation')
-        
+        self.titleLabel = SubtitleLabel("Kamikaze Mode Confirmation")
+        # toggle if to use main drone
+
+        self.use_main_drone = QCheckBox("⚠️ DANGEROUS: USE MAIN DRONE INSTEAD")
+        self.use_main_drone.setTextColor("#cf1010", QColor(255, 28, 32))
+        self.use_main_drone.setChecked(False)
+
         # Warning message
         self.messageLabel = QLabel(
             "Are you sure you want to activate kamikaze mode? "
             "This will make the drone fly to the last known GPS coordinates."
         )
         self.messageLabel.setWordWrap(True)
-        
+
         # Coordinates display
-        self.coordsLabel = CaptionLabel(f"Target Coordinates: {latitude:.6f}, {longitude:.6f}")
+        self.coordsLabel = CaptionLabel(
+            f"Target Coordinates: {self.latitude:.6f}, {self.longitude:.6f}"
+        )
         self.coordsLabel.setTextColor("#666666", QColor(102, 102, 102))
-        
+
         # Warning icon/text
         self.warningLabel = CaptionLabel("⚠️ This action cannot be undone!")
         self.warningLabel.setTextColor("#cf1010", QColor(255, 28, 32))
-        
+
         # Add widgets to layout
         self.viewLayout.addWidget(self.titleLabel)
         self.viewLayout.addWidget(self.messageLabel)
+        self.viewLayout.addWidget(self.use_main_drone)
         self.viewLayout.addWidget(self.coordsLabel)
         self.viewLayout.addWidget(self.warningLabel)
-        
+
         # Set minimum width
         self.widget.setMinimumWidth(400)
 
-def showKamikazeConfirmation(window, latitude=0.0, longitude=0.0):
-    """ Show kamikaze mode confirmation dialog """
-    w = KamikazeConfirmationBox(latitude, longitude, window)
+
+def showKamikazeConfirmation(parent, drone_client:DroneClient):
+    """Show kamikaze mode confirmation dialog"""
+    w = KamikazeConfirmationBox(parent=parent)
+    # if drone_client.helipad_gps is None:
+    #   return
+    # w.latitude = drone_client.helipad_gps[0]
+    # w.longitude = drone_client.helipad_gps[1]
     if w.exec():
-        print(f"Kamikaze mode activated for coordinates: {latitude}, {longitude}")
-        return True
+      drone_client.kamikaze_connection.arm()
+      time.sleep(2)
+      drone_client.kamikaze_connection.takeoff(10)
+      time.sleep(10)
+      drone_client.kamikaze_connection.goto_kamikaze(40.9589112, 29.1359169)
+    #     if w.use_main_drone:
+    #     else:
+    #       drone_client.kamikaze_connection.goto_kamikaze(*drone_client.tank_gps)
+    #     return True
     else:
         print("Kamikaze mode cancelled")
         return False
+
 
 class ConsoleOutput(QTextEdit):
     """
@@ -587,6 +284,7 @@ class DroneControlApp(QMainWindow):
         """Initialize the UI components."""
         setTheme(Theme.DARK)
         setThemeColor("#0078d4", save=True)
+        self.setMinimumHeight(1000)
         # Create main widget and layout
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
@@ -600,7 +298,7 @@ class DroneControlApp(QMainWindow):
         kamikaze_connection_layout = QHBoxLayout(kamikaze_connection_group)
 
         self.tcp_address_input = QLineEdit()
-        self.tcp_address_input.setText("127.0.0.1")
+        self.tcp_address_input.setText("192.168.144.12")
         self.tcp_address_input.setToolTip("Enter the drone's IP address")
         self.tcp_port_input = QSpinBox()
         self.tcp_port_input.setRange(1, 65535)
@@ -669,7 +367,7 @@ class DroneControlApp(QMainWindow):
 
         move_marker_btn = QPushButton("Move Marker")
         move_marker_btn.clicked.connect(lambda: self.map_event("move_marker"))
-        select_area_btn = QPushButton("Select Area")
+        select_area_btn = QPushButton("GeoFence")
         select_area_btn.clicked.connect(lambda: self.map_event("select_area"))
         select_waypoint = QPushButton("Set Waypoint")
         select_waypoint.clicked.connect(lambda: self.map_event("set_waypoint"))
@@ -707,7 +405,7 @@ class DroneControlApp(QMainWindow):
         self.tab_widget.setStyleSheet(
             """
 		QTabWidget {
-			min-width: 1000px;
+			min-width: 900px;
 			}
 		QTabWidget::pane {
 		    border-radius: 10px;
@@ -746,6 +444,18 @@ class DroneControlApp(QMainWindow):
         # Basic controls tab
         basic_control_widget = QWidget()
         basic_control_layout = QVBoxLayout(basic_control_widget)
+
+        telem_group = QWidget()
+        telem_row = QHBoxLayout(telem_group)
+
+        self.attitude_indicator_mini = AttitudeIndicator()
+        self.compass_widget_mini = CompassWidget()
+        self.altitude_gauge_mini = AltitudeGauge()
+        self.speed_gauge_mini = SpeedGauge()
+        telem_row.addWidget(self.attitude_indicator_mini)
+        telem_row.addWidget(self.compass_widget_mini)
+        telem_row.addWidget(self.altitude_gauge_mini)
+        telem_row.addWidget(self.speed_gauge_mini)
 
         controller_group = QGroupBox("Controller Controls")
         controller_layout = QHBoxLayout(controller_group)
@@ -809,11 +519,16 @@ class DroneControlApp(QMainWindow):
         self.rtl_btn.clicked.connect(self._on_rtl_clicked)
         self.rtl_btn.setEnabled(False)
 
+        self.stabilize_btn = QPushButton("Stabilize")
+        self.stabilize_btn.clicked.connect(self._on_stabilize_clicked)
+        self.stabilize_btn.setEnabled(False)
+
         controls_row1.addWidget(self.arm_btn)
         controls_row1.addWidget(self.disarm_btn)
         controls_row1.addWidget(self.takeoff_btn)
         controls_row1.addWidget(self.land_btn)
         controls_row1.addWidget(self.rtl_btn)
+        controls_row1.addWidget(self.stabilize_btn)
 
         # Second row for goto controls
         goto_group = QGroupBox("Go to Position")
@@ -842,11 +557,11 @@ class DroneControlApp(QMainWindow):
         self.open_map_btn = PrimaryPushButton("Open Map")
         self.open_map_btn.clicked.connect(self._on_open_map_clicked)
 
-        goto_layout.addWidget(QLabel("Latitude:"))
+        goto_layout.addWidget(QLabel("Lat:"))
         goto_layout.addWidget(self.goto_lat_input)
-        goto_layout.addWidget(QLabel("Longitude:"))
+        goto_layout.addWidget(QLabel("Lon:"))
         goto_layout.addWidget(self.goto_lon_input)
-        goto_layout.addWidget(QLabel("Altitude (m):"))
+        goto_layout.addWidget(QLabel("Alt(m):"))
         goto_layout.addWidget(self.goto_alt_input)
         goto_layout.addWidget(self.goto_btn)
         goto_layout.addWidget(self.open_map_btn)
@@ -865,14 +580,16 @@ class DroneControlApp(QMainWindow):
         # Add all controls to the layout
         control_layout.addLayout(controls_row1)
         control_layout.addLayout(takeoff_layout)
-        basic_control_layout.addWidget(self.map_btn_group)
-        basic_control_layout.addWidget(control_group)
-        basic_control_layout.addWidget(goto_group)
-        basic_control_layout.addWidget(controller_group)
 
         # Create status display
         status_group = QGroupBox("Drone Status")
-        status_layout = QGridLayout(status_group)
+        status_group.setContentsMargins(0, 0, 0, 0)
+        status_h_layout = QVBoxLayout(status_group)
+        status_h_layout.setContentsMargins(0, 0, 0, 0)
+        status_ = QWidget()
+        status_layout = QGridLayout(status_)
+        status_h_layout.addWidget(telem_group)
+        status_h_layout.addWidget(status_)
 
         self.connection_status_label = QLabel("Not Connected")
         self.armed_status_label = QLabel("Disarmed")
@@ -895,34 +612,35 @@ class DroneControlApp(QMainWindow):
 
         status_layout.addWidget(QLabel("Flight:"), 1, 0)
         status_layout.addWidget(self.flight_status_label, 1, 1)
-        status_layout.addWidget(QLabel("Altitude:"), 1, 2)
-        status_layout.addWidget(self.altitude_label, 1, 3)
+        # status_layout.addWidget(QLabel("Altitude:"), 1, 2)
+        # status_layout.addWidget(self.altitude_label, 1, 3)
 
-        status_layout.addWidget(QLabel("Orientation:"), 2, 0)
-        status_layout.addWidget(self.orientation_label, 2, 1)
-        status_layout.addWidget(QLabel("Position:"), 2, 2)
-        status_layout.addWidget(self.position_label, 2, 3)
+        # status_layout.addWidget(QLabel("Orientation:"), 2, 0)
+        # status_layout.addWidget(self.orientation_label, 2, 1)
+        status_layout.addWidget(QLabel("Position:"), 1, 2)
+        status_layout.addWidget(self.position_label, 1, 3)
 
-        status_layout.addWidget(QLabel("Helipad GPS:"), 3, 0)
-        status_layout.addWidget(self.helipad_gps_label, 3, 1)
-        status_layout.addWidget(QLabel("Tank GPS:"), 3, 2)
-        status_layout.addWidget(self.tank_gps_label, 3, 3)
+        status_layout.addWidget(QLabel("Helipad GPS:"), 2, 0)
+        status_layout.addWidget(self.helipad_gps_label, 2, 1)
+        status_layout.addWidget(QLabel("Tank GPS:"), 2, 2)
+        status_layout.addWidget(self.tank_gps_label, 2, 3)
 
         _label = QLabel("Mode:")
         _label.setStyleSheet("color: #0078d4;")
-        status_layout.addWidget(_label, 4, 0)
-        status_layout.addWidget(self.mode_label, 4, 1)
-        status_layout.addWidget(QLabel("Battery:"), 4, 2)
-        status_layout.addWidget(self.battery_progress, 4, 3, 1, 2)
+        status_layout.addWidget(_label, 3, 0)
+        status_layout.addWidget(self.mode_label, 3, 1)
+        status_layout.addWidget(QLabel("Battery:"), 3, 2)
+        status_layout.addWidget(self.battery_progress, 3, 3, 1, 2)
 
-        # Add status group to basic control layout
+        basic_control_layout.addWidget(self.map_btn_group)
+        basic_control_layout.addWidget(control_group)
+        basic_control_layout.addWidget(goto_group)
+        basic_control_layout.addWidget(controller_group)
         basic_control_layout.addWidget(status_group)
         basic_control_layout.addStretch(1)
 
         # camera display tab
-        camera_widget = CameraWidget(
-            parent=self, video_client=self.drone_client.zmq_client
-        )
+        camera_widget = CameraWidget(parent=self, drone_client=self.drone_client)
 
         # Mission planning tab
         mission_widget = QWidget()
@@ -974,39 +692,45 @@ class DroneControlApp(QMainWindow):
         # Mission file operations
         mission_file_layout = QHBoxLayout()
 
-        self.load_mission_btn = QPushButton("Load Mission")
+        self.load_mission_btn = QPushButton("Load")
         self.load_mission_btn.clicked.connect(self._on_load_mission_clicked)
 
-        self.save_mission_btn = QPushButton("Save Mission")
+        self.save_mission_btn = QPushButton("Save")
         self.save_mission_btn.clicked.connect(self._on_save_mission_clicked)
 
-        self.clear_mission_btn = QPushButton("Clear Mission")
+        self.clear_mission_btn = QPushButton("Clear")
         self.clear_mission_btn.clicked.connect(self._on_clear_mission_clicked)
 
         mission_file_layout.addWidget(self.load_mission_btn)
         mission_file_layout.addWidget(self.save_mission_btn)
         mission_file_layout.addWidget(self.clear_mission_btn)
-        mission_file_layout.addStretch()
+        # mission_file_layout.addStretch()
 
         # Mission execution controls
         mission_exec_layout = QHBoxLayout()
 
-        self.upload_mission_btn = QPushButton("Upload Mission")
+        self.upload_mission_btn = PrimaryPushButton("Upload")
         self.upload_mission_btn.clicked.connect(self._on_upload_mission_clicked)
         self.upload_mission_btn.setEnabled(False)
 
-        self.start_mission_btn = QPushButton("Start Mission")
+        self.start_mission_btn = PrimaryPushButton("Start")
         self.start_mission_btn.clicked.connect(self._on_start_mission_clicked)
         self.start_mission_btn.setEnabled(False)
 
-        self.cancel_mission_btn = QPushButton("Cancel Mission")
+        self.cancel_mission_btn = PrimaryPushButton("Cancel")
         self.cancel_mission_btn.clicked.connect(self._on_cancel_mission_clicked)
         self.cancel_mission_btn.setEnabled(False)
 
         mission_exec_layout.addWidget(self.upload_mission_btn)
         mission_exec_layout.addWidget(self.start_mission_btn)
         mission_exec_layout.addWidget(self.cancel_mission_btn)
-        mission_exec_layout.addStretch()
+        # mission_exec_layout.addStretch()
+
+        mission_events_layout = QHBoxLayout()
+
+        mission_events_layout.addLayout(mission_file_layout)
+        mission_events_layout.addLayout(mission_exec_layout)
+        mission_events_layout.addStretch()
 
         # Mission progress
         mission_progress_layout = QHBoxLayout()
@@ -1019,8 +743,7 @@ class DroneControlApp(QMainWindow):
 
         # Add mission controls to the layout
         mission_layout.addWidget(add_waypoint_group)
-        mission_layout.addLayout(mission_file_layout)
-        mission_layout.addLayout(mission_exec_layout)
+        mission_layout.addLayout(mission_events_layout)
         mission_layout.addLayout(mission_progress_layout)
 
         telemetry_widget = QWidget()
@@ -1057,27 +780,27 @@ class DroneControlApp(QMainWindow):
 
         # Add tabs to the tab widget
         self._create_tab(
-            "src/new_control_station/assets/images/controls.png",
+            "src/gcs/assets/images/controls.png",
             "Controls",
             basic_control_widget,
         )
         self._create_tab(
-            "src/new_control_station/assets/images/camera.png", "Camera", camera_widget
+            "src/gcs/assets/images/camera.png", "Camera", camera_widget
         )
         self._create_tab(
-            "src/new_control_station/assets/images/mission.png",
+            "src/gcs/assets/images/mission.png",
             "Missions",
             mission_widget,
         )
         self._create_tab(
-            "src/new_control_station/assets/images/telemetry.png",
+            "src/gcs/assets/images/telemetry.png",
             "Telemetry",
             telemetry_widget,
         )
 
         # self.tab_widget.addTab(mission_widget, "Mission Planning")
         self._create_tab(
-            "src/new_control_station/assets/images/console.png",
+            "src/gcs/assets/images/console.png",
             "‍Console",
             console_widget,
         )
@@ -1092,8 +815,7 @@ class DroneControlApp(QMainWindow):
 
         # Create dock widget
         self.dock = QDockWidget("Map Dock(Fullscreen Only)", self)
-        canberra_airport = [-35.363261, 149.165230]
-        self.dock_content = MapWidget(canberra_airport)
+        self.dock_content = MapWidget()
         self.dock_content.addMissionCallback(self.waypoint_table.add_waypoint)
         self.dock_content.clearMissionCallback(self.waypoint_table.clear_waypoints)
         self.dock_content.addPositionCallback(
@@ -1146,7 +868,7 @@ class DroneControlApp(QMainWindow):
         address = self.k_tcp_address_input.text()
         port = self.k_tcp_port_input.value()
 
-        if not address or not port:
+        if not address and not port:
             self._show_error("Please enter a valid TCP address and port")
             return
 
@@ -1177,12 +899,28 @@ class DroneControlApp(QMainWindow):
         #     QMessageBox.Yes | QMessageBox.No,
         #     QMessageBox.No,
         # )
-        result = showKamikazeConfirmation(self)
-        #, self.drone_client.k_current_position["lat"], self.drone_client.k_current_position["lon"])
+        result = showKamikazeConfirmation(self, self.drone_client)
+        # , self.drone_client.k_current_position["lat"], self.drone_client.k_current_position["lon"])
         if result == QMessageBox.Yes:
             self.console.append_message("Activating kamikaze mode...", "warning")
             # Call kamikaze method on drone client
             self.drone_client.kamikaze()
+
+    def _is_valid_ip(self, ip):
+        pattern = re.compile(r'''
+            ^
+            (?:
+                (?:25[0-5]|      # 250-255
+                 2[0-4][0-9]|    # 200-249
+                 1[0-9]{2}|      # 100-199
+                 [1-9]?[0-9])    # 0-99
+                \.
+            ){3}
+            (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])
+            $
+        ''', re.VERBOSE)
+        
+        return bool(pattern.match(ip))
 
     def _on_connect_clicked(self, _type="udp"):
         """Handle connect button click."""
@@ -1190,7 +928,7 @@ class DroneControlApp(QMainWindow):
         port = self.tcp_port_input.value()
 
         if not address:
-            self._show_error("Please enter a valid TCP address")
+            self._show_error("Please enter a valid IP address")
             return
 
         self.console.append_message(f"Connecting to {_type}:{address}:{port}", "info")
@@ -1206,7 +944,7 @@ class DroneControlApp(QMainWindow):
             pose = self.drone_client.initial_position
             self.dock_content.set_home_marker(pose["lat"], pose["lon"])
         else:
-            self._show_error(f"Failed to connect to {address}:{port}")
+            self._show_error(f"Failed to connect to {connection_string}")
             self.console.append_message(
                 f"Failed to connect to {address}:{port}", "error"
             )
@@ -1230,7 +968,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_disconnect_clicked(self):
         """Handle disconnect button click."""
-        self.drone_client.disconnect(is_kamikaze=False)
+        self.drone_client._disconnect(is_kamikaze=False)
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
         self._disable_control_buttons()
@@ -1238,11 +976,12 @@ class DroneControlApp(QMainWindow):
 
     def _on_kamikaze_disconnect_clicked(self):
         """Handle disconnect button click."""
-        self.drone_client.disconnect(is_kamikaze=True)
+        self.drone_client._disconnect(is_kamikaze=True)
         self.k_connect_btn.setEnabled(True)
         self.k_disconnect_btn.setEnabled(False)
         self._disable_control_buttons()
         self.console.append_message("Disconnected from kamikaze drone", "info")
+
     def _on_arm_clicked(self):
         """Handle arm button click."""
         self.console.append_message("Arming drone...", "info")
@@ -1252,7 +991,8 @@ class DroneControlApp(QMainWindow):
             self.takeoff_btn.setEnabled(True)
             self.start_mission_btn.setEnabled(True)
         else:
-            print("Failed to arm drone")
+            self._show_error("Failed to arm drone")
+            # print("Failed to arm drone")
             self.console.append_message("Failed to arm drone", "error")
 
     def _on_safety_clicked(self, state):
@@ -1297,6 +1037,15 @@ class DroneControlApp(QMainWindow):
         else:
             self.console.append_message("Failed to land drone", "error")
 
+    def _on_stabilize_clicked(self):
+        """Handle return to home button click."""
+        if not self.drone_client.helipad_gps:
+          self._show_error("Helipad not detected")
+        if self.drone_client.goto_coordinates(*self.drone_client.helipad_gps, self.takeoff_alt_input.value()):
+            self.console.append_message("Stabilizing on helipad", "success")
+        else:
+            self.console.append_message("Failed to stabilize", "error")
+
     def _on_rtl_clicked(self):
         """Handle return to home button click."""
         if self.drone_client.return_to_home():
@@ -1321,6 +1070,7 @@ class DroneControlApp(QMainWindow):
                 f"Moving to position: Lat {lat}, Lon {lon}, Alt {alt}m", "success"
             )
         else:
+            self._show_error(f"Failed to move to {lat}, {lon}, {alt}m")
             self.console.append_message("Failed to move to position", "error")
 
     def _on_add_waypoint_clicked(self):
@@ -1339,6 +1089,7 @@ class DroneControlApp(QMainWindow):
     def _on_clear_mission_clicked(self):
         """Handle clear mission button click."""
         self.waypoint_table.clear_waypoints()
+        self.map_event("clear_all")
         self.console.append_message("Mission cleared", "info")
 
     def _on_load_mission_clicked(self):
@@ -1366,11 +1117,15 @@ class DroneControlApp(QMainWindow):
                 )
 
             self.console.append_message(f"Loaded mission from {file_path}", "success")
+            self.map_event("load_mission")
+
+            # TODO: show missions on map
         except Exception as e:  # pylint: disable=broad-except
             self._show_error(f"Failed to load mission: {str(e)}")
             self.console.append_message(f"Failed to load mission: {str(e)}", "error")
 
     def map_event(self, event):
+
         if event == "move_marker":
             self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
             self.dock_content.page().runJavaScript(
@@ -1379,6 +1134,16 @@ class DroneControlApp(QMainWindow):
             self.dock_content.page().runJavaScript(
                 "map.on('click', moveMarkerByClick);"
             )
+
+        elif event == "load_mission":
+            waypoints = self.waypoint_table.get_waypoints()
+            waypoint_str = []
+            for waypoint in waypoints:
+                waypoint_str.append(f"{waypoint.lat},{waypoint.lon}")
+            waypoint_str = "|".join(waypoint_str)
+            print(waypoint_str)
+            self.dock_content.page().runJavaScript("clearAll();")
+            self.dock_content.page().runJavaScript(f'loadMission("{waypoint_str}")')
         elif event == "select_area":
             self.dock_content.page().runJavaScript(
                 "map.off('click', putWaypointEvent);"
@@ -1467,13 +1232,14 @@ class DroneControlApp(QMainWindow):
 
         _waypoints = self.waypoint_table.get_waypoints()
         waypoints = []
+        altitude = self.takeoff_alt_input.value()
+        pose = self.drone_client.initial_position
         for wp in _waypoints:
-            pose = self.drone_client.initial_position
             waypoints.append(
                 Waypoint(
                     lat=float(pose["lat"]),
                     lon=float(pose["lon"]),
-                    alt=float(pose["alt"]),
+                    alt=float(altitude),
                     hold=10,
                 )
             )
@@ -1483,7 +1249,7 @@ class DroneControlApp(QMainWindow):
             Waypoint(
                 lat=float(pose["lat"]),
                 lon=float(pose["lon"]),
-                alt=float(pose["alt"]),
+                alt=float(altitude),
                 hold=10,
             )
         )
@@ -1494,6 +1260,7 @@ class DroneControlApp(QMainWindow):
             )
             self.start_mission_btn.setEnabled(True)
         else:
+            self._show_error("Failed to upload mission")
             self.console.append_message("Failed to upload mission", "error")
 
     def _on_start_mission_clicked(self):
@@ -1503,6 +1270,7 @@ class DroneControlApp(QMainWindow):
             self.start_mission_btn.setEnabled(False)
             self.cancel_mission_btn.setEnabled(True)
         else:
+            self._show_error("Failed to start mission")
             self.console.append_message("Failed to start mission", "error")
 
     def _on_cancel_mission_clicked(self):
@@ -1512,6 +1280,7 @@ class DroneControlApp(QMainWindow):
             self.start_mission_btn.setEnabled(True)
             self.cancel_mission_btn.setEnabled(False)
         else:
+            self._show_error("Failed to cancel mission")
             self.console.append_message("Failed to cancel mission", "error")
 
     def _on_connection_status_changed(self, connected, _):
@@ -1541,6 +1310,7 @@ class DroneControlApp(QMainWindow):
         self.land_btn.setEnabled(is_armemd and is_flying)
         self.rtl_btn.setEnabled(is_armemd and is_flying)
         self.flight_status_label.setText("Flying" if is_flying else "Not Flying")
+        self.stabilize_btn.setEnabled(self.drone_client.helipad_gps is not None)
 
         # Update position
         position = status.get("position", {})
@@ -1552,6 +1322,7 @@ class DroneControlApp(QMainWindow):
             self.position_label.setText(f"({lat},{lon})")
             self.altitude_label.setText(f"{alt:.1f}m")
             self.altitude_gauge.set_value(alt)
+            self.altitude_gauge_mini.set_value(alt)
 
             pose = self.drone_client.initial_position
             # print(f"Updating home marker to new position: {lat}, {lon}")
@@ -1575,11 +1346,14 @@ class DroneControlApp(QMainWindow):
             yaw = orientation.get("yaw", 0)
             self.orientation_label.setText(f"R:{roll:.1f}° P:{pitch:.1f}° Y:{yaw:.1f}°")
             self.attitude_indicator.set_attitude(pitch, roll, yaw)
+            self.attitude_indicator_mini.set_attitude(pitch, roll, yaw)
             self.compass_widget.set_heading(yaw)
+            self.compass_widget_mini.set_heading(yaw)
 
         self.battery_gauge.set_value(status.get("battery", 100))
         self.battery_progress.setValue(status.get("battery", 100))
         self.speed_gauge.set_value(status.get("speed", 0))
+        self.speed_gauge_mini.set_value(status.get("speed", 0))
 
         # Helipad GPS and kamikaze GPS
         helipad_gps = status.get("helipad_gps", None)
@@ -1623,7 +1397,16 @@ class DroneControlApp(QMainWindow):
 
     def _show_error(self, message):
         """Show an error message dialog."""
-        QMessageBox.critical(self, "Error", message)
+        msg = MessageBox(
+            "Error",
+            message,
+            self,
+        )
+
+        style_sheet = msg.yesButton.styleSheet()
+        style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}\nPrimaryPushButton::hover {background-color: #B22222; color: white; border: 1px solid red;}"
+        msg.yesButton.setStyleSheet(style_sheet)
+        msg.exec()
 
     def eventFilter(self, obj, event):
         # Check for window state change events
@@ -1651,7 +1434,7 @@ class DroneControlApp(QMainWindow):
         self.dock.setVisible(False)
         time.sleep(0.1)  # Allow time for dock to hide
         if self.drone_client.connected:
-            self.drone_client.disconnect()
+            self.drone_client._disconnect()
         event.accept()
 
 
@@ -1720,16 +1503,16 @@ def main():
     """Run the drone control application."""
     app = QApplication(sys.argv)
 
-    from src.new_control_station.src.login.page import LoginWindow
+    from src.gcs.src.login.page import LoginWindow
 
-    app.setStyle("Fusion")
+    # app.setStyle("Fusion")
     set_theme(app)
     # Apply the palette
 
     window = DroneControlApp()
-    window.show()
-    # w = LoginWindow(mainWindow=window)
-    # w.show()
+    #window.show()
+    w = LoginWindow(accept=window.show)
+    w.show()
 
     sys.exit(app.exec())
 

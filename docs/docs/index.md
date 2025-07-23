@@ -86,8 +86,8 @@ This documentation covers the Nebula 2025 autonomous drone system developed for 
 [Teknofest](https://www.teknofest.org) is Turkey's premier aerospace and technology festival featuring competitive categories across multiple engineering disciplines. Our 10-member team developed this system for the drone competition category, focusing on autonomous package delivery and object recognition tasks.
 
 
-### Technical Software Leadership
-Documentation and system architecture led by [amarjay](https://github.com/amar-jay)
+<!-- ### Technical Software Leadership
+Documentation and system architecture led by [amarjay](https://github.com/amar-jay) -->
 
 ---
 

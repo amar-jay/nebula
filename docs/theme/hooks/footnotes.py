@@ -1,12 +1,14 @@
-from mkdocs.structure.pages import Page
 from mkdocs.plugins import event_priority
+from mkdocs.structure.pages import Page
+
 
 @event_priority(-100)
 def on_page_markdown(markdown: str, /, *, page: Page, config, files) -> str | None:
-  if not page.meta.get("footnotes"):
-    return
-  
-  return f"{markdown}\n{CONTENT}"
+    if not page.meta.get("footnotes"):
+        return
+
+    return f"{markdown}\n{CONTENT}"
+
 
 CONTENT: str = """
 ----

@@ -1,0 +1,36 @@
+app:
+  author: Amar Jay
+  description: A control center for Matek drones
+  name: Matek Control Center
+  password: nebula123
+  user: nebula
+  version: 1.0.0
+camera:
+  distortion:
+  - 0.1
+  - -0.05
+  - 0.01
+  - 0.01
+  intrinsics:
+  - 205.46962738
+  - 0.0
+  - 320.0
+  - 0.0
+  - 205.46965599
+  - 240.0
+  - 0.0
+  - 0.0
+  - 1.0
+communication:
+  mavlink_address: tcp://localhost:16550
+  zmq_control_address: tcp://localhost:5556
+  zmq_timeout: 1000
+  zmq_video_address: tcp://localhost:5555
+logging:
+  level: DEBUG
+ml:
+  confidence_threshold: 0.6
+  production_model_path: src/controls/detection/main.pt
+  simulation_model_path: src/controls/detection/sim.pt
+  workers: 2
+simulation: true

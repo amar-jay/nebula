@@ -1,21 +1,9 @@
 [submodule "src/controls"]
 	path = src/controls
 	url = https://github.com/amar-jay/controls
-[submodule "src/orthomosaic_mapping"]
-	path = src/orthomosaic_mapping
-	url = https://github.com/amar-jay/orthomosaic_mapping
-[submodule "src/control_station"]
-	path = src/control_station
-	url = https://github.com/amar-jay/matek-gcs
 [submodule "src/ardupilot_gazebo"]
 	path = src/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl
-[submodule "src/new_control_station/libs/PyQt-Fluent-Widgets"]
-	path = src/new_control_station/libs/PyQt-Fluent-Widgets
-	url = https://github.com/amar-jay/PyQt-Fluent-Widgets
-[submodule "src/new_control_station/libs/PyQt-Frameless-Window"]
-	path = src/new_control_station/libs/PyQt-Frameless-Window
-	url = https://github.com/amar-jay/PyQt-Frameless-Window
-[submodule "src/new_control_station/libs/PySide6-Fluent-Widgets-plguin"]
-  path = src/new_control_station/libs/PySide6-Fluent-Widgets-plguin
+[submodule "src/gcs/libs/PySide6-Fluent-Widgets-plguin"]
+  path = src/gcs/libs/PySide6-Fluent-Widgets-plguin
 	url = https://github.com/amar-jay/PySide6-Fluent-Widgets-plugin

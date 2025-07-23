@@ -9,10 +9,8 @@ from folium.plugins import MousePosition
 # Make Icon
 from PIL import Image
 from PySide6 import QtWebEngineWidgets
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
 from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication
 
 
 def image_to_base64(image_path, size=(100, 100)):
@@ -30,20 +28,27 @@ def icon_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode()
 
 
-uav_icon_base64 = icon_to_base64("src/new_control_station/assets/images/drone.png")
+# @enum.Enum
+# class MapEvents:
+#   CLEAR_ALL = "clear_all"
+#   LOAD_MISSON = "load_mission"
+
+uav_icon_base64 = icon_to_base64("src/gcs/assets/images/drone.png")
 mobileuser_marker_base64 = icon_to_base64(
-    "src/new_control_station/assets/images/mobileuser.png"
+    "src/gcs/assets/images/mobileuser.png"
 )
 target_marker_base64 = icon_to_base64(
-    "src/new_control_station/assets/images/target.png"
+    "src/gcs/assets/images/target.png"
 )
-home_icon_base64 = icon_to_base64("src/new_control_station/assets/images/home.png")
-kamikaze_icon_base64 = icon_to_base64("src/new_control_station/assets/images/kamikaze.png")
+home_icon_base64 = icon_to_base64("src/gcs/assets/images/home.png")
+kamikaze_icon_base64 = icon_to_base64(
+    "src/gcs/assets/images/kamikaze.png"
+)
 
 
 def custom_code(location, map_variable_name):
     with open(
-        "src/new_control_station/src/map/map_script.js", "r", encoding="utf-8"
+        "src/gcs/src/map/map_script.js", "r", encoding="utf-8"
     ) as f:
         script_file = f.read()
     return script_file % (
@@ -82,7 +87,7 @@ class WebEnginePage(QWebEnginePage):
 
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
-    def __init__(self, center_coord, starting_zoom=20):
+    def __init__(self, center_coord=(40.9589, 29.1352), starting_zoom=20):
         super().__init__()
         MAPBOX_TOKEN = "sk.eyJ1IjoiYW1hcmpheSIsImEiOiJjbWI1bzVkcnkwMGlqMmtzMnBrcmJvb2thIn0.Y0JIq8H_w522Dh4H_gWj0Q"
         # NOTE: WHILE HARDCODING ENVIRONMENT VARIABLES IS NOT RECOMMENDED, IT IS
@@ -92,16 +97,17 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
             f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{{z}}/{{x}}/{{y}}@2x"
             f"?access_token={MAPBOX_TOKEN}"
         )
+        print(f"Mapbox tiles URL: {mapbox_tiles}")
         satellite_tiles = (
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
             "tile/{z}/{y}/{x}"
         )
 
         self.fmap = folium.Map(
-            location=[41.27442, 28.727317],  # center_coord,
+            location=center_coord,
             tiles=mapbox_tiles,
-            attr="Mapbox Satellite",
-            # attr="Esri",
+            #attr="Mapbox Satellite",
+            attr="Esri",
             max_zoom=22,
             zoom_start=starting_zoom,
             # scrollWheelZoom=True,

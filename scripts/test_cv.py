@@ -30,7 +30,6 @@ def main():
         "AUTO",
         "V4L",
         "V4L2",
-        "FIREWIRE",
         "GSTREAMER",
         "FFMPEG",
     ]
@@ -46,7 +45,7 @@ def main():
             error = str(e)
 
         status = "✅ Available" if is_available else "❌ Not available"
-        print(f"{backend_names[idx]}: {status}")
+        print(f"{backend}: {status}")
 
     # Check if GStreamer is available specifically
     print("\n----- GStreamer Support -----")
@@ -124,7 +123,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["any", "v4l", "v4l2", "gstreamer", "firewire", "ffmpeg"],
+        choices=["any", "v4l", "v4l2", "gstreamer", "ffmpeg"],
         help="Camera backend to use",
     )
 
@@ -138,7 +137,6 @@ if __name__ == "__main__":
         "v4l": cv2.CAP_V4L,
         "v4l2": cv2.CAP_V4L2,
         "gstreamer": cv2.CAP_GSTREAMER,
-        "firewire": cv2.CAP_FIREWIRE,
         "ffmpeg": cv2.CAP_FFMPEG,
     }
 

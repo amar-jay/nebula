@@ -8,10 +8,11 @@ from PySide6.QtWidgets import QWidget
 class CompassWidget(QWidget):
     """Modern compass widget"""
 
-    def __init__(self, parent=None):
+    def __init__(self, title="COMPASS", parent=None):
         super().__init__(parent)
         self.setMinimumSize(140, 140)
         self.heading = 0.0
+        self.title = title
 
     def set_heading(self, heading):
         self.heading = heading % 360
@@ -68,5 +69,11 @@ class CompassWidget(QWidget):
         heading_text = f"{int(self.heading)}°"
         text_rect = painter.fontMetrics().boundingRect(heading_text)
         painter.drawText(
-            center.x() - text_rect.width() // 2, center.y() + 35, heading_text
+            center.x() - text_rect.width() // 2, center.y() + 25, heading_text
         )
+
+        # Title
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        title_rect = painter.fontMetrics().boundingRect(self.title)
+        painter.drawText(center.x() - title_rect.width() // 2, 25, self.title)

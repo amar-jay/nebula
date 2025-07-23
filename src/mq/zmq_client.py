@@ -170,16 +170,22 @@ class ZMQClient:
 
     def stop(self):
         """Stop video reception and cleanup"""
-        self.video_thread.stop()
+        try:
+            self.video_thread.stop()
 
-        # Cleanup control socket
-        self.control_socket.close()
-        self.context.term()
+            # Cleanup control socket
+            self.control_socket.close()
+            self.context.term()
+        except:
+            pass
 
         logger.info("Video client stopped")
 
     def send_command(self, command) -> str:
         """Send control command to server"""
+        if not self.control_socket:
+            logger.info("not connected")
+            return None
         try:
             logger.info(f"Sending command: {command}")
             self.control_socket.send_string(

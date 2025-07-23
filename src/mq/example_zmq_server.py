@@ -144,7 +144,6 @@ class ZMQServer:
         video_port: int = 5555,
         control_port: int = 5556,
         video_source: int = 0,
-        is_simulation: bool = False,
     ):
         """
         video_port: Port for video frame publishing
@@ -204,7 +203,7 @@ class ZMQServer:
 
         self.tracker = yolo.YoloObjectTracker(
             K=camera_intrinsics,
-            model_path="src/controls/detection/best.pt",
+            model_path="src/controls/detection/" + ("sim.pt" if IS_SIMULATION else "main.pt"),
         )
         logger.info(
             "Server initialized with video port %d and control port %d",
@@ -261,29 +260,28 @@ class ZMQServer:
 
             # Send the frame
             topic, encoded_frame = self.encode_frame(frame)
-            self.video_socket.send_multipart([topic, encoded_frame])
+            self.video_socket.send_multipart([topic, encoded_frame], zmq.NOBLOCK)
 
             # send the processed frame to the serial connection
-            drone_position = connection.get_current_gps_location(relative=False)
+            drone_position = connection.get_amsl_gps_location()
             if drone_position is None:
                 logger.error("Failed to get drone GPS position")
                 continue
-            curr_position = (drone_position[0], drone_position[1], drone_position[2][1])
+            curr_position = (drone_position[0], drone_position[1], drone_position[3])
             drone_attitude = connection.get_current_attitude()
-            if drone_attitude is None and self.prev_attitude is None:
-                logger.error("Failed to get drone attitude")
-                continue
-            if drone_attitude is None:
-                drone_attitude = self.prev_attitude
+            if drone_attitude is not None:
+                self.prev_attitude = drone_attitude
+            elif self.prev_attitude is not None:
                 logger.warning("Using previous attitude as current attitude")
             else:
-                logger.info(f"Current attitude: {drone_attitude}")
+                logger.error("Failed to get drone attitude")
+                continue
 
             processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
                 frame=frame,
                 drone_gps=curr_position,
-                drone_attitude=drone_attitude,
-                ground_level_masl=drone_position[2][1] - drone_position[2][0],
+                drone_attitude=self.prev_attitude,
+                ground_level_masl=drone_position[3] - drone_position[2],
                 object_classes=self.object_classes,
             )
             self.gps_coordinates = gps_coords
@@ -293,7 +291,7 @@ class ZMQServer:
             topic, processed_encoded_frame = self.encode_frame(
                 processed_frame, _type="processed"
             )
-            self.video_socket.send_multipart([topic, processed_encoded_frame])
+            self.video_socket.send_multipart([topic, processed_encoded_frame], zmq.NOBLOCK)
 
             # FPS calculation
             fps_count += 1

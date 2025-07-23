@@ -18,12 +18,12 @@ from qfluentwidgets import (
     setTheme,
 )
 
-from src.new_control_station.src.map.map_widget import MapWidget
+from src.gcs.src.map.map_widget import MapWidget
 
 
 def get_asset(path: str) -> str:
     """Get the asset path"""
-    basePath = "/home/amarjay/Desktop/code/matek/src/new_control_station/assets"
+    basePath = "/home/amarjay/Desktop/code/matek/src/gcs/assets"
     return os.path.join(basePath, path)
 
 

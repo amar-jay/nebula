@@ -27,19 +27,20 @@ from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 
 from src.mq.zmq_client import ZMQClient
+from src.gcs.drone_client import DroneClient
 
 
 class CameraWidget(QWidget):
     """Custom camera widget matching the drone control app style"""
 
-    def __init__(self, parent=None, video_client: Optional[ZMQClient] = None):
+    def __init__(self, parent=None, drone_client: Optional[DroneClient] = None):
         super().__init__(parent)
         self.current_frame = None
         self.is_connected = False
         self.is_recording = False
         self.video_writer = None
         self.recording_filename = None
-        self.video_client = video_client
+        self.drone_client = drone_client
 
         self.setup_ui()
         self.setup_style()
@@ -179,7 +180,7 @@ class CameraWidget(QWidget):
     def show_placeholder(self):
         """Show placeholder when camera is not connected"""
         placeholder = QPixmap(
-            "src/new_control_station/assets/images/logo.png_"
+            "src/gcs/assets/images/logo.png_"
         )  # Path to your image asset
 
         if placeholder.isNull():
@@ -222,7 +223,9 @@ class CameraWidget(QWidget):
 
     def _disconnect_camera_signals(self):
         """Safely disconnect both frame signals."""
-        thread = self.video_client.video_thread
+        if not self.drone_client.zmq_client:
+            return
+        thread = self.drone_client.zmq_client.video_thread
         for signal in [thread.frame_received, thread.processed_frame_received]:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
@@ -230,15 +233,20 @@ class CameraWidget(QWidget):
 
     def connect_camera(self, _type: str = "raw"):
         """Connect to camera"""
+        if not self.drone_client.zmq_client:
+            print("not foundbro")
+            return
         try:
-            self.video_client.start()
+            self.drone_client.zmq_client.start()
 
             self._disconnect_camera_signals()
 
             if _type == "raw":
-                self.video_client.video_thread.frame_received.connect(self.update_frame)
+                self.drone_client.zmq_client.video_thread.frame_received.connect(
+                    self.update_frame
+                )
             else:
-                self.video_client.video_thread.processed_frame_received.connect(
+                self.drone_client.zmq_client.video_thread.processed_frame_received.connect(
                     self.update_frame
                 )
 
@@ -254,7 +262,7 @@ class CameraWidget(QWidget):
 
     def disconnect_camera(self):
         """Disconnect from camera"""
-        # self.video_client.video_thread.stop()
+        # self.drone_client.zmq_client.video_thread.stop()
         self._disconnect_camera_signals()
         if self.is_recording:
             self.stop_recording()
@@ -372,8 +380,8 @@ class CameraWidget(QWidget):
 
     def closeEvent(self, event):
         """Clean up when widget is closed"""
-        if self.video_client:
-            self.video_client.stop()
+        if self.drone_client.zmq_client:
+            self.drone_client.zmq_client.stop()
         if self.video_writer:
             self.video_writer.release()
         event.accept()
@@ -389,8 +397,10 @@ if __name__ == "__main__":
     window.setGeometry(100, 100, 800, 600)
 
     layout = QVBoxLayout(window)
-    zmq_client = ZMQClient()  # Replace with your actual ZMQ address
-    camera_widget = CameraWidget(video_client=zmq_client)
+    drone_client = DroneClient()
+    drone_client.zmq_client = ZMQClient()
+
+    camera_widget = CameraWidget(drone_client=drone_client)
     layout.addWidget(camera_widget)
 
     window.show()

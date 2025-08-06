@@ -35,7 +35,7 @@ class DroneClient(QObject):
         self.initial_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
         self.k_current_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
         self.helipad_gps = None
-        self.tank_gps = None
+        self.tank_gps = (40.9589782, 29.1358378)
         self.mission_waypoints = []
         self.current_waypoint_index = -1
         self.master_connection = None

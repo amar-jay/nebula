@@ -576,8 +576,8 @@ class YoloObjectTracker:
 def main():
     """Example usage of the improved tracker"""
 
-    input_video_path = "assets/input_video2.mp4"
-    output_video_path = "assets/output.mp4"
+    input_video_path = "/home/amarjay/Desktop/long.MOV"
+    output_video_path = "/home/amarjay/Desktop/long-processed.MOV"
 
     cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
@@ -601,14 +601,14 @@ def main():
     # Initialize tracker
     estimator = YoloObjectTracker(
         K=K,
-        model_path="detection/sim.pt",
+        model_path="/home/amarjay/Desktop/code/matek/src/controls/detection/best_v2.pt",
     )
 
     # Configuration
-    object_classes = ["helipad", "tank"]
+    object_classes = ["helipad", "real_tank"]
     object_colors = {
         "helipad": (0, 255, 0),
-        "tank": (255, 100, 100),
+        "real_tank": (255, 100, 100),
     }
 
     frame_count = 0

@@ -327,10 +327,13 @@ def _collect_dataset_sample(
         connection.log(f"❌ Dataset collection error: {e}")
 
 connection = ardupilot.ArdupilotConnection("udp:127.0.0.1:14550")
-camera = GazeboVideoCapture()
+camera = cv2.VideoCapture("/home/amarjay/Desktop/drone-gimbal-raw.mp4")
+if not camera.isOpened():
+    connection.log("❌ Failed to open camera stream")
+    exit(1)
 display = MissionDisplay("Multiple Waypoint Stabilized Landing Test")
 estimator = yolo.YoloObjectTracker(
-    model_path=os.path.join(os.path.dirname(__file__), "detection/sim.pt"),
+    model_path=os.path.join(os.path.dirname(__file__), "detection/best_v2.pt"),
     K=CAMERA_MATRIX,
 )
 dataset_writer_context = estimator.dataset_writer("multi_stabilization_test.csv")
@@ -352,14 +355,14 @@ try:
     lat, lon, alt = current_pos
 
     mission_coords = [
-        Waypoint(lat=lat + 0.0008, lon=lon + 0.00003, alt=10),
-        Waypoint(lat - 0.00004, lon - 0.00012, 15),
-        Waypoint(lat, lon + 0.000008, 10),
-        Waypoint(lat - 0.00001, lon - 0.00011, 7.5),
-        Waypoint(lat + 0.000009, lon + 0.00009, 5),
-        Waypoint(lat - 0.000009, lon - 0.00009, 5),
-        Waypoint(lat + 0.000009, lon - 0.00009, 5),
-        Waypoint(lat, lon, alt + 10),  # Return to home
+        Waypoint(lat=lat + 0.0008, lon=lon + 0.00003, alt=10, hold=10),
+        # Waypoint(lat - 0.00004, lon - 0.00012, 15),
+        # Waypoint(lat, lon + 0.000008, 10),
+        # Waypoint(lat - 0.00001, lon - 0.00011, 7.5),
+        # Waypoint(lat + 0.000009, lon + 0.00009, 5),
+        # Waypoint(lat - 0.000009, lon - 0.00009, 5),
+        # Waypoint(lat + 0.000009, lon - 0.00009, 5),
+        # Waypoint(lat, lon, alt + 10),  # Return to home
     ]
     connection.upload_mission(mission_coords)
 

@@ -28,6 +28,7 @@ CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
 logging.basicConfig(
     format="%(asctime)s - %(message)s",
     handlers=[
+        logging.FileHandler("zmq_server.log", mode="w"),  # Log to file
         logging.StreamHandler()  # Explicit console handler
     ]
 )

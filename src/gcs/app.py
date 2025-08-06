@@ -206,7 +206,7 @@ def showKamikazeConfirmation(parent, drone_client:DroneClient):
     if w.exec():
       drone_client.kamikaze_connection.arm()
       time.sleep(2)
-      drone_client.kamikaze_connection.takeoff(5)
+      drone_client.kamikaze_connection.takeoff(10)
       # message box to tell to wait
       m = MessageBox(
         "Kamikaze",
@@ -215,7 +215,16 @@ def showKamikazeConfirmation(parent, drone_client:DroneClient):
       )
 
       time.sleep(5)
-      drone_client.kamikaze_connection.goto_kamikaze(40.9588559, 29.1357784)
+      tank_gps = drone_client.tank_gps
+      if tank_gps is None:
+        m = MessageBox(
+          "Kamikaze",
+          "Tank GPS not set. Please set the tank GPS before proceeding.",
+          parent,
+        )
+        m.exec()
+        return False
+      drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
       if m.exec():
         m = MessageBox(
           "Kamikaze",
@@ -1251,10 +1260,10 @@ class DroneControlApp(QMainWindow):
         for wp in _waypoints:
             waypoints.append(
                 Waypoint(
-                    lat=float(pose["lat"]),
-                    lon=float(pose["lon"]),
-                    alt=float(altitude),
-                    hold=10,
+                    lat=pose["lat"],
+                    lon=pose["lon"],
+                    alt=altitude,
+                    hold=wp.hold,
                 )
             )
             waypoints.append(wp)
@@ -1264,7 +1273,7 @@ class DroneControlApp(QMainWindow):
                 lat=float(pose["lat"]),
                 lon=float(pose["lon"]),
                 alt=float(altitude),
-                hold=10,
+                hold=_waypoints[0].hold,
             )
         )
 

@@ -1,15 +1,15 @@
 # FOR TESTING PURPOSES ONLY
-import traceback
+import math
 import os
 import time
+import traceback
 from typing import Optional, Tuple
 
 import cv2
-import math
 import numpy as np
 
-from src.controls.mavlink import ardupilot
 from src.controls.detection import yolo
+from src.controls.mavlink import ardupilot
 from src.controls.mavlink.ardupilot import Waypoint
 from src.controls.mavlink.gz import GazeboVideoCapture, enable_streaming
 
@@ -25,17 +25,21 @@ CAMERA_MATRIX = np.array(
     [[205.46962738037109, 0.0, 320], [0.0, 205.46965599060059, 240], [0.0, 0.0, 1.0]]
 )
 
+
 class STATES:
     IN_FLIGHT = 0
     HOLD = 1
     STABILIZE = 2
     REACHED = 3
     SIMULATED_CRANE_HOLD = 4
+
+
 current_waypoint = 0
 current_state = STATES.IN_FLIGHT
 hold_timer = None
 detected_coords = None
 stable_coords = None
+
 
 class MissionDisplay:
     """Handles the visual display of drone mission progress"""
@@ -114,8 +118,8 @@ class MissionDisplay:
             "HOLD": (0, 165, 255),  # Orange
             "STABILIZE": (80, 80, 255),  # Red
             "AUTO": (0, 255, 0),  # Green
-            "REACHED": (255, 80,  80),  # Green
-            "LOADING CARGO": (255, 165,  0) 
+            "REACHED": (255, 80, 80),  # Green
+            "LOADING CARGO": (255, 165, 0),
         }
         return colors.get(mode, (255, 255, 255))  # White default
 
@@ -155,6 +159,7 @@ class MissionDisplay:
                 (10, h - 90),
                 (0, 165, 255),
             )
+
             def _haversine(first, second):
                 R = 6371000
 
@@ -163,10 +168,13 @@ class MissionDisplay:
                 dphi = math.radians(second[0] - first[0])
                 dlambda = math.radians(second[1] - first[1])
 
-                a = math.sin(dphi / 2) ** 2 + math.cos(phi) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-                c = 2* math.atan2(math.sqrt(a), math.sqrt(1-a))
+                a = (
+                    math.sin(dphi / 2) ** 2
+                    + math.cos(phi) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+                )
+                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-                return R*c
+                return R * c
 
             # Error calculations
             if actual_coords:
@@ -187,14 +195,13 @@ class MissionDisplay:
                     (0, 255, 0),
                 )
 
-                error_text = (
-                    f"Detection Error: {detection_diff:.8f}m"
-                )
+                error_text = f"Detection Error: {detection_diff:.8f}m"
                 if gps_error:
                     error_text += f" | {gps_error:.2f}m"
                 self._add_text(frame, error_text, (w + 10, h - 30), (255, 165, 0))
         else:
             self._add_text(frame, "No helipad detected", (10, h - 60), (0, 0, 255))
+
 
 def stabilize_after_reached(waypoint_seq: int, completed: bool):
     global current_waypoint, current_state, hold_timer, stable_coords
@@ -232,7 +239,7 @@ def stabilize_after_reached(waypoint_seq: int, completed: bool):
             connection.log("📸 Stabilizing on helipad...")
             if not stable_coords:
                 raise Exception("Cannot stabilize since there is no stable point")
-            connection.goto_waypointv2(stable_coords[0],stable_coords[1], 10)
+            connection.goto_waypointv2(stable_coords[0], stable_coords[1], 10)
             current_state = STATES.SIMULATED_CRANE_HOLD
             hold_timer = time.time()
     elif current_state == STATES.SIMULATED_CRANE_HOLD:
@@ -243,7 +250,7 @@ def stabilize_after_reached(waypoint_seq: int, completed: bool):
     elif current_state == STATES.REACHED:
         if not stable_coords:
             raise Exception("How did you end up in this state STATES.REACHED.")
-        if connection.check_reposition_reached(stable_coords[0],stable_coords[1], 10):
+        if connection.check_reposition_reached(stable_coords[0], stable_coords[1], 10):
             connection.log(f"🎯 Reached waypoint {waypoint_seq}")
             connection.set_mode("AUTO")
             display.set_flight_mode("AUTO")
@@ -253,7 +260,7 @@ def stabilize_after_reached(waypoint_seq: int, completed: bool):
 
 
 def process_single_frame(
-    actual_coords: Optional[Tuple[float, float, float]] = None
+    actual_coords: Optional[Tuple[float, float, float]] = None,
 ) -> bool:
     global detected_coords
     """Process one frame from camera and update display"""
@@ -283,14 +290,8 @@ def process_single_frame(
     if helipad is not None:
         detected_coords = helipad
     # Collect dataset if enabled and helipad detected
-    if (
-        helipad
-        and pixel
-        and actual_coords
-    ):
-        _collect_dataset_sample(
-            pixel, actual_coords[:2], drone_gps, current_attitude
-        )
+    if helipad and pixel and actual_coords:
+        _collect_dataset_sample(pixel, actual_coords[:2], drone_gps, current_attitude)
 
     # Update display
     display.update_display(
@@ -302,6 +303,7 @@ def process_single_frame(
         actual_coords=actual_coords,
     )
     return True
+
 
 def _collect_dataset_sample(
     pixel_coords: Tuple[float, float],
@@ -315,7 +317,9 @@ def _collect_dataset_sample(
         pixel_str = f"{pixel_coords[0]:.2f},{pixel_coords[1]:.2f}"
         gps_true_str = f"{true_gps[0]:.8f},{true_gps[1]:.8f}"
         drone_gps_str = f"{drone_gps[0]:.8f},{drone_gps[1]:.8f},{drone_gps[2]:.2f}"
-        drone_attitude_str = f"{drone_attitude[0]:.4f},{drone_attitude[1]:.4f},{drone_attitude[2]:.4f}"
+        drone_attitude_str = (
+            f"{drone_attitude[0]:.4f},{drone_attitude[1]:.4f},{drone_attitude[2]:.4f}"
+        )
 
         # Write to CSV
         dataset_writer.writerow(
@@ -324,6 +328,7 @@ def _collect_dataset_sample(
 
     except Exception as e:
         connection.log(f"❌ Dataset collection error: {e}")
+
 
 connection = ardupilot.ArdupilotConnection("udp:127.0.0.1:14550")
 camera = GazeboVideoCapture()
@@ -364,7 +369,7 @@ try:
 
     connection.start_mission()
 
-# Main mission loop
+    # Main mission loop
     while not connection.monitor_mission_progress(stabilize_after_reached):
         process_single_frame(current_pos)
         time.sleep(FRAME_DELAY)
@@ -376,9 +381,7 @@ except Exception as e:
     connection.log(f"❌ Mission failed: {traceback.print_exc()}")
 finally:
     dataset_writer_context.__exit__(None, None, None)
-    connection.log(
-        "📊 Dataset collection completed: multi_stabilization_test.csv"
-    )
+    connection.log("📊 Dataset collection completed: multi_stabilization_test.csv")
 
     if camera and camera.cap.isOpened():
         camera.cap.release()

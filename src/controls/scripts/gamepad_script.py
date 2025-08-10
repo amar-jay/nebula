@@ -1,8 +1,8 @@
 import time
 
 import pygame
-from src.controls.mavlink import ardupilot
 
+from src.controls.mavlink import ardupilot
 
 CONNECTION_STR = "udp:127.0.0.1:14550"
 SAVE_DIR = "captures"  # directory to save images

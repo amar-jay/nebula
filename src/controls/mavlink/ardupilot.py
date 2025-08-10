@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 
@@ -6,31 +7,23 @@ from pymavlink import mavutil
 
 from src.controls.mavlink.mission_types import Waypoint
 
-# ========== ========= ========= =========
-# ========== Global Variables ==========
-# ========== ========= ========= =========
-WAIT_FOR_PICKUP_CONFIRMATION_TIMEOUT = 10  # seconds
-pickup_confirmation_counter = 0
-alt_compensation = 0.0  # to store altitude compensation
-# ========= ========= ======== =========
-# ========== ========= ========= =========
-
 
 class ArdupilotConnection:
     def __init__(self, connection_string, wait_heartbeat=10, logger=None):
         self.connection_string = connection_string
         self.target_system = 1
         self.target_component = 1
-        self.master  = mavutil.mavlink_connection(connection_string, baudrate=57600)
+        self.master = mavutil.mavlink_connection(connection_string, baudrate=57600)
         self.master.wait_heartbeat(timeout=wait_heartbeat)
         # timeout for heartbeat
         if not self.master:
             raise ConnectionError(
                 f"Failed to connect to {connection_string} within {wait_heartbeat} seconds"
             )
-        self.log = lambda *args: logger(*args) if logger else print("[MAVLink] ", *args)
+        self.log = self._set_logger(logger)
         self.log(
-            f"Connected to {self.connection_string} with system ID {self.master.target_system}"
+            f"Connected to {self.connection_string} with system ID {self.master.target_system}",
+            "info",
         )
 
         self.home_position = self.get_relative_gps_location()
@@ -46,6 +39,43 @@ class ArdupilotConnection:
             "total_waypoints": 0,
             "battery": 100,
         }
+
+    def _set_logger(self, logger):
+        # if logger is an instance of logging.Logger, set it
+        # else if logger is a callable, use it as a function
+        # else use print prepended with [MAVLink]
+        if isinstance(logger, logging.Logger):
+
+            def _logger(arg, _type):
+                if _type == "info":
+                    logger.info(arg)
+                elif _type == "success":
+                    logger.success(arg)
+                elif _type == "warning":
+                    logger.warning(arg)
+                elif _type == "error":
+                    logger.error(arg)
+                else:
+                    logger.debug(arg)
+
+            return _logger
+        elif callable(logger):
+            return logger
+        else:
+
+            def _logger(arg, _type):
+                if _type == "info":
+                    print("[MAVLink] ", arg)
+                elif _type == "success":
+                    print("[MAVLink] ✅ ", arg)
+                elif _type == "warning":
+                    print("[MAVLink] ⚠️ ", arg)
+                elif _type == "error":
+                    print("[MAVLink] ❌ ", arg)
+                else:
+                    print("[MAVLink] ", arg)
+
+            return _logger
 
     def set_mode(self, mode):
         mode_id = self.master.mode_mapping()[mode]
@@ -63,15 +93,16 @@ class ArdupilotConnection:
             if m is not None:
                 if m.get_type() == msg:
                     return m
-                self.log(f"Received {m.get_type()} instead of {msg}")
+                self.log(f"Received {m.get_type()} instead of {msg}", "warning")
             else:
                 continue
+
     def repeat_relay(self, delay=10):
         """
-        DO REPEAT RELAY: NOTE: unstable, unknown, 
+        DO REPEAT RELAY: NOTE: unstable, unknown,
         """
         # Wait for a heartbeat from the vehicle
-        self.log("Repeating relay...")
+        self.log("Repeating relay...", "info")
 
         # Arm the vehicle
         self.master.mav.command_long_send(
@@ -79,8 +110,8 @@ class ArdupilotConnection:
             self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_REPEAT_RELAY,
             1,  # relay instance number
-            1, # param2: cycle count
-            delay, # param3: delay in seconds
+            1,  # param2: cycle count
+            delay,  # param3: delay in seconds
             0,
             0,
             0,
@@ -88,22 +119,21 @@ class ArdupilotConnection:
             0,  # Arm (1 to arm, 0 to disarm)
         )
 
-
     def arm(self):
         """
         Arms the vehicle and sets it to GUIDED mode.
         """
         print("Arming the vehicle...")
         # Wait for a heartbeat from the vehicle
-        self.log("Waiting for heartbeat...")
+        self.log("Waiting for heartbeat...", "info")
         self.master.wait_heartbeat()
-        self.log(f"Heartbeat received from system {self.master.target_system}")
+        self.log(f"Heartbeat received from system {self.master.target_system}", "info")
 
         # Set mode to GUIDED (or equivalent)
         self.set_mode("GUIDED")
 
         # Arm the vehicle
-        self.log("Arming motors...")
+        self.log("Arming motors...", "info")
         self.master.mav.command_long_send(
             self.master.target_system,
             self.master.target_component,
@@ -130,7 +160,7 @@ class ArdupilotConnection:
         """
         Disarms the vehicle.
         """
-        self.log("Disarming motors...")
+        self.log("Disarming motors...", "info")
         self.master.mav.command_long_send(
             self.master.target_system,
             self.master.target_component,
@@ -146,7 +176,7 @@ class ArdupilotConnection:
         )
 
         self.master.motors_disarmed_wait()
-        self.log("Vehicle disarmed!")
+        self.log("Vehicle disarmed!", "info")
 
     def takeoff(self, target_altitude=5.0, wait_time=10):
         """
@@ -154,7 +184,7 @@ class ArdupilotConnection:
         """
 
         # Send takeoff command
-        self.log(f"Taking off to {target_altitude} meters...")
+        self.log(f"Taking off to {target_altitude} meters...", "info")
         self.set_mode("GUIDED")  # Ensure we're in GUIDED mode
         self.master.mav.command_long_send(
             self.master.target_system,
@@ -173,7 +203,7 @@ class ArdupilotConnection:
         # Optional: wait for some time or monitor altitude via message stream
         time.sleep(wait_time)  # crude wait; replace with altitude monitor if needed
 
-        self.log("Takeoff command sent.")
+        self.log("Takeoff command sent.", "info")
 
     def return_to_launch(self):
         self.set_mode("GUIDED")
@@ -193,7 +223,7 @@ class ArdupilotConnection:
         self.ack_sync("COMMAND_ACK")
 
     def land(self):
-        self.log("Landing...")
+        self.log("Landing...", "info")
         self.set_mode("GUIDED")
         self.master.mav.command_long_send(
             self.master.target_system,
@@ -212,7 +242,7 @@ class ArdupilotConnection:
 
     def upload_mission(self, waypoints: list[Waypoint]):
         num_wp = len(waypoints)
-        self.log(f"Uploading {num_wp} waypoints...")
+        self.log(f"Uploading {num_wp} waypoints...", "info")
 
         # send mission count
         self.master.mav.mission_count_send(
@@ -239,14 +269,14 @@ class ArdupilotConnection:
             )
             if i != num_wp - 1:
                 self.ack_sync("MISSION_REQUEST")
-                self.log(f"Waypoint {i} uploaded: {waypoint.__dict__}")
+                self.log(f"Waypoint {i} uploaded: {waypoint.__dict__}", "info")
 
         self.ack_sync("MISSION_ACK")
-        self.log("Mission upload complete.")
+        self.log("Mission upload complete.", "info")
 
     def clear_mission(self):
         # Clear mission
-        self.log("Clearing all missions. Hack...")
+        self.log("Clearing all missions. Hack...", "info")
         self.master.mav.mission_clear_all_send(
             self.master.target_system, self.master.target_component
         )
@@ -284,7 +314,7 @@ class ArdupilotConnection:
         )
         if not msg:
             if blocking:
-                self.log("❌ Timeout: Failed to receive GPS data.")
+                self.log("Timeout: Failed to receive GPS data.", "error")
             return None
 
         _lat = msg.lat / 1e7  # Convert from 1e7-scaled degrees to float degrees
@@ -294,6 +324,7 @@ class ArdupilotConnection:
         )  # Convert mm to meters (altitude above ground)
         # Select altitude based on `relative` flag
         return _lat, _lon, _ralt
+
     def get_amsl_gps_location(self, blocking=True, timeout=1.0):
         """
         Get the current GPS location of the drone.
@@ -306,7 +337,7 @@ class ArdupilotConnection:
         )
         if not msg:
             if blocking:
-                self.log("❌ Timeout: Failed to receive GPS data.")
+                self.log("Timeout: Failed to receive GPS data.", "error")
             return None
 
         _lat = msg.lat / 1e7  # Convert from 1e7-scaled degrees to float degrees
@@ -318,7 +349,7 @@ class ArdupilotConnection:
         _alt = msg.alt / 1000.0  # Convert mm to meters (altitude AMSL)
         return _lat, _lon, _ralt, _alt
 
-    def get_current_attitude(self, blocking=True, timeout=1.):
+    def get_current_attitude(self, blocking=True, timeout=1.0):
         """
         Get the current attitude (roll, pitch, yaw) of the drone in radians.
 
@@ -337,7 +368,7 @@ class ArdupilotConnection:
             # )
 
             # Wait for the attitude message
-            #now = time.time()
+            # now = time.time()
             msg = self.master.recv_match(
                 type="ATTITUDE", blocking=blocking, timeout=timeout
             )
@@ -350,15 +381,15 @@ class ArdupilotConnection:
                 # Normalize yaw to [0, 2π] range if needed
                 if yaw < 0:
                     yaw += 2 * math.pi
-                #print("Time to fetch gps", time.time() - now)
+                # print("Time to fetch gps", time.time() - now)
                 return (roll, pitch, yaw)
             else:
                 if blocking:
-                    self.log("❌ Failed to get attitude data")
+                    self.log("Failed to get attitude data", "error")
                 return None
 
         except Exception:
-            self.log("❌ MAVLink Error getting attitude")
+            self.log("MAVLink Error getting attitude", "error")
             return None
 
     def get_status(self):
@@ -418,7 +449,7 @@ class ArdupilotConnection:
     def close(self):
         self.master.close()
         delattr(self, "master")
-        self.log("Connection closed.")
+        self.log("Mavlink Connection closed.", "info")
 
     def goto_waypointv2(
         self,
@@ -429,11 +460,12 @@ class ArdupilotConnection:
         speed=1,  # speed in m/s, default is 1 m/s
     ):
         """
+        Send command to move to the specified latitude, longitude, and current altitude
         Initiate waypoint navigation. This does not block.
         """
-        self.log(f"goto_waypoint: lat={lat}, lon={lon}, alt={alt}, timeout={timeout}")
-        # alt = self.master.location(relative_alt=True).alt
-        # Send command to move to the specified latitude, longitude, and current altitude
+        self.log(
+            f"Waypoint Set: lat={lat}, lon={lon}, alt={alt}, timeout={timeout}", "info"
+        )
         self.master.mav.command_int_send(
             self.master.target_system,
             self.master.target_component,
@@ -450,7 +482,7 @@ class ArdupilotConnection:
             int(lon * 1e7),
             alt,
         )
-        self.log(f"🛫 Sent waypoint → lat={lat}, lon={lon}, alt={alt}")
+        self.log(f"Waypoint Sent: lat={lat}, lon={lon}, alt={alt}", "info")
         return
 
     # Send kamikaze GPS coordinate
@@ -467,7 +499,7 @@ class ArdupilotConnection:
         lat, lon, alt = location
         # print(f"difference: {abs(_lat-lat)} , {abs(_lon-lon)}, {_alt}/{alt}")
         if abs(_lat - lat) < 5e-6 and abs(_lon - lon) < 5e-6 and abs(_alt - alt) < 1e-2:
-            self.log("✅ Reposition reached!")
+            self.log("Reposition reached!", "success")
             return True
 
         return False
@@ -484,7 +516,7 @@ class ArdupilotConnection:
                     _update_status_hook(msg.seq, False)
                 # Check if we've reached the final waypoint
                 if msg.seq == msg.total:
-                    self.log("✅ Mission completed!")
+                    self.log("Mission completed!", "success")
                     if _update_status_hook:
                         _update_status_hook(msg.seq, True)
                     return True
@@ -499,7 +531,7 @@ class ArdupilotConnection:
                     return True
         else:
             return func()
-        self.log("❌ Mission monitoring timed out")
+        self.log("Mission monitoring timed out", "error")
         return False
 
 
@@ -553,7 +585,9 @@ if __name__ == "__main__":
                         curr_lat, curr_lon, 10
                     ):
                         time.sleep(1)
-                    connection.log(f"Waypoint {seq} reached, setting to AUTO mode.")
+                    connection.log(
+                        f"Waypoint {seq} reached, setting to AUTO mode.", "success"
+                    )
                     connection.set_mode("AUTO")
                     prev_seq = seq
 
@@ -561,7 +595,7 @@ if __name__ == "__main__":
         while not connection.monitor_mission_progress(_update_status_hook):
             time.sleep(1)
     except Exception as e:
-        connection.log(f"❌ Error during mission upload: {e}")
+        connection.log(f"Error during mission upload: {e}", "error")
     finally:
         connection.clear_mission()
         connection.return_to_launch()

@@ -20,6 +20,9 @@ define set_env_var_fn
 	fi
 endef
 
+RUNWAY:=delivery_runway
+MODEL_NAME:=iris_with_stationary_gimbal
+CAMERA_LINK:=tilt_link
 app:
 	@python -m src.gcs.app
 
@@ -36,17 +39,9 @@ create:
 	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1
 
 camera_feed:
-	#gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp,encoding-name=H264 ! rtph264depay ! avdec_h264 ! videoconvert ! jpegenc ! multipartmux ! tcpserversink host=0.0.0.0 port=8080
-	#! autovideosink
-	gst-launch-1.0 -v udpsrc port=5600 \
-	! application/x-rtp,encoding-name=H264 \
-	! rtph264depay \
-	! avdec_h264 \
-	! videoconvert \
-	! videorate \
-	! video/x-raw,framerate=30/1 \
-	! autovideosink
+	gst-launch-1.0 -v udpsrc port=5600 caps='application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264' ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false
 
+# ! video/x-raw,framerate=60/1 \
 # Check if the variable is defined and add it to .bashrc if it's not
 set_env_vars:
 	@rm -f $(RE_SOURCE_FLAG)
@@ -67,7 +62,11 @@ test_cv:
 	@python ./scripts/test_cv.py
 
 test_gst:
-	@python ./scripts/camera_display.py
+	@gst-launch-1.0 v4l2src ! videoconvert ! autovideosink
+
+enable_streaming:
+	echo "$(CAMERA_LINK) for $(RUNWAY) in $(MODEL_NAME)"
+	gz topic -t /world/$(RUNWAY)/model/$(MODEL_NAME)/model/gimbal/link/$(CAMERA_LINK)/sensor/camera/image/enable_streaming -m gz.msgs.Boolean -p "data: 1"
 
 test_torch: # not sure if this is needed, only endpoint is in YOLO
 	@python ./scripts/test_torch.py
@@ -88,6 +87,7 @@ sim_server:
 
 server:
 	@python -m src.mq.zmq_server
+# 	@python -m src.mq.old_server --is-simulation
 
 sim_server2:
 	@python -m src.mq.example_zmq_server2 --is-simulation
@@ -97,6 +97,7 @@ recv:
 
 lint:
 	@isort .
+	@ruff format .
 	@black .
 
 telem:
@@ -104,3 +105,6 @@ telem:
 
 k_telem:
 	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:14560
+
+rtsp:
+	cd /home/amarjay/Desktop/code/matek/src/video-streamer && ./nebula-video-streamer

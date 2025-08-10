@@ -20,10 +20,12 @@ from src.controls.detection import yolo
 from src.controls.mavlink import gz, mission_types
 from src.mq.crane import CraneControls, ZMQTopics
 from src.mq.mavproxy_tcp import MAVLinkProxy
-from src.mq.video_writer import RTSPVideoWriter 
+from src.mq.video_writer import RTSPVideoWriter
+from src.mq.memory_monitor import MemoryMonitor
 
 # IMAGE_QUALITY = 50  # JPEG quality for video frames
-CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
+CPU_BURNOUT = 0.05  # Increased CPU burn rate for better memory management
+FRAME_BUFFER_SIZE = 1  # Limit frame buffer size
 
 SUCCESS_LEVEL_NUM = 25
 logging.addLevelName(SUCCESS_LEVEL_NUM, "SUCCESS")
@@ -140,9 +142,12 @@ class ZMQServer:
                 self.cap = gz.GazeboVideoCapture()
             else:
                 self.cap = cv2.VideoCapture(self.video_source)
-                # if video source is local, set the fps to 30fps
-                # it will be ignored by opencv if it is not
+                # Optimize video capture settings to reduce memory usage
                 self.cap.set(cv2.CAP_PROP_FPS, 30)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, FRAME_BUFFER_SIZE)  # Minimize buffer
+                # Limit frame size to reduce memory consumption
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
             if not self.cap.isOpened():
                 logger.error("Failed to open video source %s", self.video_source)
@@ -202,7 +207,15 @@ class ZMQServer:
                     continue
 
                 data.timestamp = time.time()
-                data.frame = frame.copy()
+                # Resize frame to reduce memory usage
+                height, width = frame.shape[:2]
+                if width > 640:  # Limit frame size to reduce memory
+                    scale = 640 / width
+                    new_width = int(width * scale)
+                    new_height = int(height * scale)
+                    frame = cv2.resize(frame, (new_width, new_height))
+                
+                data.frame = frame  # Avoid unnecessary copy
 
                 # Process frame (returns None for skipped frames)
                 result = self._process_frame(data)
@@ -217,6 +230,9 @@ class ZMQServer:
                     # Write processed frame to video output
                     if self.video_writer and self.running:
                         self.video_writer.write(result.processed_frame)
+                    
+                    # Clean up frame references to free memory
+                    del result.processed_frame
                 else:
                     # For skipped frames, get last known coordinates
                     (
@@ -231,6 +247,9 @@ class ZMQServer:
                     # Write raw frame when no processing is done
                     if self.video_writer and self.running:
                         self.video_writer.write(frame)
+                    
+                # Explicitly delete frame reference to free memory
+                del frame
 
                 frame_count += 1
 
@@ -360,7 +379,8 @@ class ZMQServer:
                     object_classes=self.object_classes,
                 )
 
-                cv2.imshow("Pre Annotated Frame", processed_frame)
+                # Remove cv2.imshow calls that cause memory accumulation
+                # cv2.imshow("Pre Annotated Frame", processed_frame)
                 try:
                     processed_frame = self.tracker.write_on_frame(
                         frame=processed_frame,
@@ -374,10 +394,11 @@ class ZMQServer:
                     logger.error("Error writing on frame: %s", traceback.format_exc())
                     processed_frame = frame_data.frame.copy()
 
-                print(gps_coords)
-                cv2.imshow("Annotated Frame", processed_frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    raise KeyboardInterrupt
+                # Remove debug print and cv2.imshow to prevent memory leaks
+                # print(gps_coords)
+                # cv2.imshow("Annotated Frame", processed_frame)
+                # if cv2.waitKey(1) & 0xFF == ord("q"):
+                #     raise KeyboardInterrupt
 
                 result = mission_types.ProcessedResult(
                     processed_frame=processed_frame,
@@ -391,6 +412,9 @@ class ZMQServer:
 
             except Exception as e:
                 logger.warning("Frame processing failed: %s", e)
+                # Clean up any remaining frame references
+                import gc
+                gc.collect()
                 return None
 
         # Return None for skipped frames
@@ -416,12 +440,28 @@ class ZMQServer:
         except Exception as e:
             logger.error(f"Error closing control socket: {e}")
 
+        # Close video capture and writer
+        try:
+            if self.cap:
+                self.cap.release()
+        except Exception as e:
+            logger.error(f"Error closing video capture: {e}")
+
         # Close video writer
         try:
             if self.video_writer:
                 self.video_writer.close()
         except Exception as e:
             logger.error(f"Error closing video writer: {e}")
+
+        # Clear any remaining frame references
+        self.last_result = None
+        self.latest_gps_coordinates.clear()
+        self.latest_pixel_coordinates.clear()
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
 
         # Terminate context
         try:

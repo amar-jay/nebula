@@ -1,10 +1,11 @@
 import enum
 import time
+import traceback
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from src.controls.mavlink import ardupilot
-from src.mq.messages import ZMQTopics
+from src.mq.crane import ZMQTopics
 from src.mq.zmq_client import ZMQClient
 
 
@@ -48,6 +49,7 @@ class DroneClient(QObject):
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._update_status)
         self.status_timer.setInterval(1000)  # Update every second
+        self.status = None
 
     def drop_load(self):
         """Drop load command."""
@@ -186,8 +188,8 @@ class DroneClient(QObject):
                 if connection_string.startswith("tcp:"):
                     address = connection_string[4:].split(":")[0]
                     # parse the connection string and get the ip
-                    print(address)
-                    self.zmq_client = ZMQClient(server_ip=address)
+                    print(connection_string)
+                    self.zmq_client = ZMQClient()
                     self.log("ZMQ client started")
                 self.log("Starting status timer...")
                 self.status_timer.start()
@@ -198,16 +200,16 @@ class DroneClient(QObject):
                     f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
                 )
 
-
             # self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
             return True
         except:
+            print(traceback.format_exc())
             return False
 
     def set_logger(self, logger):
         self.log = logger
 
-    def _disconnect(self, is_kamikaze=False):
+    def close(self, is_kamikaze=False):
         """Disconnect from the drone."""
 
         if is_kamikaze and self.kamikaze_connection is not None:
@@ -226,29 +228,31 @@ class DroneClient(QObject):
 
             self.connection_status.emit(
                 False,
-                f"[MAVLink] Disconnecting from drone",
+                "[MAVLink] Disconnecting from drone",
             )
 
     def arm(self, is_kamikaze=False):
         """Arm the drone."""
         try:
-          if not self.connected:
-              return False
+            if not self.connected:
+                return False
 
-          self.log("Arming drone...")
-          if is_kamikaze:
-              self.kamikaze_connection.arm()
-          else:
-              self.master_connection.arm()
+            self.log("Arming drone...")
+            if is_kamikaze:
+                self.kamikaze_connection.arm()
+            else:
+                self.master_connection.arm()
 
-          self.log("Drone armed successfully.")
-          return True
+            self.log("Drone armed successfully.")
+            return True
         except:
-          return False
+            return False
 
     def disarm(self):
         """Disarm the drone."""
         if not self.connected:
+            return False
+        if not self.status:
             return False
 
         # Check if the drone is armed from the status update
@@ -352,7 +356,7 @@ class DroneClient(QObject):
     def _update_status_hookv2(self, current, done):
         # Check if we reached a new waypoint
         # Update mission progress
-        if  self.master_connection is None:
+        if self.master_connection is None:
             print("not connected!!!!")
             return
         msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
@@ -463,6 +467,8 @@ class DroneClient(QObject):
         status["helipad_gps"] = self.helipad_gps
         status["tank_gps"] = self.tank_gps
         if self.kamikaze_connection and self.k_connected:
-            status["kamikaze_gps"] = self.kamikaze_connection.get_relative_gps_location()
+            status[
+                "kamikaze_gps"
+            ] = self.kamikaze_connection.get_relative_gps_location()
         self.drone_status_update.emit(status)
         self.status = status

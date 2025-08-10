@@ -10,9 +10,9 @@ import cv2
 import numpy as np
 import zmq
 
+from mq.crane import ZMQTopics
 from src.controls.detection import yolo
 from src.controls.mavlink import ardupilot, gz, mission_types
-from src.mq.messages import ZMQTopics
 
 parser = argparse.ArgumentParser(description="ZMQ Video Server with Control Interface")
 parser.add_argument(
@@ -188,13 +188,13 @@ class ZMQServer:
             if not done:
                 logger.error("❌ Failed to enable streaming.")
                 return
-            camera_intrinsics = gz.get_camera_intrinsics(
+            camera_intrinsics = gz.get_camera_params(
                 model_name="iris_with_stationary_gimbal",
                 camera_link="tilt_link",
                 world="delivery_runway",
             )
         else:
-            camera_intrinsics = mission_types.get_camera_intrinsics()
+            camera_intrinsics = mission_types.get_camera_params()
 
         if camera_intrinsics is None:
             logger.error("❌ Failed to get camera intrinsics.")
@@ -203,7 +203,8 @@ class ZMQServer:
 
         self.tracker = yolo.YoloObjectTracker(
             K=camera_intrinsics,
-            model_path="src/controls/detection/" + ("sim.pt" if IS_SIMULATION else "main.pt"),
+            model_path="src/controls/detection/"
+            + ("sim.pt" if IS_SIMULATION else "main.pt"),
         )
         logger.info(
             "Server initialized with video port %d and control port %d",
@@ -291,7 +292,9 @@ class ZMQServer:
             topic, processed_encoded_frame = self.encode_frame(
                 processed_frame, _type="processed"
             )
-            self.video_socket.send_multipart([topic, processed_encoded_frame], zmq.NOBLOCK)
+            self.video_socket.send_multipart(
+                [topic, processed_encoded_frame], zmq.NOBLOCK
+            )
 
             # FPS calculation
             fps_count += 1
@@ -338,7 +341,7 @@ class ZMQServer:
                 return "NACK: No GPS data available"
         elif command == ZMQTopics.TANK_GPS.name:
             if hasattr(self, "gps_coordinates"):
-                return f'ACK>{self.gps_coordinates["tank" if IS_SIMULATION else "real_tank"]}'
+                return f"ACK>{self.gps_coordinates['tank' if IS_SIMULATION else 'real_tank']}"
             else:
                 return "NACK: No GPS data available"
 
@@ -404,7 +407,6 @@ class ZMQServer:
 
 
 def main():
-
     # Convert video_source to int if it's a number
     try:
         args.video_source = int(args.video_source)
@@ -412,7 +414,7 @@ def main():
         pass  # Keep as string if it's not a number (e.g., file path)
 
     server = ZMQServer(
-        is_simulation=args.is_simulation,
+        # is_simulation=args.is_simulation,
         video_port=args.video_port,
         control_port=args.control_port,
         video_source=args.video_source,

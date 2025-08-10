@@ -1,6 +1,7 @@
+# pylint: disable=E0611
 import json
-import sys
 import re
+import sys
 import time
 
 from PySide6.QtCore import Qt
@@ -196,7 +197,7 @@ class KamikazeConfirmationBox(MessageBoxBase):
         self.widget.setMinimumWidth(400)
 
 
-def showKamikazeConfirmation(parent, drone_client:DroneClient):
+def showKamikazeConfirmation(parent, drone_client: DroneClient):
     """Show kamikaze mode confirmation dialog"""
     w = KamikazeConfirmationBox(parent=parent)
     # if drone_client.helipad_gps is None:
@@ -204,38 +205,38 @@ def showKamikazeConfirmation(parent, drone_client:DroneClient):
     # w.latitude = drone_client.helipad_gps[0]
     # w.longitude = drone_client.helipad_gps[1]
     if w.exec():
-      drone_client.kamikaze_connection.arm()
-      time.sleep(2)
-      drone_client.kamikaze_connection.takeoff(10)
-      # message box to tell to wait
-      m = MessageBox(
-        "Kamikaze",
-        "Kamikaze in Progress. Click OK if ready to LAND",
-        parent,
-      )
-
-      time.sleep(5)
-      tank_gps = drone_client.tank_gps
-      if tank_gps is None:
+        drone_client.kamikaze_connection.arm()
+        time.sleep(2)
+        drone_client.kamikaze_connection.takeoff(10)
+        # message box to tell to wait
         m = MessageBox(
-          "Kamikaze",
-          "Tank GPS not set. Please set the tank GPS before proceeding.",
-          parent,
+            "Kamikaze",
+            "Kamikaze in Progress. Click OK if ready to LAND",
+            parent,
         )
-        m.exec()
-        return False
-      drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
-      if m.exec():
-        m = MessageBox(
-          "Kamikaze",
-          "Landing in Progress",
-          parent,
-        )
-        m.exec()
-        drone_client.kamikaze_connection.repeat_relay(10)
-        drone_client.kamikaze_connection.set_mode("LAND")
 
-      return True
+        time.sleep(5)
+        tank_gps = drone_client.tank_gps
+        if tank_gps is None:
+            m = MessageBox(
+                "Kamikaze",
+                "Tank GPS not set. Please set the tank GPS before proceeding.",
+                parent,
+            )
+            m.exec()
+            return False
+        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
+        if m.exec():
+            m = MessageBox(
+                "Kamikaze",
+                "Landing in Progress",
+                parent,
+            )
+            m.exec()
+            drone_client.kamikaze_connection.repeat_relay(10)
+            drone_client.kamikaze_connection.set_mode("LAND")
+
+        return True
     else:
         print("Kamikaze mode cancelled")
         return False
@@ -329,37 +330,37 @@ class DroneControlApp(QMainWindow):
         self.tcp_port_input.setSingleStep(1000)
 
         self.connect_btn = PrimaryPushButton("Connect")
-        self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
+        # self.connect_btn.clicked.connect(lambda: self._on_connect_clicked())
         self.connect_menu = QMenu("Connect", self)
-        self.connect_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "Standard Connect",
-                triggered=lambda: self._on_connect_clicked(),
+                icon=FIF.CONNECT,
+                text="Standard Connect",
+                triggered=lambda _: self._on_connect_clicked(_type="udp"),
             )
         )
         # self.connect_action.triggered.connect(lambda: self._on_connect_clicked())
-        self.tcp_connect_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "TCP Connect",
-                triggered=lambda: self._on_connect_clicked(_type="tcp"),
+                icon=FIF.CONNECT,
+                text="TCP Connect",
+                triggered=lambda _: self._on_connect_clicked(_type="tcp"),
             )
         )
-        self.connect_auto_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "Serial (/dev/ttyAMA0)",
-                triggered=lambda: self._on_usb_connect_clicked(
+                icon=FIF.CONNECT,
+                text="Serial (/dev/ttyAMA0)",
+                triggered=lambda _: self._on_usb_connect_clicked(
                     connection_string="/dev/ttyAMA0"
                 ),
             )
         )
-        self.connect_sitl_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "USB (/dev/ttyUSB0)",
-                triggered=lambda: self._on_usb_connect_clicked(
+                icon=FIF.CONNECT,
+                text="USB (/dev/ttyUSB0)",
+                triggered=lambda _: self._on_usb_connect_clicked(
                     connection_string="/dev/ttyUSB0"
                 ),
             )
@@ -379,7 +380,9 @@ class DroneControlApp(QMainWindow):
         self.k_tcp_port_input.setValue(14560)
 
         self.k_connect_btn = QPushButton("Connect")
-        self.k_connect_btn.clicked.connect(lambda: self._on_kamikaze_connect_clicked())
+        self.k_connect_btn.clicked.connect(
+            lambda _: self._on_kamikaze_connect_clicked(_type="udp")
+        )
 
         self.k_disconnect_btn = QPushButton("Disconnect")
         self.k_disconnect_btn.clicked.connect(self._on_kamikaze_disconnect_clicked)
@@ -662,9 +665,6 @@ class DroneControlApp(QMainWindow):
         basic_control_layout.addWidget(status_group)
         basic_control_layout.addStretch(1)
 
-        # camera display tab
-        camera_widget = CameraWidget(parent=self, drone_client=self.drone_client)
-
         # Mission planning tab
         mission_widget = QWidget()
         mission_layout = QVBoxLayout(mission_widget)
@@ -801,15 +801,16 @@ class DroneControlApp(QMainWindow):
         self.console = ConsoleOutput()
         console_layout.addWidget(self.console)
 
+        # camera display tab
+        camera_widget = CameraWidget(parent=self, logger=self.console.append_message)
+
         # Add tabs to the tab widget
         self._create_tab(
             "src/gcs/assets/images/controls.png",
             "Controls",
             basic_control_widget,
         )
-        self._create_tab(
-            "src/gcs/assets/images/camera.png", "Camera", camera_widget
-        )
+        self._create_tab("src/gcs/assets/images/camera.png", "Camera", camera_widget)
         self._create_tab(
             "src/gcs/assets/images/mission.png",
             "Missions",
@@ -930,7 +931,8 @@ class DroneControlApp(QMainWindow):
             self.drone_client.kamikaze()
 
     def _is_valid_ip(self, ip):
-        pattern = re.compile(r'''
+        pattern = re.compile(
+            r"""
             ^
             (?:
                 (?:25[0-5]|      # 250-255
@@ -941,8 +943,10 @@ class DroneControlApp(QMainWindow):
             ){3}
             (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])
             $
-        ''', re.VERBOSE)
-        
+        """,
+            re.VERBOSE,
+        )
+
         return bool(pattern.match(ip))
 
     def _on_connect_clicked(self, _type="udp"):
@@ -991,7 +995,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_disconnect_clicked(self):
         """Handle disconnect button click."""
-        self.drone_client._disconnect(is_kamikaze=False)
+        self.drone_client.close()
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
         self._disable_control_buttons()
@@ -999,7 +1003,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_kamikaze_disconnect_clicked(self):
         """Handle disconnect button click."""
-        self.drone_client._disconnect(is_kamikaze=True)
+        self.drone_client.close(is_kamikaze=True)
         self.k_connect_btn.setEnabled(True)
         self.k_disconnect_btn.setEnabled(False)
         self._disable_control_buttons()
@@ -1063,8 +1067,10 @@ class DroneControlApp(QMainWindow):
     def _on_stabilize_clicked(self):
         """Handle return to home button click."""
         if not self.drone_client.helipad_gps:
-          self._show_error("Helipad not detected")
-        if self.drone_client.goto_coordinates(*self.drone_client.helipad_gps, self.takeoff_alt_input.value()):
+            self._show_error("Helipad not detected")
+        if self.drone_client.goto_coordinates(
+            *self.drone_client.helipad_gps, self.takeoff_alt_input.value()
+        ):
             self.console.append_message("Stabilizing on helipad", "success")
         else:
             self.console.append_message("Failed to stabilize", "error")
@@ -1142,13 +1148,11 @@ class DroneControlApp(QMainWindow):
             self.console.append_message(f"Loaded mission from {file_path}", "success")
             self.map_event("load_mission")
 
-            # TODO: show missions on map
         except Exception as e:  # pylint: disable=broad-except
             self._show_error(f"Failed to load mission: {str(e)}")
             self.console.append_message(f"Failed to load mission: {str(e)}", "error")
 
     def map_event(self, event):
-
         if event == "move_marker":
             self.dock_content.page().runJavaScript("map.off('click', drawRectangle);")
             self.dock_content.page().runJavaScript(
@@ -1316,6 +1320,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_drone_status_update(self, status):
         """Handle drone status updates."""
+        print(status)
         # Update armed status
         mode_status = status.get("mode", "Unknown")
         self.mode_label.setText(f"{mode_status}")
@@ -1457,7 +1462,9 @@ class DroneControlApp(QMainWindow):
         self.dock.setVisible(False)
         time.sleep(0.1)  # Allow time for dock to hide
         if self.drone_client.connected:
-            self.drone_client._disconnect()
+            self.drone_client.close()
+        if self.drone_client.k_connected:
+            self.drone_client.close(is_kamikaze=True)
         event.accept()
 
 
@@ -1533,9 +1540,9 @@ def main():
     # Apply the palette
 
     window = DroneControlApp()
-    #window.show()
-    w = LoginWindow(accept=window.show)
-    w.show()
+    window.show()
+    # w = LoginWindow(accept=window.show)
+    # w.show()
 
     sys.exit(app.exec())
 

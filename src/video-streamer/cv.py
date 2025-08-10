@@ -1,5 +1,6 @@
-import cv2
 import time
+
+import cv2
 
 rtsp_url = "rtsps://127.0.0.1:8554/stream"
 

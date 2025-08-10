@@ -34,22 +34,14 @@ def icon_to_base64(image_path):
 #   LOAD_MISSON = "load_mission"
 
 uav_icon_base64 = icon_to_base64("src/gcs/assets/images/drone.png")
-mobileuser_marker_base64 = icon_to_base64(
-    "src/gcs/assets/images/mobileuser.png"
-)
-target_marker_base64 = icon_to_base64(
-    "src/gcs/assets/images/target.png"
-)
+mobileuser_marker_base64 = icon_to_base64("src/gcs/assets/images/mobileuser.png")
+target_marker_base64 = icon_to_base64("src/gcs/assets/images/target.png")
 home_icon_base64 = icon_to_base64("src/gcs/assets/images/home.png")
-kamikaze_icon_base64 = icon_to_base64(
-    "src/gcs/assets/images/kamikaze.png"
-)
+kamikaze_icon_base64 = icon_to_base64("src/gcs/assets/images/kamikaze.png")
 
 
 def custom_code(location, map_variable_name):
-    with open(
-        "src/gcs/src/map/map_script.js", "r", encoding="utf-8"
-    ) as f:
+    with open("src/gcs/src/map/map_script.js", "r", encoding="utf-8") as f:
         script_file = f.read()
     return script_file % (
         map_variable_name,
@@ -106,7 +98,7 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
         self.fmap = folium.Map(
             location=center_coord,
             tiles=mapbox_tiles,
-            #attr="Mapbox Satellite",
+            # attr="Mapbox Satellite",
             attr="Esri",
             max_zoom=22,
             zoom_start=starting_zoom,

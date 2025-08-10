@@ -11,33 +11,26 @@ from src.controls.mavlink.ardupilot import ArdupilotConnection
 
 
 class GazeboVideoCapture:
-    def __init__(self, camera_port=5600):
+    def __init__(self, camera_port=5600, fps=30):
         """
         Open a video stream from the Gazebo simulation.
         """
-        old_pipeline = (
+
+        pipeline = (
             f"udpsrc port={camera_port} ! "
-            "application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 ! "
+            "application/x-rtp, encoding-name=H264 ! "
             "rtph264depay ! "
-            "h264parse ! "
             "avdec_h264 ! "
             "videoconvert ! "
-            "appsink drop=1"
-        )
-        
-        pipeline = (
-            f"udpsrc port={camera_port} "
-            "! application/x-rtp,encoding-name=H264 "
-            "! rtph264depay "
-            "! avdec_h264 "
-            "! videoconvert "
-            "! videorate "
-            "! video/x-raw,framerate=30/1 "
-            "! appsink drop=1"
+            "videorate ! "
+            f"video/x-raw,framerate={fps}/1 ! "
+            "appsink"
         )
 
+
         print(f"Using GStreamer pipeline: {pipeline}")
-        self.cap = cv2.VideoCapture(old_pipeline, cv2.CAP_GSTREAMER)
+        self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         print(f"VideoCapture opened with pipeline: {pipeline}")
 
         if not self.cap.isOpened():
@@ -164,14 +157,7 @@ def point_gimbal_downward(topic="/gimbal/cmd_tilt", angle=0) -> bool:
         return False
 
 
-import re
-import subprocess
-import time
-
-import numpy as np
-
-
-def get_camera_intrinsics(
+def get_camera_params(
     model_name="iris_with_stationary_gimbal",
     camera_link="tilt_link",
     world="delivery_runway",
@@ -338,7 +324,7 @@ def goto_waypoint_sync(
 
 if __name__ == "__main__":
     print(
-        get_camera_intrinsics(
+        get_camera_params(
             model_name="iris_with_stationary_gimbal",
             camera_link="tilt_link",
             world="delivery_runway",

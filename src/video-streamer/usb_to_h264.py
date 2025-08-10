@@ -4,13 +4,14 @@ Real-time USB Camera Streaming System
 Captures frames from USB camera and streams to named pipe for ffplay consumption
 """
 
-import cv2
-import os
-import sys
-import time
 import argparse
+import os
 import signal
 import subprocess
+import sys
+import time
+
+import cv2
 
 # Global variable for signal handler
 streamer = None

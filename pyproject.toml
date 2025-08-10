@@ -21,3 +21,11 @@ extend-exclude = '''
 indent-style = "tab"
 docstring-code-format = true
 docstring-code-line-length = 20
+
+[tool.pylint]
+disable = [
+    "C0116",  # missing-function-docstring
+		"W0703",  # broad-except
+		"W0702",  
+		"W1203",  # logging-format-interpolation
+]

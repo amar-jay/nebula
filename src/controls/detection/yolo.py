@@ -130,8 +130,8 @@ class YoloObjectTracker:
                     # Get track ID if available
                     track_id = None
                     if (
-                        hasattr(tracked_detections, "tracker_id") and
-                        tracked_detections.tracker_id is not None 
+                        hasattr(tracked_detections, "tracker_id")
+                        and tracked_detections.tracker_id is not None
                         and len(tracked_detections.tracker_id) > i
                     ):
                         track_id = tracked_detections.tracker_id[i]
@@ -474,7 +474,7 @@ class YoloObjectTracker:
         drone_attitude: Tuple[float, float, float],
         ground_level_masl: float,
         K: Optional[np.ndarray] = None,
-        object_classes: List[str] = ["helipad", "real_tank"],
+        object_classes: List[str] = ["real_helipad", "real_tank"],
         threshold: float = 0.5,
     ) -> Tuple[np.ndarray, Dict[str, Tuple[float, float]], Dict[str, Tuple[int, int]]]:
         """
@@ -493,7 +493,6 @@ class YoloObjectTracker:
 
         # self.log(f"Detected {len(detections)} objects")
 
-        annotated_frame = frame.copy()
         gps_coords = {}
         pixel_coords = {}
 
@@ -503,8 +502,8 @@ class YoloObjectTracker:
             center = detection.center_pixel
 
             color = (100, 255, 0)  # Could be made configurable
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-            cv2.circle(annotated_frame, center, 8, (255, 0, 255), -1)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.circle(frame, center, 8, (255, 0, 255), -1)
 
             # Add label with tracking ID if available
             label = f"{object_class}: {detection.confidence:.2f}"
@@ -512,7 +511,7 @@ class YoloObjectTracker:
                 label += f" (ID: {detection.track_id})"
 
             cv2.putText(
-                annotated_frame,
+                frame,
                 label,
                 (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -534,7 +533,7 @@ class YoloObjectTracker:
                 gps_coords[object_class] = gps_result
                 pixel_coords[object_class] = center
 
-        return annotated_frame, gps_coords, pixel_coords
+        return frame, gps_coords, pixel_coords
 
     @contextmanager
     def dataset_writer(self, dataset_path: str):

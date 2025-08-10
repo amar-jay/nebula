@@ -4,14 +4,15 @@ Real-time USB Camera Streaming System
 Captures frames from USB camera and streams to named pipe for ffplay consumption
 """
 
-import os
-import sys
-import time
 import argparse
+import os
 import signal
 import subprocess
-import numpy as np
+import sys
+import time
+
 import cv2
+import numpy as np
 
 
 class VideoWriter:

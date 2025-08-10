@@ -1,241 +1,125 @@
 import logging
-import time
 
-import cv2
-import numpy as np
 import zmq
-from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QImage, QPixmap
-
-# Usage example in a PySide6 application:
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
-
-logger = logging.getLogger(__name__)
-
-
-class ZMQVideoThread(QThread):
-    """QThread for receiving ZMQ video frames"""
-
-    # Signals for communicating with the main thread
-    frame_received = Signal(np.ndarray)  # Raw video frame
-    processed_frame_received = Signal(np.ndarray)  # Processed frame
-    fps_updated = Signal(float)  # FPS information
-    error_occurred = Signal(str)  # Error messages
-
-    def __init__(self, server_ip="localhost", video_port=5555, parent=None):
-        super().__init__(parent)
-        self.server_ip = server_ip
-        self.video_port = video_port
-        self.running = False
-
-        # ZMQ setup
-        self.context = None
-        self.video_socket = None
-
-    def setup_zmq(self):
-        """Initialize ZMQ connection"""
-        try:
-            self.context = zmq.Context()
-            self.video_socket = self.context.socket(zmq.SUB)
-            self.video_socket.connect(f"tcp://{self.server_ip}:{self.video_port}")
-            self.video_socket.setsockopt_string(
-                zmq.SUBSCRIBE, ""
-            )  # Subscribe to all topics
-            logger.info(
-                f"Connected to video stream at {self.server_ip}:{self.video_port}"
-            )
-        except Exception as e:
-            self.error_occurred.emit(f"Failed to setup ZMQ: {str(e)}")
-            raise
-
-    def run(self):
-        """Main thread execution - receives video frames"""
-        try:
-            self.setup_zmq()
-            self.running = True
-
-            fps_count = 0
-            fps_timer = time.time()
-
-            logger.info("Video receiver thread started")
-
-            while self.running:
-                try:
-                    # Poll with timeout to make loop interruptible
-                    if self.video_socket.poll(timeout=100) != 0:  # 100ms timeout
-                        # Receive frame data
-                        topic, frame_data = self.video_socket.recv_multipart()
-
-                        # Decode frame
-                        jpg_buffer = np.frombuffer(frame_data, dtype=np.uint8)
-                        frame = cv2.imdecode(jpg_buffer, cv2.IMREAD_COLOR)
-
-                        if frame is not None:
-                            # Emit appropriate signal based on topic
-                            if topic == b"processed_video":
-                                self.processed_frame_received.emit(frame)
-                            elif topic == b"video":
-                                self.frame_received.emit(frame)
-                            else:
-                                logger.warning(f"Unknown topic received: {topic}")
-
-                        # FPS calculation
-                        fps_count += 1
-                        curr_time = time.time()
-                        if curr_time - fps_timer > 10:  # Update FPS every 10 seconds
-                            fps = fps_count / 10
-                            self.fps_updated.emit(fps)
-                            fps_count = 0
-                            fps_timer = curr_time
-
-                except zmq.ZMQError as e:
-                    if self.running:  # Only log if we're still supposed to be running
-                        self.error_occurred.emit(f"ZMQ error: {str(e)}")
-                    time.sleep(0.1)
-                except Exception as e:
-                    if self.running:
-                        self.error_occurred.emit(f"Video receiver error: {str(e)}")
-                    time.sleep(0.1)
-
-        except Exception as e:
-            self.error_occurred.emit(f"Critical error in video thread: {str(e)}")
-        finally:
-            self.cleanup_zmq()
-            logger.info("Video receiver thread stopped")
-
-    def stop(self):
-        """Stop the video receiving thread"""
-        self.running = False
-        self.wait(2000)  # Wait up to 2 seconds for thread to finish
-
-    def cleanup_zmq(self):
-        """Clean up ZMQ resources"""
-        if self.video_socket:
-            self.video_socket.close()
-        if self.context:
-            self.context.term()
 
 
 class ZMQClient:
-    """Simplified ZMQ client for PySide6 applications"""
+    """ZMQ client for drone control commands"""
 
-    def __init__(self, server_ip="localhost", video_port=5555, control_port=5556):
-        self.server_ip = server_ip
-        self.control_port = control_port
-
-        # Video thread
-        self.video_thread = ZMQVideoThread(server_ip, video_port)
-
-        # Control socket setup
-        self.context = zmq.Context()
-        self.control_socket = self.context.socket(zmq.REQ)
-        self.control_socket.connect(f"tcp://{server_ip}:{control_port}")
-        self.control_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
-
-        # Current frames (thread-safe through Qt signals)
-        self.current_frame = None
-        self.current_processed_frame = None
-
-        # Connect signals
-        self.video_thread.frame_received.connect(self._on_frame_received)
-        self.video_thread.processed_frame_received.connect(
-            self._on_processed_frame_received
+    def __init__(self, control_address: str = "tcp://localhost:5556", _logger=None):
+        self.control_address = control_address
+        self.log = (
+            _logger
+            if callable(_logger)
+            else lambda msg, level="info": print(f"[ZMQ Client][{level.upper()}] {msg}")
         )
-        self.video_thread.fps_updated.connect(self._on_fps_updated)
-        self.video_thread.error_occurred.connect(self._on_error)
+        self.context = zmq.Context()
+        self.socket = None
+        self.connected = False
 
-        logger.info(f"ZMQ Video Client initialized for {server_ip}")
+        self.log(f"ZMQ Client initialized - Control: {control_address}", "info")
 
-    def _on_frame_received(self, frame):
-        """Handle raw video frame reception"""
-        self.current_frame = frame
+    def connect(self) -> bool:
+        """Connect to ZMQ control server"""
+        try:
+            self.socket = self.context.socket(zmq.REQ)
+            self.socket.connect(self.control_address)
+            self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+            self.connected = True
+            self.log(
+                f"Connected to ZMQ control server at {self.control_address}", "info"
+            )
+            return True
+        except Exception as e:
+            self.log(f"Failed to connect to ZMQ control server: {e}", "error")
+            self.connected = False
+            return False
 
-    def _on_processed_frame_received(self, frame):
-        """Handle processed frame reception"""
-        self.current_processed_frame = frame
+    def send_command(self, command: str) -> str:
+        """Send command to server and get response"""
+        if not self.socket or not self.connected:
+            return "ERROR: Not connected"
 
-    def _on_fps_updated(self, fps):
-        """Handle FPS updates"""
-        logger.info(f"Video FPS: {fps:.2f}")
+        try:
+            self.socket.send_string(command)
+            response = self.socket.recv_string()
+            self.log(f"Command '{command}' -> Response: '{response}'", "info")
+            return response
+        except zmq.Again:
+            return "ERROR: Timeout waiting for response"
+        except Exception as e:
+            self.log(f"Error sending command: {e}", "error")
+            return f"ERROR: {e}"
 
-    def _on_error(self, error_msg):
-        """Handle errors from video thread"""
-        logger.error(f"Video thread error: {error_msg}")
+    def disconnect(self):
+        """Disconnect from server"""
+        self.connected = False
+        if self.socket:
+            self.socket.close()
+        self.context.term()
+        self.log("Disconnected from ZMQ control server", "info")
 
-    def start(self):
-        """Start video reception"""
-        if not self.video_thread.isRunning():
-            self.video_thread.start()
-            logger.info("Video client started")
+    def is_connected(self) -> bool:
+        """Check if connected to server"""
+        return self.connected
+
+    def start(self) -> bool:
+        """Start ZMQ control connection"""
+        control_connected = self.connect()
+
+        if control_connected:
+            self.log("ZMQ Client started", "info")
+        else:
+            self.log(
+                "ZMQ Client failed to start - control connection failed", "warning"
+            )
+
+        return control_connected
 
     def stop(self):
-        """Stop video reception and cleanup"""
-        try:
-            self.video_thread.stop()
+        """Stop ZMQ control connection"""
+        self.disconnect()
+        self.log("ZMQ Client stopped", "info")
 
-            # Cleanup control socket
-            self.control_socket.close()
-            self.context.term()
-        except:
-            pass
+    def get_helipad_gps(self) -> tuple:
+        """Get helipad GPS coordinates"""
+        response = self.send_command("HELIPAD_GPS")
+        if response.startswith("ACK>"):
+            coords = response[4:].split(",")
+            return float(coords[0]), float(coords[1])
+        return None
 
-        logger.info("Video client stopped")
+    def get_tank_gps(self) -> tuple:
+        """Get tank GPS coordinates"""
+        response = self.send_command("TANK_GPS")
+        if response.startswith("ACK>"):
+            coords = response[4:].split(",")
+            return float(coords[0]), float(coords[1])
+        return None
 
-    def send_command(self, command) -> str:
-        """Send control command to server"""
-        if not self.control_socket:
-            logger.info("not connected")
-            return None
-        try:
-            logger.info(f"Sending command: {command}")
-            self.control_socket.send_string(
-                command.name if hasattr(command, "name") else str(command)
-            )
-            response = self.control_socket.recv_string()
-            logger.info(f"Received response: {response}")
-            return response
-        except zmq.ZMQError as e:
-            logger.error(f"Failed to send command: {e}")
-            return None
+    def drop_hook(self) -> bool:
+        """Drop the hook"""
+        response = self.send_command("DROP_HOOK")
+        return response.startswith("ACK")
 
-    def get_current_frame(self):
-        """Get the latest raw frame"""
-        return self.current_frame
+    def retrieve_hook(self) -> bool:
+        """Retrieve the hook"""
+        response = self.send_command("RETRIEVE_HOOK")
+        return response.startswith("ACK")
 
-    def get_current_processed_frame(self):
-        """Get the latest processed frame"""
-        return self.current_processed_frame
-
-
-class VideoWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.label = QLabel()
-        self.setCentralWidget(self.label)
-
-        # Initialize video client
-        self.video_client = ZMQClient()
-        self.video_client.video_thread.frame_received.connect(self.update_display)
-
-        self.video_client.start()
-
-    def update_display(self, frame):
-        # Convert OpenCV frame to QImage and display
-        h, w, ch = frame.shape
-        bytes_per_line = ch * w
-        qt_image = QImage(
-            frame.data, w, h, bytes_per_line, QImage.Format_RGB888
-        ).rgbSwapped()
-        self.label.setPixmap(QPixmap.fromImage(qt_image))
-
-    def closeEvent(self, event):
-        self.video_client.stop()
-        event.accept()
+    def get_hook_status(self) -> str:
+        """Get hook status"""
+        response = self.send_command("HOOK_STATUS")
+        if response.startswith("ACK>"):
+            return response[4:]
+        return "Unknown"
 
 
-def main():
-    """Main application entry point"""
-    import sys
+# Example usage
+if __name__ == "__main__":
+    import argparse
+
+    logger = logging.getLogger(__name__)
 
     # Set up logging
     logging.basicConfig(
@@ -243,16 +127,32 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Create Qt application
-    app = QApplication(sys.argv)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="ZMQ Control Client")
+    parser.add_argument(
+        "--control-address",
+        default="tcp://localhost:5556",
+        help="ZMQ control address (default: tcp://localhost:5556)",
+    )
 
-    # Create and show main window
-    window = VideoWindow()
-    window.show()
+    args = parser.parse_args()
 
-    # Run the application
-    sys.exit(app.exec_())
+    logger.info("Starting ZMQ control client")
+    logger.info("Control Address: %s", args.control_address)
 
+    # Create ZMQ client
+    client = ZMQClient(control_address=args.control_address)
 
-if __name__ == "__main__":
-    main()
+    # Connect and test commands
+    if client.start():
+        print("Connected successfully!")
+
+        # Test some commands
+        print("Hook Status:", client.get_hook_status())
+        helipad = client.get_helipad_gps()
+        if helipad:
+            print(f"Helipad GPS: {helipad[0]}, {helipad[1]}")
+
+        client.stop()
+    else:
+        print("Failed to connect to ZMQ server")

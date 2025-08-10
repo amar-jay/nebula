@@ -1,344 +1,55 @@
 #!/usr/bin/env python3
+# pylint: disable=W0703,C0413,I1101,C0114
+
+import os
+
+os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
 import argparse
 import asyncio
 import logging
-import queue
-import socket
-import threading
+import signal
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import cv2
-import numpy as np
 import zmq
 import zmq.asyncio
 
 from src.controls.detection import yolo
-from src.controls.mavlink import ardupilot, gz, mission_types
-from src.mq.messages import ZMQTopics
+from src.controls.mavlink import gz, mission_types
+from src.mq.crane import CraneControls, ZMQTopics
+from src.mq.mavproxy_tcp import MAVLinkProxy
+from src.mq.video_writer import RTSPVideoWriter 
 
-IMAGE_QUALITY = 50  # JPEG quality for video frames
+# IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
 
+SUCCESS_LEVEL_NUM = 25
+logging.addLevelName(SUCCESS_LEVEL_NUM, "SUCCESS")
 
-# Configure logging
-logging.basicConfig(
-    format="%(asctime)s - %(message)s",
-    handlers=[
-        logging.FileHandler("zmq_server.log", mode="w"),  # Log to file
-        logging.StreamHandler()  # Explicit console handler
-    ]
-)
+
+# Add success() method to Logger
+def success(self, message, *args, **kwargs):
+    if self.isEnabledFor(SUCCESS_LEVEL_NUM):
+        self._log(SUCCESS_LEVEL_NUM, message, args, **kwargs)
+
+
+logging.Logger.success = success
+
+log_file = os.path.join(os.path.expanduser("~"), "zmq_server.log")
+
 logger = logging.getLogger("zmq-server")
 logger.setLevel(logging.DEBUG)  # Ensure logger level is set
 
-@dataclass
-class FrameData:
-    """Data structure for frame processing"""
+if not logger.hasHandlers():
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+    logger.addHandler(console_handler)
 
-    mode: str  # default is "UNKNOWN"
-    frame: np.ndarray
-    timestamp: float
-    drone_position: Tuple[float, float, float]
-    drone_attitude: Any
-    ground_level: float
-
-
-@dataclass
-class ProcessedResult:
-    """Result of frame processing"""
-
-    processed_frame: np.ndarray
-    gps_coordinates: Dict[str, Tuple[float, float]]
-    pixel_coordinates: Dict[str, Tuple[int, int]]
-    timestamp: float
-
-
-class AsyncFrameProcessor:
-    """Asynchronous frame processor that doesn't block the main video loop"""
-
-    def __init__(self, tracker: yolo.YoloObjectTracker, object_classes, max_workers=2):
-        self.tracker = tracker
-        self.object_classes = object_classes
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        self.processing_queue = queue.Queue(
-            maxsize=3
-        )  # Small buffer to prevent memory issues
-        self.results_queue = queue.Queue(maxsize=10)
-        self.running = False
-        self.worker_thread = None
-
-    def start(self):
-        self.running = True
-        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
-        self.worker_thread.start()
-
-    def stop(self):
-        self.running = False
-        if self.worker_thread:
-            self.worker_thread.join(timeout=2.0)
-        self.executor.shutdown(wait=True)
-
-    def submit_frame(self, frame_data: FrameData) -> bool:
-        """Submit a frame for processing. Returns False if queue is full."""
-        try:
-            self.processing_queue.put_nowait(frame_data)
-            return True
-        except queue.Full:
-            logger.warning("Processing queue is full, dropping oldest frame")
-            return False
-
-    def get_result(self) -> Optional[ProcessedResult]:
-        """Get the latest processed result, non-blocking."""
-        try:
-            return self.results_queue.get_nowait()
-        except queue.Empty:
-            return None
-
-    def _worker_loop(self):
-        """Worker thread that processes frames asynchronously"""
-        while self.running:
-            try:
-                # Get frame data with timeout
-                frame_data = self.processing_queue.get(timeout=0.1)
-
-                # Process in thread pool to avoid blocking
-                future = self.executor.submit(self._process_frame, frame_data)
-
-                # Wait for result with timeout
-                try:
-                    result = future.result(timeout=0.5)  # 500ms timeout for processing
-
-                    # Put result in results queue, drop oldest if full
-                    try:
-                        self.results_queue.put_nowait(result)
-                    except queue.Full:
-                        # Drop oldest result
-                        try:
-                            self.results_queue.get_nowait()
-                            self.results_queue.put_nowait(result)
-                        except queue.Empty:
-                          continue
-
-                except Exception as e:
-                    logger.warning("Frame processing failed: %s", e)
-
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error("Error in frame processor worker: %s", e)
-                time.sleep(0.1)
-
-    def _process_frame(self, frame_data: FrameData) -> ProcessedResult:
-        """Process a single frame"""
-        processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
-            frame=frame_data.frame,
-            drone_gps=frame_data.drone_position,
-            drone_attitude=frame_data.drone_attitude,
-            ground_level_masl=frame_data.ground_level,
-            object_classes=self.object_classes,
-        )
-
-        try:
-            processed_frame = self.tracker.write_on_frame(
-                frame=processed_frame,
-                curr_gps=frame_data.drone_position,
-                gps_coords=gps_coords,
-                pixel_coords=pixel_coords,
-                mode=frame_data.mode,
-                object_classes=self.object_classes,
-            )
-        except Exception:
-            logger.error(
-                "Error writing on frame in _process_frame: %s", traceback.format_exc()
-            )
-            processed_frame = frame_data.frame.copy()
-
-        return ProcessedResult(
-            processed_frame=processed_frame,
-            gps_coordinates=gps_coords,
-            pixel_coordinates=pixel_coords,
-            timestamp=frame_data.timestamp,
-        )
-
-
-class MAVLinkProxy:
-    """Handles MAVLink connection and TCP proxy in a clean way"""
-
-    def __init__(
-        self, connection_string: str, tcp_host: str = "0.0.0.0", tcp_port: int = 16550
-    ):
-        self.connection_string = connection_string
-        self.tcp_host = tcp_host
-        self.tcp_port = tcp_port
-        self.connection = None
-        self.tcp_server = None
-        self.clients: list[socket.socket] = []
-        self.clients_lock = threading.Lock()
-        self.running = False
-        self.drone_data = dict()
-
-    def start(self):
-        # Initialize MAVLink connection
-        try:
-            self.connection = ardupilot.ArdupilotConnection(
-                connection_string=self.connection_string
-            )
-            logger.info("MAVLink connection established")
-        except ConnectionError:
-            logger.error("Failed to connect to MAVLink at %s", self.connection_string)
-            raise
-
-        # Set up TCP server
-        self.tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.tcp_server.bind((self.tcp_host, self.tcp_port))
-        self.tcp_server.listen(5)
-        logger.info("TCP server listening on %s:%d", self.tcp_host, self.tcp_port)
-
-        self.running = True
-
-        # Start background threads
-        threading.Thread(target=self._accept_clients, daemon=True).start()
-        threading.Thread(target=self._forward_serial_to_tcp, daemon=True).start()
-
-    def stop(self):
-        self.running = False
-        if self.tcp_server:
-            self.tcp_server.close()
-        if self.connection:
-            self.connection.close()
-        with self.clients_lock:
-            for client in self.clients:
-                try:
-                    client.close()
-                except Exception:
-                    logger.warning("Failed to close client socket")
-            self.clients.clear()
-
-    def get_drone_data(self) -> Any | None:
-        if "drone_position" not in self.drone_data or not self.drone_data["drone_position"]:
-          logger.warning("Drone position not available")
-          return None
-        if "drone_attitude" not in self.drone_data or not self.drone_data["drone_attitude"]:
-          logger.warning("Drone attitude not available")
-          return None
-        if "ground_level" not in self.drone_data or not self.drone_data["ground_level"]:
-          logger.warning("Ground level not available")
-          return None
-        return (
-            self.drone_data["drone_position"],
-            self.drone_data["drone_attitude"],
-            self.drone_data["ground_level"],
-            self.drone_data.get("mode", "UNKNOWN"),
-        )
-    def fetch_drone_data(self, msg):
-        """Get current drone position, attitude, and ground level"""
-        if not self.connection:
-            logger.warning("MAVLink connection not established")
-            return
-
-        msg_type = msg.get_type()
-
-        if msg_type == "GLOBAL_POSITION_INT":
-            # Convert values to standard units
-            lat = msg.lat / 1e7
-            lon = msg.lon / 1e7
-            relative_alt = msg.relative_alt / 1000.0  # meters
-            alt_amsl = msg.alt / 1000.0  # meters
-
-            self.drone_data["drone_position"] = (lat, lon, alt_amsl)
-            self.drone_data["ground_level"] = alt_amsl - relative_alt
-
-        elif msg_type == "ATTITUDE":
-            roll = msg.roll
-            pitch = msg.pitch
-            yaw = msg.yaw
-
-            # Normalize yaw to [0, 2π]
-            if yaw < 0:
-                yaw += 2 * np.pi
-
-            self.drone_data["drone_attitude"] = (roll, pitch, yaw)
-
-        self.drone_data["mode"] = self.connection.get_mode()
-
-
-    def _accept_clients(self):
-        while self.running:
-            try:
-                client_socket, client_address = self.tcp_server.accept()
-                with self.clients_lock:
-                    self.clients.append(client_socket)
-                logger.info("New client connected: %s", client_address)
-
-                # Handle client in separate thread
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client_socket, client_address),
-                    daemon=True,
-                ).start()
-            except Exception as e:
-                if self.running:
-                    logger.error("Error accepting client: %s", e)
-                    time.sleep(1)
-
-    def _handle_client(self, client_socket: socket.socket, client_address: tuple):
-        try:
-            while self.running:
-                try:
-                    data = client_socket.recv(1024)
-                    if not data:
-                        break
-                    if self.connection:
-                        self.connection.master.write(data)
-                except Exception as e:
-                    logger.error(f"Error handling client {client_address}: {e}")
-                    break
-        finally:
-            with self.clients_lock:
-                if client_socket in self.clients:
-                    self.clients.remove(client_socket)
-            client_socket.close()
-            logger.info(f"Client disconnected: {client_address}")
-
-    def _forward_serial_to_tcp(self):
-        while self.running:
-            try:
-                if not self.connection:
-                    time.sleep(0.1)
-                    continue
-
-                msg = self.connection.master.recv_match(blocking=False)
-                if msg is not None:
-                    # Fetch drone data for gps estimation
-                    self.fetch_drone_data(msg)
-                    
-                    msg_bytes = msg.get_msgbuf()
-
-                    with self.clients_lock:
-                        disconnected_clients: list[socket.socket] = []
-                        for client in self.clients:
-                            try:
-                                client.send(msg_bytes)
-                            except Exception:
-                                disconnected_clients.append(client)
-
-                        for client in disconnected_clients:
-                            self.clients.remove(client)
-                            try:
-                                client.close()
-                            except:
-                                pass
-                else:
-                    time.sleep(0.001)  # Small sleep when no messages
-
-            except Exception as e:
-                logger.error(f"Error in serial to TCP forwarding: {e}")
-                time.sleep(0.1)
+    file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+    logger.addHandler(file_handler)
 
 
 class ZMQServer:
@@ -346,25 +57,40 @@ class ZMQServer:
 
     def __init__(
         self,
-        video_port: int = 5555,
+        controller_connection_string: Optional[str],
         control_port: int = 5556,
-        video_source: int = 0,
+        video_source: int | str = 0,
+        video_output: str = "/tmp/camera_stream",
         is_simulation: bool = False,
+        controller_baudrate: int = 9600,
+        object_classes = ["helipad", "tank"]
     ):
-        self.video_port = video_port
         self.control_port = control_port
         self.video_source = video_source
+        self.video_output = video_output
         self.is_simulation = is_simulation
+
+        # Initialize controller
+        if controller_connection_string is None:
+            logger.warning(
+                "Controller connection string not provided, so controller will not be used."
+            )
+            self.controller = None
+        else:
+            self.controller = CraneControls(
+                connection_string=controller_connection_string,
+                baudrate=controller_baudrate,
+            )
 
         # ZMQ Context
         self.context = zmq.asyncio.Context()
 
         # Sockets
-        self.video_socket = None
         self.control_socket = None
 
-        # Video capture
+        # Video capture and writer
         self.cap = None
+        self.video_writer = None
 
         # State
         self.hook_state = "dropped"
@@ -374,20 +100,17 @@ class ZMQServer:
         self.latest_gps_coordinates = {}
         self.latest_pixel_coordinates = {}
 
-        # Frame processor
-        self.frame_processor = None
-
         # Object classes
-        self.object_classes = ["helipad", "tank" if is_simulation else "real_tank"]
+        self.object_classes = object_classes
 
         if is_simulation:
-            camera_intrinsics = gz.get_camera_intrinsics(
+            camera_intrinsics = gz.get_camera_params(
                 model_name="iris_with_stationary_gimbal",
                 camera_link="tilt_link",
                 world="delivery_runway",
             )
         else:
-            camera_intrinsics = mission_types.get_camera_intrinsics()
+            camera_intrinsics = mission_types.get_camera_params()
 
         if camera_intrinsics is None:
             raise RuntimeError("Failed to get camera intrinsics")
@@ -398,45 +121,60 @@ class ZMQServer:
 
         self.tracker = yolo.YoloObjectTracker(
             K=camera_intrinsics,
-            model_path="src/controls/detection/sim.pt" if is_simulation else "src/controls/detection/main.pt",
+            model_path="src/controls/detection/sim.pt"
+            if is_simulation
+            else "src/controls/detection/main.pt",
         )
 
-        # Initialize frame processor
-        self.frame_processor = AsyncFrameProcessor(
-            tracker=self.tracker, object_classes=self.object_classes, max_workers=2
+        # Initialize frame processor params
+        self.skip_counter = 0
+        self.process_every_n_frames = (
+            3  # Process every 3rd frame to maintain performance, setting it to 10fps
         )
+        self.last_result: Optional[mission_types.ProcessedResult] = None
 
     def _initialize_video_capture(self) -> bool:
-        """Initialize video capture"""
+        """Initialize video capture and video writer"""
         try:
             if self.is_simulation:
                 self.cap = gz.GazeboVideoCapture()
             else:
                 self.cap = cv2.VideoCapture(self.video_source)
+                # if video source is local, set the fps to 30fps
+                # it will be ignored by opencv if it is not
+                self.cap.set(cv2.CAP_PROP_FPS, 30)
 
             if not self.cap.isOpened():
-                logger.error(f"Failed to open video source {self.video_source}")
+                logger.error("Failed to open video source %s", self.video_source)
                 return False
 
-            logger.info("Video capture initialized successfully")
+            # Get video properties for video writer
+            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2
+            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) // 2
+            # fps = (
+            #     int(self.cap.get(cv2.CAP_PROP_FPS)) or 30
+            # )  # Default to 30 FPS if unable to get
+
+            # Initialize video writer
+            self.video_writer = RTSPVideoWriter(
+                source=self.video_output, width=width, height=height, fps=30
+            )
+
+            logger.info("Video capture and writer initialized successfully")
+            logger.info(
+                "Video output: %s (%dx%d @ 30 FPS)",
+                self.video_output,
+                width,
+                height,
+            )
             return True
 
         except Exception as e:
             logger.error("Error initializing video capture: %s", e)
             return False
 
-    def _encode_frame(
-        self, frame: np.ndarray, topic_prefix: str = ""
-    ) -> Tuple[bytes, bytes]: #TODO: use a more efficient implementation in the future
-        """Encode frame to JPEG"""
-        topic = f"{topic_prefix}video".encode()
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, IMAGE_QUALITY, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
-
-        _, jpeg_frame = cv2.imencode(".jpg", frame, encode_params)
-        return topic, jpeg_frame.tobytes()
-
     async def _video_publisher_loop(self, mavlink_proxy: MAVLinkProxy):
-        """Main video publishing loop"""
+        """Main video processing loop - only sends processed frames"""
         if not self._initialize_video_capture():
             return
 
@@ -447,44 +185,28 @@ class ZMQServer:
 
         while self.running:
             try:
+                if not self.cap or not self.cap.isOpened():
+                    logger.error("Video capture not initialized or opened")
+                    await asyncio.sleep(1)
+                    continue
                 ret, frame = self.cap.read()
-                if not ret:
+                if not ret or frame is None:
                     logger.warning("Failed to capture frame")
                     await asyncio.sleep(0.1)
                     continue
 
-                # Always send raw frame
-                topic, encoded_frame = self._encode_frame(frame)
-                await self.video_socket.send_multipart([topic, encoded_frame], zmq.NOBLOCK)
-
-                # Submit frame for processing (non-blocking)
+                # Process frame for object detection
                 data = mavlink_proxy.get_drone_data()
                 if data is None:
-                    logger.warning("Drone data not available, skipping frame")
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(1)
                     continue
-                (
-                    drone_pos,
-                    drone_att,
-                    ground_level,
-                    mode,
-                ) = data
 
-                frame_data = FrameData(
-                    frame=frame.copy(),
-                    timestamp=time.time(),
-                    drone_position=drone_pos,
-                    drone_attitude=drone_att,
-                    ground_level=ground_level,
-                    mode=mode,
-                )
+                data.timestamp = time.time()
+                data.frame = frame.copy()
 
-                # Submit for processing (non-blocking)
-                if not self.frame_processor.submit_frame(frame_data):
-                    logger.debug("Frame processor queue full, skipping frame")
+                # Process frame (returns None for skipped frames)
+                result = self._process_frame(data)
 
-                # Check for processed results
-                result = self.frame_processor.get_result()
                 if result:
                     # Update latest coordinates
                     if result.gps_coordinates is not None:
@@ -492,80 +214,93 @@ class ZMQServer:
                     if result.pixel_coordinates is not None:
                         self.latest_pixel_coordinates = result.pixel_coordinates
 
-                    # Send processed frame
-                    topic, proccessed_frame = self._encode_frame(
-                        result.processed_frame, "processed_"
-                    )
-                    await self.video_socket.send_multipart([topic, proccessed_frame], zmq.NOBLOCK)
+                    # Write processed frame to video output
+                    if self.video_writer and self.running:
+                        self.video_writer.write(result.processed_frame)
                 else:
-                  logger.debug("No processed result available, sending raw frame")
-                  # If no processed result, just send the original frame
-                  await self.video_socket.send_multipart([topic, encoded_frame], zmq.NOBLOCK)
+                    # For skipped frames, get last known coordinates
+                    (
+                        gps_coords,
+                        pixel_coords,
+                    ) = self.get_last_coordinates()
+                    if gps_coords:
+                        self.latest_gps_coordinates = gps_coords
+                    if pixel_coords:
+                        self.latest_pixel_coordinates = pixel_coords
+
+                    # Write raw frame when no processing is done
+                    if self.video_writer and self.running:
+                        self.video_writer.write(frame)
 
                 frame_count += 1
 
                 # FPS logging
                 if time.time() - fps_timer > 5:
                     fps = frame_count / 5
-                    logger.debug(f"Publishing video at {fps:.1f} FPS")
+                    logger.debug("Publishing video at %.1f FPS", fps)
                     frame_count = 0
                     fps_timer = time.time()
 
                 # Small sleep to prevent CPU overload
-                await asyncio.sleep(CPU_BURNOUT) # 30fps is sufficient for video publishing
+                await asyncio.sleep(
+                    CPU_BURNOUT
+                )  # 30fps is sufficient for video publishing
 
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt in video loop, shutting down...")
+                self.running = False
+                break
             except Exception:
                 logger.error("Error in video loop:\n%s", traceback.format_exc())
                 await asyncio.sleep(0.1)
 
+        logger.info("Video publisher loop stopped")
+        self.running = False
+        logger.info("Closing video writer...")
+        await asyncio.sleep(0.1)  # Allow time for cleanup
+        logger.info("Video writer closed")
         # Cleanup
         if self.cap:
             self.cap.release()
-        logger.info("Video publishing stopped")
+        if self.video_writer:
+            self.video_writer.close()
+        logger.info("Video writer closed")
 
     async def _control_receiver_loop(self):
         """Control command receiver loop"""
         logger.info("Control receiver started")
 
-        while self.running:
-            try:
-                # Check for messages with timeout
-                if await self.control_socket.poll(timeout=100):
-                    message = await self.control_socket.recv_string()
-                    response = self._handle_command(message)
-                    await self.control_socket.send_string(response)
-                    if "NACK" not in message:
-                      logger.info(f"Command: {message} -> Response: {response}")
+        try:
+            while self.running:
+                try:
+                    # Check for messages with timeout
+                    if await self.control_socket.poll(timeout=100):
+                        message = await self.control_socket.recv_string()
+                        response = self._handle_command(message)
+                        await self.control_socket.send_string(response)
+                        if "NACK" not in message:
+                            logger.info(
+                                "Command: %s -> Response: %s", message, response
+                            )
 
-            except Exception as e:
-                logger.error(f"Error in control receiver: {e}")
-                await asyncio.sleep(0.1)
+                except KeyboardInterrupt:
+                    logger.info("Keyboard interrupt in control loop, shutting down...")
+                    self.running = False
+                    break
+                except Exception as e:
+                    logger.error("Error in control receiver: %s", e)
+                    await asyncio.sleep(0.1)
+
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt in control receiver loop")
+            self.running = False
 
     def _handle_command(self, command: str) -> str:
         """Handle control commands"""
         command = command.strip()
-
-        if command == ZMQTopics.DROP_LOAD.name:
-            return "ACK: Load dropped"
-        elif command == ZMQTopics.PICK_LOAD.name:
-            return "ACK: Load picked"
-        elif command == ZMQTopics.RAISE_HOOK.name:
-            if self.hook_state == "raised":
-                return "ACK: Hook already raised"
-            else:
-                self.hook_state = "raised"
-                return "ACK: Hook raised"
-        elif command == ZMQTopics.DROP_HOOK.name:
-            if self.hook_state == "dropped":
-                return "ACK: Hook already dropped"
-            else:
-                self.hook_state = "dropped"
-                return "ACK: Hook dropped"
-        elif command == ZMQTopics.STATUS.name:
-            return f"ACK: Hook is {self.hook_state}"
-        elif command == ZMQTopics.HELIPAD_GPS.name:
+        if command == ZMQTopics.HELIPAD_GPS.name:
             if self.latest_gps_coordinates and "helipad" in self.latest_gps_coordinates:
-                coords = self.latest_gps_coordinates['helipad']
+                coords = self.latest_gps_coordinates["helipad"]
                 return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
@@ -577,8 +312,9 @@ class ZMQServer:
             else:
                 return "NACK: No GPS data available"
         else:
-            logger.error("Unknown command: %s", command)
-            return "NACK: Unknown command"
+            if self.controller is None:
+                return "NACK: Controller not initialized"
+            return self.controller.handle_command(command)
 
     async def start(self, mavlink_proxy: MAVLinkProxy):
         """Start the server"""
@@ -586,41 +322,112 @@ class ZMQServer:
             logger.warning("Server is already running")
             return
 
-        # Initialize ZMQ sockets
-        self.video_socket = self.context.socket(zmq.PUB)
-        self.video_socket.bind(f"tcp://*:{self.video_port}")
-
+        # Initialize ZMQ control socket only
         self.control_socket = self.context.socket(zmq.REP)
-        self.control_socket.bind(f"tcp://*:{self.control_port}")
-
-        # Start frame processor
-        self.frame_processor.start()
+        self.control_socket.bind(self.control_port)
 
         self.running = True
         logger.info("Server started")
 
-        # Run both loops concurrently
-        await asyncio.gather(
-            self._video_publisher_loop(mavlink_proxy), self._control_receiver_loop()
-        )
+        try:
+            # Run both loops concurrently
+            await asyncio.gather(
+                self._video_publisher_loop(mavlink_proxy),
+                self._control_receiver_loop(),
+                return_exceptions=True,
+            )
+        except Exception as e:
+            logger.error(f"Error in server loops: {e}")
+        finally:
+            self.running = False
 
-    def stop(self):
+    def _process_frame(
+        self, frame_data: mission_types.FrameData
+    ) -> Optional[mission_types.ProcessedResult]:
+        """Process frame with smart skipping to maintain performance"""
+        self.skip_counter += 1
+
+        # Only process every nth frame to avoid performance issues
+        if self.skip_counter >= self.process_every_n_frames:
+            self.skip_counter = 0
+
+            try:
+                processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
+                    frame=frame_data.frame,
+                    drone_gps=frame_data.drone_position,
+                    drone_attitude=frame_data.drone_attitude,
+                    ground_level_masl=frame_data.ground_level,
+                    object_classes=self.object_classes,
+                )
+
+                cv2.imshow("Pre Annotated Frame", processed_frame)
+                try:
+                    processed_frame = self.tracker.write_on_frame(
+                        frame=processed_frame,
+                        curr_gps=frame_data.drone_position,
+                        gps_coords=gps_coords,
+                        pixel_coords=pixel_coords,
+                        mode=frame_data.mode,
+                        object_classes=self.object_classes,
+                    )
+                except Exception:
+                    logger.error("Error writing on frame: %s", traceback.format_exc())
+                    processed_frame = frame_data.frame.copy()
+
+                print(gps_coords)
+                cv2.imshow("Annotated Frame", processed_frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    raise KeyboardInterrupt
+
+                result = mission_types.ProcessedResult(
+                    processed_frame=processed_frame,
+                    gps_coordinates=gps_coords,
+                    pixel_coordinates=pixel_coords,
+                    timestamp=frame_data.timestamp,
+                )
+
+                self.last_result = result
+                return result
+
+            except Exception as e:
+                logger.warning("Frame processing failed: %s", e)
+                return None
+
+        # Return None for skipped frames
+        return self.last_result
+
+    def get_last_coordinates(
+        self,
+    ) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Tuple[int, int]]]:
+        """Get the last processed coordinates"""
+        if self.last_result:
+            return self.last_result.gps_coordinates, self.last_result.pixel_coordinates
+        return {}, {}
+
+    def close(self):
         """Stop the server"""
         logger.info("Stopping server...")
         self.running = False
 
-        # Stop frame processor
-        if self.frame_processor:
-            self.frame_processor.stop()
-
         # Close sockets
-        if self.video_socket:
-            self.video_socket.close()
-        if self.control_socket:
-            self.control_socket.close()
+        try:
+            if self.control_socket:
+                self.control_socket.close()
+        except Exception as e:
+            logger.error(f"Error closing control socket: {e}")
+
+        # Close video writer
+        try:
+            if self.video_writer:
+                self.video_writer.close()
+        except Exception as e:
+            logger.error(f"Error closing video writer: {e}")
 
         # Terminate context
-        self.context.term()
+        try:
+            self.context.term()
+        except Exception as e:
+            logger.error(f"Error terminating ZMQ context: {e}")
 
         logger.info("Server stopped")
 
@@ -630,65 +437,97 @@ async def main():
     parser.add_argument(
         "--is-simulation", action="store_true", help="Run in simulation mode"
     )
-    parser.add_argument(
-        "--video-port", type=int, default=5555, help="Port for video publishing"
-    )
-    parser.add_argument(
-        "--control-port", type=int, default=5556, help="Port for control commands"
-    )
-    parser.add_argument(
-        "--video-source", default=0, help="Video source (device ID or file path)"
-    )
 
     args = parser.parse_args()
+    config = mission_types.get_server_config()
+    print("Configuration loaded:\n", config)
 
     # Convert video_source to int if it's a number
-    try:
-        args.video_source = int(args.video_source)
-    except ValueError:
-        pass
 
     # Initialize MAVLink proxy
-    connection_string = "udp:127.0.0.1:14550" if args.is_simulation else "/dev/ttyUSB0"
-    mavlink_proxy = MAVLinkProxy(connection_string)
+    mavlink_proxy = MAVLinkProxy(
+        config.mavproxy_source,
+        host=config.mavproxy_dest_host,
+        port=config.mavproxy_dest_port,
+        logger=logger,
+    )
 
     # Enable video streaming for simulation
     if args.is_simulation:
+        gz_config = mission_types.get_gazebo_config()
         logger.info("Enabling video streaming for simulation")
         done = gz.enable_streaming(
-            world="delivery_runway",
-            model_name="iris_with_stationary_gimbal",
-            camera_link="tilt_link",
+            world=gz_config.world,
+            model_name=gz_config.model_name,
+            camera_link=gz_config.camera_link,
         )
         if not done:
             logger.error("Failed to enable streaming")
             return
 
+    object_classes = ["real_helipad", "real_tank"]
+    if args.is_simulation:
+        object_classes = ["helipad", "tank"]
     # Initialize server
     server = ZMQServer(
-        video_port=args.video_port,
-        control_port=args.control_port,
-        video_source=args.video_source,
+        control_port=config.control_address,
+        video_source=config.video_source,
+        video_output= "rtsp://localhost:8554/processed",  # config.sandwich_video_pipe,
         is_simulation=args.is_simulation,
+        controller_connection_string=config.controller_connection_string,
+        controller_baudrate=config.controller_baudrate,
+        object_classes=object_classes
     )
+
+    mavlink_proxy_started = False
+
+    # Setup signal handlers for graceful shutdown
+    shutdown_event = asyncio.Event()
+
+    def signal_handler():
+        logger.info("Shutdown signal received")
+        shutdown_event.set()
+
+    # Add signal handlers for common shutdown signals
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda s, f: signal_handler())
 
     try:
         # Start MAVLink proxy
         mavlink_proxy.start()
+        mavlink_proxy_started = True
 
         # Start server
         logger.info("Starting server. Press Ctrl+C to stop.")
-        await server.start(mavlink_proxy)
 
+        # Create task for server
+        server_task = asyncio.create_task(server.start(mavlink_proxy))
+
+        # Wait for either completion or shutdown signal
+        done, pending = await asyncio.wait(
+            [server_task, asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        # Cancel any remaining tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
     except Exception as e:
-        logger.error(f"Error running server: {e}")
+        logger.error("Error running server: %s", e)
     finally:
         # Cleanup
-        server.stop()
-        mavlink_proxy.stop()
+        logger.info("Shutting down...")
+        server.close()
+        if mavlink_proxy_started:
+            mavlink_proxy.close()
+        logger.info("Shutdown complete")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(), debug=True)

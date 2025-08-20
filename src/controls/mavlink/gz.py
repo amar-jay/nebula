@@ -27,7 +27,6 @@ class GazeboVideoCapture:
             "appsink"
         )
 
-
         print(f"Using GStreamer pipeline: {pipeline}")
         self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)

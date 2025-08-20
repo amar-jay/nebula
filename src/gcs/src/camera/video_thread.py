@@ -2,6 +2,8 @@ import time
 
 import cv2
 import numpy as np
+
+# pylint: disable=E0611
 from PySide6.QtCore import QThread, Signal
 
 
@@ -64,17 +66,6 @@ class VideoThread(QThread):
                             pass
                         self.cap = None
                     return  # Exit immediately
-
-                # Configure capture settings for RTSP
-                # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
-                # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Set reasonable resolution
-                # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-                # # Add timeout settings to prevent hanging
-                # self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)  # 5 second timeout
-                # self.cap.set(
-                #     cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000
-                # )  # 3 second read timeout
 
                 # Try to read a test frame to verify connection
                 if not self.cap.isOpened():
@@ -234,36 +225,30 @@ class VideoThread(QThread):
         """Stop the video thread"""
         self.running = False
 
-        # Stop any ongoing recording first
-        if self.is_recording:
+        if self.is_recording:  # Stop any ongoing recording first
             self.stop_recording()
 
         # Force release capture BEFORE trying to quit the thread
         if self.cap is not None:
             try:
-                # Give current operation time to complete
-                self.msleep(200)
+                self.msleep(200)  # Give current operation time to complete
                 if hasattr(self.cap, "isOpened") and self.cap.isOpened():
                     self.cap.release()
             except Exception as e:
                 print(f"Warning: Error releasing video capture: {e}")
             finally:
-                # Always set to None to prevent further access
-                self.cap = None
+                self.cap = None  # Always set to None to prevent further access
 
         # Now quit the thread
         if self.isRunning():
-            # Request thread to quit
-            self.quit()
+            self.quit()  # Request thread to quit
             # Wait for thread to finish naturally
             if not self.wait(3000):  # 3 second timeout
                 print(
                     "Warning: Video thread did not stop gracefully, forcing termination"
                 )
-                # Force terminate as last resort
-                self.terminate()
-                # Give it a short time to clean up
-                self.wait(1000)
+                self.terminate()  # Force terminate as last resort
+                self.wait(1000)  # Give it a short time to clean up
 
     def start_recording(self, filepath: str):
         """Start video recording"""

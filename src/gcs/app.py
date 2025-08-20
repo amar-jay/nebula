@@ -901,7 +901,7 @@ class DroneControlApp(QMainWindow):
         if self.drone_client.connect_to_drone(connection_string, is_kamikaze=True):
             # Set target marker on the map
             pose = self.drone_client.k_current_position
-            print(f"Setting kamikaze marker at {pose}")
+            # print(f"Setting kamikaze marker at {pose}")
             self.dock_content.set_kamikaze_marker(pose["lat"], pose["lon"])
             self.k_connect_btn.setEnabled(False)
             self.k_disconnect_btn.setEnabled(True)
@@ -1168,7 +1168,7 @@ class DroneControlApp(QMainWindow):
             for waypoint in waypoints:
                 waypoint_str.append(f"{waypoint.lat},{waypoint.lon}")
             waypoint_str = "|".join(waypoint_str)
-            print(waypoint_str)
+            # print(waypoint_str)
             self.dock_content.page().runJavaScript("clearAll();")
             self.dock_content.page().runJavaScript(f'loadMission("{waypoint_str}")')
         elif event == "select_area":
@@ -1320,7 +1320,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_drone_status_update(self, status):
         """Handle drone status updates."""
-        print(status)
+        # print(status)
         # Update armed status
         mode_status = status.get("mode", "Unknown")
         self.mode_label.setText(f"{mode_status}")
@@ -1533,8 +1533,7 @@ def main():
     """Run the drone control application."""
     app = QApplication(sys.argv)
 
-    from src.gcs.src.login.page import LoginWindow
-
+    # from src.gcs.src.login.page import LoginWindow
     # app.setStyle("Fusion")
     set_theme(app)
     # Apply the palette

@@ -88,7 +88,7 @@ class YoloObjectTracker:
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
-        object_classes: List[str] = ["helipad", "real_tank"],
+        object_classes: Tuple[str, str] = ("helipad", "real_tank"),
     ) -> Dict[str, Detection]:
         """
         Detect objects in image and return structured detection results
@@ -161,21 +161,21 @@ class YoloObjectTracker:
         R_x = np.array(
             [
                 [1, 0, 0],
-                [0, math.cos(roll), -math.sin(roll)],
-                [0, math.sin(roll), math.cos(roll)],
+                [0, np.cos(roll), -np.sin(roll)],
+                [0, np.sin(roll), np.cos(roll)],
             ]
         )
         R_y = np.array(
             [
-                [math.cos(pitch), 0, math.sin(pitch)],
+                [np.cos(pitch), 0, np.sin(pitch)],
                 [0, 1, 0],
-                [-math.sin(pitch), 0, math.cos(pitch)],
+                [-np.sin(pitch), 0, np.cos(pitch)],
             ]
         )
         R_z = np.array(
             [
-                [math.cos(yaw), -math.sin(yaw), 0],
-                [math.sin(yaw), math.cos(yaw), 0],
+                [np.cos(yaw), -np.sin(yaw), 0],
+                [np.sin(yaw), np.cos(yaw), 0],
                 [0, 0, 1],
             ]
         )
@@ -266,7 +266,7 @@ class YoloObjectTracker:
         gps_coords: Dict[str, Tuple[float, float]],
         pixel_coords: Dict[str, Tuple[int, int]],
         mode="UNKNOWN",
-        object_classes: List[str] = ["helipad", "real_tank"],
+        object_classes: Tuple[str, str] = ("helipad", "real_tank"),
     ):
         """Write overlay information on the frame"""
         _, frame_w = frame.shape[:2]
@@ -352,7 +352,7 @@ class YoloObjectTracker:
 
         if "helipad" in gps_coords:
             helipad_latlon = gps_coords["helipad"]
-            dist = self._haversine_distance(
+            dist = self.calculate_gps_error(
                 curr_lat, curr_lon, helipad_latlon[0], helipad_latlon[1]
             )
             gps_text_lines.append(f"D: {dist:.1f} m")
@@ -386,7 +386,7 @@ class YoloObjectTracker:
         gps_coords: Dict[str, Tuple[float, float]],
         pixel_coords: Dict[str, Tuple[int, int]],
         mode="UNKNOWN",
-        object_classes: List[str] = ["helipad", "real_tank"],
+        object_classes: Tuple[str,str] = ("helipad", "real_tank"),
     ):
         _, frame_w = frame.shape[:2]
         overlay = frame.copy()
@@ -474,7 +474,7 @@ class YoloObjectTracker:
         drone_attitude: Tuple[float, float, float],
         ground_level_masl: float,
         K: Optional[np.ndarray] = None,
-        object_classes: List[str] = ["real_helipad", "real_tank"],
+        object_classes: Tuple[str,str] = ("helipad", "real_tank"),
         threshold: float = 0.5,
     ) -> Tuple[np.ndarray, Dict[str, Tuple[float, float]], Dict[str, Tuple[int, int]]]:
         """
@@ -553,12 +553,6 @@ class YoloObjectTracker:
     def calculate_gps_error(
         self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
     ) -> float:
-        """Calculate GPS error using Haversine distance"""
-        return float(self._haversine_distance(pred_lat, pred_lon, gt_lat, gt_lon))
-
-    def _haversine_distance(
-        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
-    ) -> float:
         """Haversine distance calculation using numpy"""
         phi1 = np.deg2rad(gt_lat)
         phi2 = np.deg2rad(pred_lat)
@@ -569,7 +563,7 @@ class YoloObjectTracker:
             np.sin(dphi / 2) ** 2
             + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2) ** 2
         )
-        return 2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+        return float(2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
 
 def main():
@@ -604,7 +598,7 @@ def main():
     )
 
     # Configuration
-    object_classes = ["helipad", "real_tank"]
+    object_classes = ("helipad", "real_tank")
     object_colors = {
         "helipad": (0, 255, 0),
         "real_tank": (255, 100, 100),

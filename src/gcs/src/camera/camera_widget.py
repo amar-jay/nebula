@@ -5,6 +5,8 @@ import traceback
 
 import cv2
 import numpy as np
+
+# pylint: disable=E0611
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
@@ -107,18 +109,18 @@ class CameraWidget(QWidget):
         self.connect_btn = PrimaryPushButton("Connect")
         self.connect_menu = QMenu("Connect", self)
 
-        self.raw_connect_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "Raw Video Feed",
+                icon=FIF.CONNECT,
+                text="Raw Video Feed",
                 triggered=lambda: self.connect_camera(_type="raw"),
             )
         )
 
-        self.processed_connect_action = self.connect_menu.addAction(
+        self.connect_menu.addAction(
             Action(
-                FIF.CONNECT,
-                "Processed Video Feed",
+                icon=FIF.CONNECT,
+                text="Processed Video Feed",
                 triggered=lambda: self.connect_camera(_type="processed"),
             )
         )

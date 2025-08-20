@@ -6,10 +6,9 @@ Captures frames from USB camera and streams to named pipe for ffplay consumption
 
 import os
 import subprocess
-import sys
 
-import numpy as np
 import cv2
+import numpy as np
 
 
 class VideoWriter:
@@ -19,7 +18,6 @@ class VideoWriter:
         self.height = height
         self.fps = fps
         self._running = False
-        pass
 
     def write(self, frame: np.ndarray) -> bool:
         pass
@@ -158,7 +156,7 @@ class TSVideoWriter(VideoWriter):
 
                 self.ffmpeg_process.stdin.write(frame_data)
                 self.ffmpeg_process.stdin.flush()
-                
+
                 # Explicitly delete frame data to free memory
                 del frame_data
 
@@ -197,6 +195,7 @@ class TSVideoWriter(VideoWriter):
             os.unlink(self.pipe_path)
         self._running = False
 
+
 class RTSPVideoWriter:
     def __init__(self, source: str, width: int, height: int, fps: int):
         """
@@ -213,20 +212,33 @@ class RTSPVideoWriter:
         self._running = True
 
         # Start ffmpeg process for RTSP streaming
-        self.process = subprocess.Popen([
-            'ffmpeg',
-            '-y',  # Overwrite output
-            '-f', 'rawvideo',
-            '-pix_fmt', 'bgr24',
-            '-s', f'{self.width}x{self.height}',
-            '-r', str(self.fps),
-            '-i', '-',  # Read frames from stdin
-            '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-tune', 'zerolatency',
-            '-f', 'rtsp',
-            self.pipe_path
-        ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.process = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-y",  # Overwrite output
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "bgr24",
+                "-s",
+                f"{self.width}x{self.height}",
+                "-r",
+                str(self.fps),
+                "-i",
+                "-",  # Read frames from stdin
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-tune",
+                "zerolatency",
+                "-f",
+                "rtsp",
+                self.pipe_path,
+            ],
+            stdin=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
 
     def write(self, frame: np.ndarray) -> bool:
         """
@@ -255,15 +267,3 @@ class RTSPVideoWriter:
                 self.process.wait()
             except Exception:
                 pass
-
-
-def signal_handler(*_):
-    """Handle Ctrl+C gracefully"""
-    print("\nReceived interrupt signal...")
-    streamer = signal_handler.streamer
-    if streamer:
-        streamer.close()
-    sys.exit(0)
-
-
-signal_handler.streamer = None

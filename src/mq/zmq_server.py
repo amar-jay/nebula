@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-# pylint: disable=W0703,C0413,I1101,C0114
+# pylint: disable=I1101
 
 import os
-
-os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
 import argparse
 import asyncio
+# import gc  # For garbage collection
 import logging
 import signal
 import time
 import traceback
 from typing import Dict, Optional, Tuple
 
-import cv2
 import zmq
 import zmq.asyncio
-
+import cv2
 from src.controls.detection import yolo
 from src.controls.mavlink import gz, mission_types
 from src.mq.crane import CraneControls, ZMQTopics
 from src.mq.mavproxy_tcp import MAVLinkProxy
 from src.mq.video_writer import RTSPVideoWriter
-from src.mq.memory_monitor import MemoryMonitor
+
+# ignore opencv warnings
+# os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
 
 # IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.05  # Increased CPU burn rate for better memory management
@@ -34,7 +34,7 @@ logging.addLevelName(SUCCESS_LEVEL_NUM, "SUCCESS")
 # Add success() method to Logger
 def success(self, message, *args, **kwargs):
     if self.isEnabledFor(SUCCESS_LEVEL_NUM):
-        self._log(SUCCESS_LEVEL_NUM, message, args, **kwargs)
+        self._log(SUCCESS_LEVEL_NUM, message, args, **kwargs)  # pylint: disable=W0212
 
 
 logging.Logger.success = success
@@ -59,13 +59,13 @@ class ZMQServer:
 
     def __init__(
         self,
+        video_output: str,
         controller_connection_string: Optional[str],
         control_port: int = 5556,
         video_source: int | str = 0,
-        video_output: str = "/tmp/camera_stream",
         is_simulation: bool = False,
         controller_baudrate: int = 9600,
-        object_classes = ["helipad", "tank"]
+        object_classes=("helipad", "tank"),
     ):
         self.control_port = control_port
         self.video_source = video_source
@@ -96,11 +96,12 @@ class ZMQServer:
 
         # State
         self.hook_state = "dropped"
-        self.running = False
+        self.running = False # TODO: WHAT??
 
         # Latest processed results
-        self.latest_gps_coordinates = {}
-        self.latest_pixel_coordinates = {}
+        # # self.latest_gps_coordinates = {}
+        # self.latest_pixel_coordinates = {}
+        self.last_result: Optional[mission_types.ProcessedResult] = None
 
         # Object classes
         self.object_classes = object_classes
@@ -133,44 +134,39 @@ class ZMQServer:
         self.process_every_n_frames = (
             3  # Process every 3rd frame to maintain performance, setting it to 10fps
         )
-        self.last_result: Optional[mission_types.ProcessedResult] = None
 
     def _initialize_video_capture(self) -> bool:
         """Initialize video capture and video writer"""
         try:
             if self.is_simulation:
-                self.cap = gz.GazeboVideoCapture()
+                # self.cap = gz.GazeboVideoCapture(fps=10)
+                self.cap = cv2.VideoCapture(self.video_source)
             else:
                 self.cap = cv2.VideoCapture(self.video_source)
-                # Optimize video capture settings to reduce memory usage
-                self.cap.set(cv2.CAP_PROP_FPS, 30)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, FRAME_BUFFER_SIZE)  # Minimize buffer
-                # Limit frame size to reduce memory consumption
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
             if not self.cap.isOpened():
                 logger.error("Failed to open video source %s", self.video_source)
                 return False
 
             # Get video properties for video writer
-            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2
-            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) // 2
-            # fps = (
-            #     int(self.cap.get(cv2.CAP_PROP_FPS)) or 30
-            # )  # Default to 30 FPS if unable to get
+            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)) #// 2
+            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) #// 2
+            fps = (
+                int(self.cap.get(cv2.CAP_PROP_FPS)) or 30
+            )  # Default to 30 FPS if unable to get
 
             # Initialize video writer
             self.video_writer = RTSPVideoWriter(
-                source=self.video_output, width=width, height=height, fps=30
+                source=self.video_output, width=width, height=height, fps=10,
             )
 
             logger.info("Video capture and writer initialized successfully")
             logger.info(
-                "Video output: %s (%dx%d @ 30 FPS)",
+                "Video output: %s (%dx%d @ %d FPS)",
                 self.video_output,
                 width,
                 height,
+                fps
             )
             return True
 
@@ -187,6 +183,7 @@ class ZMQServer:
 
         frame_count = 0
         fps_timer = time.time()
+        prev_frame = None
 
         while self.running:
             try:
@@ -199,6 +196,12 @@ class ZMQServer:
                     logger.warning("Failed to capture frame")
                     await asyncio.sleep(0.1)
                     continue
+                #TODO: check if the frames are the same (debug)
+                if prev_frame is not None and (prev_frame == frame).all():
+                    logger.warning("Duplicate frame detected, skipping processing")
+                    await asyncio.sleep(1)
+                    continue
+                prev_frame = frame.copy()
 
                 # Process frame for object detection
                 data = mavlink_proxy.get_drone_data()
@@ -206,53 +209,35 @@ class ZMQServer:
                     await asyncio.sleep(1)
                     continue
 
-                data.timestamp = time.time()
-                # Resize frame to reduce memory usage
+                #TODO: Resize frame to reduce memory usage 
                 height, width = frame.shape[:2]
                 if width > 640:  # Limit frame size to reduce memory
                     scale = 640 / width
                     new_width = int(width * scale)
                     new_height = int(height * scale)
                     frame = cv2.resize(frame, (new_width, new_height))
-                
-                data.frame = frame  # Avoid unnecessary copy
+
+                now = time.time()
+                if now - data.timestamp > 2:  # if the frame capture is within 2 second delay
+                    logger.warning(f"Frame and data are too far apart for processing... {int(now - data.timestamp)}s")
 
                 # Process frame (returns None for skipped frames)
-                result = self._process_frame(data)
+                data.frame = frame.copy()
 
-                if result:
-                    # Update latest coordinates
-                    if result.gps_coordinates is not None:
-                        self.latest_gps_coordinates = result.gps_coordinates
-                    if result.pixel_coordinates is not None:
-                        self.latest_pixel_coordinates = result.pixel_coordinates
+                # Remove cv2.imshow calls that cause memory accumulation
+                processed_result = self._process_frame(data)
+                del data.frame # Clear frame reference to free memory
 
-                    # Write processed frame to video output
-                    if self.video_writer and self.running:
-                        self.video_writer.write(result.processed_frame)
-                    
-                    # Clean up frame references to free memory
-                    del result.processed_frame
-                else:
-                    # For skipped frames, get last known coordinates
-                    (
-                        gps_coords,
-                        pixel_coords,
-                    ) = self.get_last_coordinates()
-                    if gps_coords:
-                        self.latest_gps_coordinates = gps_coords
-                    if pixel_coords:
-                        self.latest_pixel_coordinates = pixel_coords
+                # Write processed frame to video output
+                if self.video_writer:
+                    self.video_writer.write(processed_result.processed_frame)
+                # Clean up frame references to free memory
+                del processed_result.processed_frame
 
-                    # Write raw frame when no processing is done
-                    if self.video_writer and self.running:
-                        self.video_writer.write(frame)
-                    
+
                 # Explicitly delete frame reference to free memory
                 del frame
-
                 frame_count += 1
-
                 # FPS logging
                 if time.time() - fps_timer > 5:
                     fps = frame_count / 5
@@ -317,16 +302,17 @@ class ZMQServer:
     def _handle_command(self, command: str) -> str:
         """Handle control commands"""
         command = command.strip()
+        latest_gps, _ = self.get_last_coordinates()
         if command == ZMQTopics.HELIPAD_GPS.name:
-            if self.latest_gps_coordinates and "helipad" in self.latest_gps_coordinates:
-                coords = self.latest_gps_coordinates["helipad"]
+            if latest_gps and "helipad" in latest_gps:
+                coords = latest_gps["helipad"]
                 return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
         elif command == ZMQTopics.TANK_GPS.name:
             tank_key = "tank" if self.is_simulation else "real_tank"
-            if self.latest_gps_coordinates and tank_key in self.latest_gps_coordinates:
-                coords = self.latest_gps_coordinates[tank_key]
+            if latest_gps and tank_key in latest_gps:
+                coords = latest_gps[tank_key]
                 return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
@@ -364,61 +350,53 @@ class ZMQServer:
         self, frame_data: mission_types.FrameData
     ) -> Optional[mission_types.ProcessedResult]:
         """Process frame with smart skipping to maintain performance"""
-        self.skip_counter += 1
 
-        # Only process every nth frame to avoid performance issues
-        if self.skip_counter >= self.process_every_n_frames:
-            self.skip_counter = 0
+        try:
+            processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
+                frame=frame_data.frame,
+                drone_gps=frame_data.drone_position,
+                drone_attitude=frame_data.drone_attitude,
+                ground_level_masl=frame_data.ground_level,
+                object_classes=self.object_classes,
+            )
 
             try:
-                processed_frame, gps_coords, pixel_coords = self.tracker.process_frame(
-                    frame=frame_data.frame,
-                    drone_gps=frame_data.drone_position,
-                    drone_attitude=frame_data.drone_attitude,
-                    ground_level_masl=frame_data.ground_level,
+                processed_frame = self.tracker.write_on_frame(
+                    frame=processed_frame,
+                    curr_gps=frame_data.drone_position,
+                    gps_coords=gps_coords,
+                    pixel_coords=pixel_coords,
+                    mode=frame_data.mode,
                     object_classes=self.object_classes,
                 )
+            except Exception:
+                logger.error("Error writing on frame: %s", traceback.format_exc())
+                processed_frame = frame_data.frame.copy()
 
-                # Remove cv2.imshow calls that cause memory accumulation
-                # cv2.imshow("Pre Annotated Frame", processed_frame)
-                try:
-                    processed_frame = self.tracker.write_on_frame(
-                        frame=processed_frame,
-                        curr_gps=frame_data.drone_position,
-                        gps_coords=gps_coords,
-                        pixel_coords=pixel_coords,
-                        mode=frame_data.mode,
-                        object_classes=self.object_classes,
-                    )
-                except Exception:
-                    logger.error("Error writing on frame: %s", traceback.format_exc())
-                    processed_frame = frame_data.frame.copy()
+            # Remove debug print and cv2.imshow to prevent memory leaks
+            # print(gps_coords)
+            # cv2.imshow("Annotated Frame", processed_frame)
+            # if cv2.waitKey(1) & 0xFF == ord("q"):
+            #     raise KeyboardInterrupt
 
-                # Remove debug print and cv2.imshow to prevent memory leaks
-                # print(gps_coords)
-                # cv2.imshow("Annotated Frame", processed_frame)
-                # if cv2.waitKey(1) & 0xFF == ord("q"):
-                #     raise KeyboardInterrupt
+            result = mission_types.ProcessedResult(
+                processed_frame=processed_frame,
+                gps_coordinates=gps_coords,
+                pixel_coordinates=pixel_coords,
+                timestamp=frame_data.timestamp,
+            )
 
-                result = mission_types.ProcessedResult(
-                    processed_frame=processed_frame,
-                    gps_coordinates=gps_coords,
-                    pixel_coordinates=pixel_coords,
-                    timestamp=frame_data.timestamp,
-                )
+            # self.last_result = result
+            return result
 
-                self.last_result = result
-                return result
-
-            except Exception as e:
-                logger.warning("Frame processing failed: %s", e)
-                # Clean up any remaining frame references
-                import gc
-                gc.collect()
-                return None
+        except Exception as e:
+            logger.warning("Frame processing failed: %s", e)
+            # Clean up any remaining frame references
+            # gc.collect()
+            return None
 
         # Return None for skipped frames
-        return self.last_result
+        # return self.last_result
 
     def get_last_coordinates(
         self,
@@ -456,12 +434,8 @@ class ZMQServer:
 
         # Clear any remaining frame references
         self.last_result = None
-        self.latest_gps_coordinates.clear()
-        self.latest_pixel_coordinates.clear()
-        
-        # Force garbage collection
-        import gc
-        gc.collect()
+# 
+        # gc.collect()
 
         # Terminate context
         try:
@@ -512,11 +486,12 @@ async def main():
     server = ZMQServer(
         control_port=config.control_address,
         video_source=config.video_source,
-        video_output= "rtsp://localhost:8554/processed",  # config.sandwich_video_pipe,
+        # video_output="rtsp://localhost:8554/processed",  # config.sandwich_video_pipe,
+        video_output="rtsp://192.168.1.113:8554/processed",
         is_simulation=args.is_simulation,
         controller_connection_string=config.controller_connection_string,
         controller_baudrate=config.controller_baudrate,
-        object_classes=object_classes
+        object_classes=object_classes,
     )
 
     mavlink_proxy_started = False

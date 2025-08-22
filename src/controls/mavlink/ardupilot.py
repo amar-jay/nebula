@@ -504,7 +504,11 @@ class ArdupilotConnection:
 
         return False
 
-    def monitor_mission_progress(self, _update_status_hook=None, timeout=None):
+    def monitor_mission_progress(self, callback=None, timeout=None):
+        """
+        `callback` is called when a waypoint is reached it takes
+        the current waypoint index and a completion flag as arguments
+        """
         def func():
             msg = self.master.recv_match(
                 type=["MISSION_CURRENT", "MISSION_COUNT"], blocking=False
@@ -512,13 +516,13 @@ class ArdupilotConnection:
             if not msg:
                 return False
             elif msg.get_type() == "MISSION_CURRENT":
-                if _update_status_hook:
-                    _update_status_hook(msg.seq, False)
+                if callback:
+                    callback(msg.seq, False)
                 # Check if we've reached the final waypoint
                 if msg.seq == msg.total:
                     self.log("Mission completed!", "success")
-                    if _update_status_hook:
-                        _update_status_hook(msg.seq, True)
+                    if callback:
+                        callback(msg.seq, True)
                     return True
             elif msg.get_type() == "MISSION_COUNT":
                 print("mission count...")
@@ -592,7 +596,7 @@ if __name__ == "__main__":
                     prev_seq = seq
 
         connection.start_mission()
-        while not connection.monitor_mission_progress(_update_status_hook):
+        while not connection.monitor_mission_progress(callback=_update_status_hook):
             time.sleep(1)
     except Exception as e:
         connection.log(f"Error during mission upload: {e}", "error")

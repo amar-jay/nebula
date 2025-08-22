@@ -1,6 +1,7 @@
 from enum import Enum
 
 import serial
+import time
 
 
 class ZMQTopics(Enum):
@@ -24,34 +25,34 @@ class CraneControls:
         self.ser.flushInput()
         self.hook_state = "dropped"  # Initial state of the hook
 
-    def fetch_load(self):
-        self.ser.write(b"Yuk Kaldir\n")
-        line = self.ser.readline().decode("utf-8").strip()
-        if line.startswith("Yuk:"):
-            try:
-                load = float(line.split(":")[1].strip())
-                return load
-            except ValueError:
-                print("Error parsing load value:", line)
-        return None
+    def _wait_for_ready(self, expected_response):
+        while True:
+            response = self.ser.readline().decode().strip()
+            if response == expected_response:
+                return expected_response
+            else:
+                time.sleep(0.1)
 
-    def get_load(self):
-        self.ser.write(b"Yuk Al\n")
-        line = self.ser.readline().decode("utf-8").strip()
-        if line.startswith("Yuk:"):
-            try:
-                load = float(line.split(":")[1].strip())
-                return load
-            except ValueError:
-                print("Error parsing load value:", line)
-        return None
+    def pick_load(self):
+        command="Yuk_Al"
+        self.ser.write(f"{command}\n".encode())
+        response = self._wait_for_ready("YUK_AL_TAMAM")
+        if response == "YUK_AL_TAMAM":
+            print("Yuk Al Görevi Tamamlandı.")
+            print("Yeni göreve geçmeye hazırsınız.")
+        return True
 
-    def get_state(self):
-        self.ser.write(b"Durum\n")
-        line = self.ser.readline().decode("utf-8").strip()
-        if line.startswith("Durum:"):
-            return line.split(":")[1].strip()
-        return None
+    def drop_load(self):
+        command="Yuk_Birak"
+        self.ser.write(f"{command}\n".encode())
+        response = self._wait_for_ready("YUK_BIRAK_TAMAM")
+        if response == "YUK_BIRAK_TAMAM":
+            print("Yuk Birak Görevi Tamamlandı.")
+            print("Yeni göreve geçmeye hazırsınız.")
+            return True
+        else:
+            print("Bir hata oluştu, lütfen tekrar deneyin.")
+        return False
 
     def close(self):
         if self.ser.is_open:
@@ -62,21 +63,27 @@ class CraneControls:
 
     def handle_command(self, command):
         if command == ZMQTopics.DROP_LOAD.name:
+            self.drop_load()
             return "ACK: Load dropped"
         elif command == ZMQTopics.PICK_LOAD.name:
+            self.pick_load()
             return "ACK: Load picked"
         elif command == ZMQTopics.RAISE_HOOK.name:
-            if self.hook_state == "raised":
-                return "ACK: Hook already raised"
-            else:
-                self.hook_state = "raised"
-                return "ACK: Hook raised"
+            return
+            # TODO:
+            # if self.hook_state == "raised":
+            #     return "ACK: Hook already raised"
+            # else:
+            #     self.hook_state = "raised"
+            #     return "ACK: Hook raised"
         elif command == ZMQTopics.DROP_HOOK.name:
-            if self.hook_state == "dropped":
-                return "ACK: Hook already dropped"
-            else:
-                self.hook_state = "dropped"
-                return "ACK: Hook dropped"
+            return
+            # TODO:
+            # if self.hook_state == "dropped":
+            #     return "ACK: Hook already dropped"
+            # else:
+            #     self.hook_state = "dropped"
+            #     return "ACK: Hook dropped"
         elif command == ZMQTopics.STATUS.name:
             return f"ACK: Hook is {self.hook_state}"
         else:

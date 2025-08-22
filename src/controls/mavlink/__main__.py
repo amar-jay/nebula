@@ -91,7 +91,7 @@ try:
     )
 
     connection.start_mission()
-    while not connection.monitor_mission_progress(_update_status_hook):
+    while not connection.monitor_mission_progress(callback=_update_status_hook):
         _imshow()
         time.sleep(0.1)
 except Exception as e:

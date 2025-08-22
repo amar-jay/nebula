@@ -222,8 +222,8 @@ class RTSPVideoWriter:
                 "bgr24",
                 "-s",
                 f"{self.width}x{self.height}",
-                "-r",
-                str(self.fps),
+                # "-r",
+                # str(self.fps),
                 "-i",
                 "-",  # Read frames from stdin
                 "-c:v",
@@ -239,7 +239,8 @@ class RTSPVideoWriter:
             stdin=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
-
+    def isOpened(self) -> bool:
+        return self._running and self.process.stdin is not None and self.process.poll() is None
     def write(self, frame: np.ndarray) -> bool:
         """
         Writes a frame to the RTSP stream.

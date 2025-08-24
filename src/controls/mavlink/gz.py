@@ -11,21 +11,34 @@ from src.controls.mavlink.ardupilot import ArdupilotConnection
 
 
 class GazeboVideoCapture:
-    def __init__(self, camera_port=5600, fps=30):
+    """
+    Capture video from a Gazebo simulation. Note at times using a set fps doesn't work.
+    for instance in our current zmq server setup, the fps may not be consistent. so by default
+    we set it to None.
+    """
+
+    def __init__(self, camera_port=5600, fps=None):
         """
         Open a video stream from the Gazebo simulation.
         """
 
-        pipeline = (
-            f"udpsrc port={camera_port} ! "
-            "application/x-rtp, encoding-name=H264 ! "
-            "rtph264depay ! "
-            "avdec_h264 ! "
-            "videoconvert ! "
-            "videorate ! "
-            f"video/x-raw,framerate={fps}/1 ! "
-            "appsink"
-        )
+        if fps is None:
+            pipeline = (
+                f'udpsrc port={camera_port} caps="application/x-rtp, media=(string)video, '
+                'clock-rate=(int)90000, encoding-name=(string)H264" ! '
+                "rtph264depay ! avdec_h264 ! videoconvert ! appsink"
+            )
+        else:
+            pipeline = (
+                f"udpsrc port={camera_port} ! "
+                "application/x-rtp, encoding-name=H264 ! "
+                "rtph264depay ! "
+                "avdec_h264 ! "
+                "videoconvert ! "
+                "videorate ! "
+                f"video/x-raw,framerate={fps}/1 ! "
+                "appsink"
+            )
 
         print(f"Using GStreamer pipeline: {pipeline}")
         self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
@@ -81,7 +94,7 @@ class GazeboConnection(ArdupilotConnection):
             ),
         )
         self.camera_port = camera_port
-        self.cap = GazeboVideoCapture(camera_port=camera_port)
+        self.cap = GazeboVideoCapture(camera_port=camera_port, fps=30)
 
 
 def enable_streaming(

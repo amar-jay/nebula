@@ -3,7 +3,6 @@ import math
 import os
 import time
 import traceback
-from logging import currentframe
 from typing import Optional, Tuple
 
 import cv2
@@ -12,7 +11,7 @@ import numpy as np
 from src.controls.detection import yolo
 from src.controls.mavlink import ardupilot
 from src.controls.mavlink.ardupilot import Waypoint
-from src.controls.mavlink.gz import GazeboVideoCapture, enable_streaming
+from src.controls.mavlink.gz import enable_streaming
 
 # Mission constants
 HELIPAD_CLASS = "helipad"
@@ -238,7 +237,7 @@ def stabilize_after_reached(waypoint_seq: int, completed: bool):
                 hold_timer = None
         else:
             connection.log("📸 Stabilizing on helipad...")
-            if not stable_coords:
+            if stable_coords is None:
                 raise Exception("Cannot stabilize since there is no stable point")
             connection.goto_waypointv2(stable_coords[0], stable_coords[1], 10)
             current_state = STATES.SIMULATED_CRANE_HOLD

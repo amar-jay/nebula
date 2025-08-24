@@ -386,7 +386,7 @@ class YoloObjectTracker:
         gps_coords: Dict[str, Tuple[float, float]],
         pixel_coords: Dict[str, Tuple[int, int]],
         mode="UNKNOWN",
-        object_classes: Tuple[str,str] = ("helipad", "real_tank"),
+        object_classes: Tuple[str, str] = ("helipad", "real_tank"),
     ):
         _, frame_w = frame.shape[:2]
         overlay = frame.copy()
@@ -474,7 +474,7 @@ class YoloObjectTracker:
         drone_attitude: Tuple[float, float, float],
         ground_level_masl: float,
         K: Optional[np.ndarray] = None,
-        object_classes: Tuple[str,str] = ("helipad", "real_tank"),
+        object_classes: Tuple[str, str] = ("helipad", "real_tank"),
         threshold: float = 0.5,
     ) -> Tuple[np.ndarray, Dict[str, Tuple[float, float]], Dict[str, Tuple[int, int]]]:
         """

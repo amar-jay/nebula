@@ -1,11 +1,20 @@
 import logging
 import math
 import time
+from dataclasses import dataclass
 
 import pymavlink.dialects.v20.all as dialect
 from pymavlink import mavutil
 
 from src.controls.mavlink.mission_types import Waypoint
+
+
+@dataclass
+class WaypointState:
+    FLYING_AUTO = "flying_auto"
+    POSITIONING = "positioning"
+    WAITING_DROP = "waiting_drop"
+    WAITING_RAISE = "waiting_raise"
 
 
 class ArdupilotConnection:
@@ -25,6 +34,7 @@ class ArdupilotConnection:
             f"Connected to {self.connection_string} with system ID {self.master.target_system}",
             "info",
         )
+        self.current_state = WaypointState.FLYING_AUTO
 
         self.home_position = self.get_relative_gps_location()
         self.status = {
@@ -242,6 +252,7 @@ class ArdupilotConnection:
 
     def upload_mission(self, waypoints: list[Waypoint]):
         num_wp = len(waypoints)
+        self.num_wp = num_wp
         self.log(f"Uploading {num_wp} waypoints...", "info")
 
         # send mission count
@@ -282,6 +293,7 @@ class ArdupilotConnection:
         )
         # time.sleep(0.5)  # Give the FCU some breathing room
         self.ack_sync("MISSION_ACK")
+        self.num_wp = 0
 
         # Set to GUIDED mode explicitly (you can also use MAV_MODE_AUTO if that suits your logic)
         # self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
@@ -504,28 +516,133 @@ class ArdupilotConnection:
 
         return False
 
+    def waypoint_reached(self):
+        """
+        Returns (True, seq) exactly once when a new waypoint is reached.
+        After reading True, it resets automatically so the next call
+        won't return True until another waypoint is reached.
+        """
+        # Persistent storage for last waypoint handled
+        if not hasattr(self, "_last_reached_seq"):
+            self._last_reached_seq = 0
+
+        # Refresh status to get latest MISSION_CURRENT
+        self.get_status()  # must update self.status["current_waypoint"]
+
+        seq = int(self.status.get("current_waypoint", -1))
+        if seq > self._last_reached_seq:
+            self._last_reached_seq = seq
+            return True, seq
+
+        return False, self._last_reached_seq
+
     def monitor_mission_progress(self, callback=None, timeout=None):
         """
         `callback` is called when a waypoint is reached it takes
         the current waypoint index and a completion flag as arguments
         """
+
         def func():
             msg = self.master.recv_match(
-                type=["MISSION_CURRENT", "MISSION_COUNT"], blocking=False
+                type=["MISSION_ITEM_REACHED", "MISSION_CURRENT", "MISSION_COUNT"],
+                blocking=False,
             )
             if not msg:
                 return False
-            elif msg.get_type() == "MISSION_CURRENT":
+            elif msg.get_type() == "MISSION_ITEM_REACHED":
                 if callback:
                     callback(msg.seq, False)
                 # Check if we've reached the final waypoint
-                if msg.seq == msg.total:
+                if msg.seq == self.num_wp - 1:
                     self.log("Mission completed!", "success")
                     if callback:
                         callback(msg.seq, True)
                     return True
             elif msg.get_type() == "MISSION_COUNT":
                 print("mission count...")
+            return False
+
+        if timeout is not None:
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if func():
+                    return True
+        else:
+            return func()
+        self.log("Mission monitoring timed out", "error")
+        return False
+
+    def monitor_mission_progressv2(
+        self, get_helipad_gps=None, drop_hook=None, raise_hook=None, timeout=None
+    ):
+        """
+        `callback` is called when a waypoint is reached it takes
+        the current waypoint index and a completion flag as arguments
+        """
+
+        def func():
+            print(f"{self.current_state=}")
+            if self.current_state == WaypointState.FLYING_AUTO:
+                reached, idx = self.waypoint_reached()
+                if reached:
+                    # msg = self.master.recv_match(type=["MISSION_ITEM_REACHED"], blocking=False)
+                    print(f"{idx=}")
+                # if msg:
+                #   print("Checking for mission progress...")
+
+                if reached and idx > 0:
+                    print(f"Reached waypoint {idx}")
+
+                    if idx >= self.num_wp - 1:
+                        print("Mission completed")
+                        delattr(self, "target_lat")
+                        delattr(self, "target_lon")
+                        return True
+
+                    # Switch to guided mode and start positioning
+                    self.set_mode("GUIDED")
+                    print("Switching to GUIDED mode")
+                    self.target_lat, self.target_lon = get_helipad_gps(idx)
+                    if self.target_lat is not None and self.target_lon is not None:
+                        self.goto_waypointv2(
+                            alt=5,
+                            lat=self.target_lat,
+                            lon=self.target_lon,
+                            timeout=100,
+                            speed=1,
+                        )
+                        self.current_state = WaypointState.POSITIONING
+                    else:
+                        print("Invalid helipad GPS coordinates")
+                        self.log("Invalid helipad GPS coordinates", "error")
+                        self.current_state = WaypointState.FLYING_AUTO
+
+            elif self.current_state == WaypointState.POSITIONING:
+                if self.check_reposition_reached(
+                    _alt=5, _lat=self.target_lat, _lon=self.target_lon
+                ):
+                    self.current_state = WaypointState.WAITING_DROP
+                    print("Positioning reached, waiting for drop...")
+
+            elif self.current_state == WaypointState.WAITING_DROP:
+                if drop_hook is not None and drop_hook():
+                    self.current_state = WaypointState.WAITING_RAISE
+                    print("Hook dropped, waiting for raise...")
+                else:
+                    # Skip hook operations, go back to auto
+                    self.set_mode("AUTO")
+                    print("Skipping hook operations, returning to AUTO mode")
+                    self.current_state = WaypointState.FLYING_AUTO
+
+            elif self.current_state == WaypointState.WAITING_RAISE:
+                if raise_hook is not None and raise_hook():
+                    print("Hook operations completed")
+                else:
+                    print("Hook raise cancelled")
+
+                # Resume auto flight
+                self.set_mode("AUTO")
+                self.current_state = WaypointState.FLYING_AUTO
             return False
 
         if timeout is not None:

@@ -1,21 +1,21 @@
+import time
 from enum import Enum
 
 import serial
-import time
 
 
 class ZMQTopics(Enum):
     """Enum for ZMQ topics"""
 
-    DROP_LOAD = 1
-    PICK_LOAD = 2
-    RAISE_HOOK = 3
-    DROP_HOOK = 4
-    STATUS = 5
-    VIDEO = 6
-    PROCESSED_VIDEO = 7
-    HELIPAD_GPS = 8
-    TANK_GPS = 9
+    DROP_LOAD = "DROP_LOAD"
+    PICK_LOAD = "PICK_LOAD"
+    RAISE_HOOK = "RAISE_HOOK"
+    DROP_HOOK = "DROP_HOOK"
+    STATUS = "STATUS"
+    VIDEO = "VIDEO"
+    PROCESSED_VIDEO = "PROCESSED_VIDEO"
+    HELIPAD_GPS = "HELIPAD_GPS"
+    TANK_GPS = "TANK_GPS"
 
 
 # This is a part of that is responsible for control of crane actuators
@@ -34,7 +34,7 @@ class CraneControls:
                 time.sleep(0.1)
 
     def pick_load(self):
-        command="Yuk_Al"
+        command = "Yuk_Al"
         self.ser.write(f"{command}\n".encode())
         response = self._wait_for_ready("YUK_AL_TAMAM")
         if response == "YUK_AL_TAMAM":
@@ -43,7 +43,7 @@ class CraneControls:
         return True
 
     def drop_load(self):
-        command="Yuk_Birak"
+        command = "Yuk_Birak"
         self.ser.write(f"{command}\n".encode())
         response = self._wait_for_ready("YUK_BIRAK_TAMAM")
         if response == "YUK_BIRAK_TAMAM":

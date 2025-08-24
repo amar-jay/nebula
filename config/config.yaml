@@ -33,14 +33,14 @@ communication:
   control_address: tcp://0.0.0.0:5556
   mavproxy_source: "udp:127.0.0.1:14550"
   timeout: 1000
-  video_source: 0
-  # video_source: rtsp://localhost:8554/processed
+  # video_source: 0
+  video_source: rtsp://localhost:8554/raw
   # controller_connection_string: /dev/ttyUSB0
   controller_baudrate: 9600
 video:
   recording_format: mp4
-  raw_url: rtsps://192.168.144.11:8554/fpv_stream #"rtsp://localhost:8554/raw"
-  processed_url: rtsps://192.168.144.11:8554/processed #"rtsp://localhost:8554/raw"
+  raw_url: rtsp://localhost:8554/raw #rtsps://192.168.144.11:8554/fpv_stream #"rtsp://localhost:8554/raw"
+  processed_url: rtsp://localhost:8554/processed #rtsps://192.168.144.11:8554/processed 
   #processed_url: "rtsp://localhost:8554/processed"
 simulation:
   world: "delivery_runway"

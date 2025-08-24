@@ -8,7 +8,7 @@ from src.controls.mavlink import gz
 is_sim = input("Is it a simulation test (y/N)?")
 
 if is_sim == "y" or is_sim == "Y":
-    cap = gz.GazeboVideoCapture()
+    cap = gz.GazeboVideoCapture(fps=30)
 else:
     cap = cv2.VideoCapture(0)
 

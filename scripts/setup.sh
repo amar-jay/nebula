@@ -41,5 +41,7 @@ make -j4
 cd $MYHOME # go to currrent repo
 make set_env_vars
 
+pip install --user -r requirements.txt
+
 echo "Setup complete! Gazebo and ArduPilot-Gazebo integration are ready."
 

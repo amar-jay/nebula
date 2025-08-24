@@ -2,59 +2,42 @@ import time
 
 import cv2
 
-pipeline = (
-    "udpsrc port=5600 ! "
-    "application/x-rtp, encoding-name=H264 ! "
-    "rtph264depay ! "
-    "avdec_h264 ! "
-    "videoconvert ! "
-    "videorate ! "
-    "video/x-raw,framerate=60/1 ! "
-    "appsink"
-)
+from src.controls.mavlink.gz import GazeboVideoCapture
+from src.mq.video_writer import RTSPVideoWriter
 
-cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-# cap.set(cv2.CAP_PROP_FPS, 60)
+# cap = GazeboVideoCapture("")
+cap = cv2.VideoCapture("rtsp://localhost:8554/raw")
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+print("FPS: ", fps)
+print("Width: ", width)
+print("Height: ", height)
 
+start_time = time.time()
 if not cap.isOpened():
-    print("Failed to open stream! Check sender or pipeline.")
-    exit()
+    print("Failed to open stream")
 
-prev_time = time.time()
-frame_count = 0
-fps = 0
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Failed to read frame.")
-        break
-
-    # FPS calculation
-    frame_count += 1
-    current_time = time.time()
-    elapsed = current_time - prev_time
-    if elapsed >= 1.0:
-        fps = frame_count / elapsed
-        prev_time = current_time
-        frame_count = 0
-
-    # Overlay FPS text
-    cv2.putText(
-        frame,
-        f"FPS: {fps:.2f}",
-        (10, 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2,
-        cv2.LINE_AA,
+else:
+    video_writer = RTSPVideoWriter(
+        source="rtsp://127.0.0.1:8554/processed",
+        width=width,
+        height=height,
+        fps=fps,
     )
 
-    cv2.imshow("Stream", frame)
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+    if video_writer is None or not video_writer.isOpened():
+        print("Failed to open video writer")
+        exit(1)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to read frame")
+            break
+        cv2.imshow("RTP Stream", frame)
+        video_writer.write(frame.copy())
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
 cap.release()
 cv2.destroyAllWindows()

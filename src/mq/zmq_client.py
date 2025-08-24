@@ -43,12 +43,12 @@ class ZMQClient:
         try:
             self.socket.send_string(command)
             response = self.socket.recv_string()
-            self.log(f"Command '{command}' -> Response: '{response}'", "info")
+            # self.log(f"Command '{command}' -> Response: '{response}'", "info")
             return response
         except zmq.Again:
             return "ERROR: Timeout waiting for response"
         except Exception as e:
-            self.log(f"Error sending command: {e}", "error")
+            self.log(f"Error sending command: ({command})- {e}", "error")
             return f"ERROR: {e}"
 
     def disconnect(self):

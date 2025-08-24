@@ -3,6 +3,7 @@ import time
 import traceback
 
 from PySide6.QtCore import QObject, QTimer, Signal
+from qfluentwidgets import MessageBox
 
 from src.controls.mavlink import ardupilot
 from src.mq.crane import ZMQTopics
@@ -36,7 +37,7 @@ class DroneClient(QObject):
         self.initial_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
         self.k_current_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
         self.helipad_gps = None
-        self.tank_gps = None #(40.9589782, 29.1358378)
+        self.tank_gps = None  # (40.9589782, 29.1358378)
         self.mission_waypoints = []
         self.current_waypoint_index = -1
         self.master_connection = None
@@ -59,7 +60,7 @@ class DroneClient(QObject):
             self.log("server is not connected", "error")
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_LOAD)
+        msg = self.zmq_client.send_command(ZMQTopics.DROP_LOAD.name)
         self.log(msg)
         return
 
@@ -72,7 +73,7 @@ class DroneClient(QObject):
             self.log("server is not connected", "error")
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD)
+        msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD.name)
         self.log(msg)
         return
 
@@ -83,7 +84,7 @@ class DroneClient(QObject):
         if self.zmq_client is None:
             return False
 
-        helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS)
+        helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS.name)
         helipad_gps = (
             helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
         )
@@ -108,10 +109,9 @@ class DroneClient(QObject):
         if self.zmq_client is None:
             return False
 
-        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS)
+        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS.name)
         tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
         tank_gps = tank_gps.split(",") if tank_gps else None
-
         if tank_gps and len(tank_gps) == 2:
             # print(f"Tank GPS: {tank_gps}")
             try:
@@ -131,7 +131,7 @@ class DroneClient(QObject):
 
         if self.zmq_client is None:
             return False
-        msg = self.zmq_client.send_command(ZMQTopics.RAISE_HOOK)
+        msg = self.zmq_client.send_command(ZMQTopics.RAISE_HOOK.name)
         self.log(msg)
         return
 
@@ -142,7 +142,7 @@ class DroneClient(QObject):
         if self.zmq_client is None:
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_HOOK)
+        msg = self.zmq_client.send_command(ZMQTopics.DROP_HOOK.name)
         self.log(msg)
         return
 
@@ -188,8 +188,9 @@ class DroneClient(QObject):
                 if connection_string.startswith("tcp:"):
                     address = connection_string[4:].split(":")[0]
                     # parse the connection string and get the ip
-                    print(connection_string)
+                    print("ADDRESS: ", connection_string, address)
                     self.zmq_client = ZMQClient()
+                    self.zmq_client.connect()
                     self.log("ZMQ client started")
                 self.log("Starting status timer...")
                 self.status_timer.start()
@@ -456,8 +457,39 @@ class DroneClient(QObject):
         self.fetch_tank_gps()
 
         if hasattr(self, "mission_completed"):
-            if self.master_connection.monitor_mission_progress(
-                _update_status_hook=self._update_status_hook
+            print("mission in progress")
+            # if self.master_connection.monitor_mission_progress(
+            #     callback=self._update_status_hook
+            # ):
+            #     self.mission_progress.emit(100, "Mission completed")
+            #     delattr(self, "mission_completed")
+
+            def drop_hook():
+                m = MessageBox(
+                    "Drop Hook", "Drop hook?", MessageBox.Yes | MessageBox.No
+                )
+                reply = m.exec()
+                if reply == MessageBox.Yes:
+                    print("Dropping hook...")
+                    return True
+                return False
+
+            def raise_hook():
+                m = MessageBox(
+                    "Raise Hook", "Raise hook?", MessageBox.Yes | MessageBox.No
+                )
+                reply = m.exec()
+                if reply == MessageBox.Yes:
+                    print("Raising hook...")
+                    return True
+                return False
+
+            # print((lambda _: self.helipad_gps)(1))
+            if self.master_connection.monitor_mission_progressv2(
+                get_helipad_gps=lambda _: self.helipad_gps,
+                # drop_hook=self.zmq_client.drop_hook,
+                drop_hook=drop_hook,
+                raise_hook=raise_hook,
             ):
                 self.mission_progress.emit(100, "Mission completed")
                 delattr(self, "mission_completed")

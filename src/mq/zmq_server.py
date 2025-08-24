@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 # pylint: disable=I1101
 
-import os
 import argparse
 import asyncio
+
 # import gc  # For garbage collection
 import logging
+import os
 import signal
 import time
 import traceback
 from typing import Dict, Optional, Tuple
 
+import cv2
 import zmq
 import zmq.asyncio
-import cv2
+
 from src.controls.detection import yolo
 from src.controls.mavlink import gz, mission_types
 from src.mq.crane import CraneControls, ZMQTopics
@@ -95,8 +97,8 @@ class ZMQServer:
         self.video_writer = None
 
         # State
-        self.hook_state = "dropped"
-        self.running = False # TODO: WHAT??
+        # self.hook_state = "dropped"
+        self.running = False  # TODO: WHAT??
 
         # Latest processed results
         # # self.latest_gps_coordinates = {}
@@ -149,15 +151,18 @@ class ZMQServer:
                 return False
 
             # Get video properties for video writer
-            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)) #// 2
-            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) #// 2
+            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))  # // 2
+            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  # // 2
             fps = (
                 int(self.cap.get(cv2.CAP_PROP_FPS)) or 30
             )  # Default to 30 FPS if unable to get
 
             # Initialize video writer
             self.video_writer = RTSPVideoWriter(
-                source=self.video_output, width=width, height=height, fps=10,
+                source=self.video_output,
+                width=width,
+                height=height,
+                fps=10,
             )
 
             logger.info("Video capture and writer initialized successfully")
@@ -166,7 +171,7 @@ class ZMQServer:
                 self.video_output,
                 width,
                 height,
-                fps
+                fps,
             )
             return True
 
@@ -196,7 +201,7 @@ class ZMQServer:
                     logger.warning("Failed to capture frame")
                     await asyncio.sleep(0.1)
                     continue
-                #TODO: check if the frames are the same (debug)
+                # TODO: check if the frames are the same (debug)
                 if prev_frame is not None and (prev_frame == frame).all():
                     logger.warning("Duplicate frame detected, skipping processing")
                     await asyncio.sleep(1)
@@ -206,10 +211,11 @@ class ZMQServer:
                 # Process frame for object detection
                 data = mavlink_proxy.get_drone_data()
                 if data is None:
+                    logger.warning("No drone data available, skipping frame")
                     await asyncio.sleep(1)
                     continue
 
-                #TODO: Resize frame to reduce memory usage 
+                # TODO: Resize frame to reduce memory usage
                 height, width = frame.shape[:2]
                 if width > 640:  # Limit frame size to reduce memory
                     scale = 640 / width
@@ -218,22 +224,28 @@ class ZMQServer:
                     frame = cv2.resize(frame, (new_width, new_height))
 
                 now = time.time()
-                if now - data.timestamp > 2:  # if the frame capture is within 2 second delay
-                    logger.warning(f"Frame and data are too far apart for processing... {int(now - data.timestamp)}s")
+                if (
+                    now - data.timestamp > 2
+                ):  # if the frame capture is within 2 second delay
+                    logger.warning(
+                        f"Frame and data are too far apart for processing... {int(now - data.timestamp)}s"
+                    )
 
                 # Process frame (returns None for skipped frames)
                 data.frame = frame.copy()
 
                 # Remove cv2.imshow calls that cause memory accumulation
                 processed_result = self._process_frame(data)
-                del data.frame # Clear frame reference to free memory
+                del data.frame  # Clear frame reference to free memory
 
-                # Write processed frame to video output
-                if self.video_writer:
-                    self.video_writer.write(processed_result.processed_frame)
-                # Clean up frame references to free memory
-                del processed_result.processed_frame
-
+                if hasattr(processed_result, "processed_frame"):
+                    # Write processed frame to video output
+                    if self.video_writer:
+                        # cv2.imshow("Processed Frame", processed_result.processed_frame)
+                        self.video_writer.write(processed_result.processed_frame)
+                    # Clean up frame references to free memory
+                    processed_result.processed_frame = None
+                    self.last_result = processed_result
 
                 # Explicitly delete frame reference to free memory
                 del frame
@@ -293,6 +305,7 @@ class ZMQServer:
                     break
                 except Exception as e:
                     logger.error("Error in control receiver: %s", e)
+                    traceback.print_exc()
                     await asyncio.sleep(0.1)
 
         except KeyboardInterrupt:
@@ -332,7 +345,7 @@ class ZMQServer:
         self.control_socket.bind(self.control_port)
 
         self.running = True
-        logger.info("Server started")
+        logger.info(f"Control socket bound to {self.control_port}")
 
         try:
             # Run both loops concurrently
@@ -373,7 +386,7 @@ class ZMQServer:
                 logger.error("Error writing on frame: %s", traceback.format_exc())
                 processed_frame = frame_data.frame.copy()
 
-            # Remove debug print and cv2.imshow to prevent memory leaks
+            # Remove debug print and cv2.imshow to prevent meimory leaks
             # print(gps_coords)
             # cv2.imshow("Annotated Frame", processed_frame)
             # if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -434,7 +447,7 @@ class ZMQServer:
 
         # Clear any remaining frame references
         self.last_result = None
-# 
+        #
         # gc.collect()
 
         # Terminate context
@@ -486,8 +499,8 @@ async def main():
     server = ZMQServer(
         control_port=config.control_address,
         video_source=config.video_source,
-        # video_output="rtsp://localhost:8554/processed",  # config.sandwich_video_pipe,
-        video_output="rtsp://192.168.1.113:8554/processed",
+        video_output="rtsp://localhost:8554/processed",  # config.sandwich_video_pipe,
+        # video_output="rtsp://192.168.1.113:8554/processed",
         is_simulation=args.is_simulation,
         controller_connection_string=config.controller_connection_string,
         controller_baudrate=config.controller_baudrate,

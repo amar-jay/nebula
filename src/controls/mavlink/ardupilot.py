@@ -308,10 +308,9 @@ class ArdupilotConnection:
         self.master.mav.mission_clear_all_send(
             self.master.target_system, self.master.target_component
         )
-        ack = self.master.recv_match(type='MISSION_ACK', blocking=True, timeout=3)
+        ack = self.master.recv_match(type="MISSION_ACK", blocking=True, timeout=3)
         self.num_wp = 0
         return ack
-
 
     def start_mission(self):
         self.master.mav.command_long_send(
@@ -639,11 +638,10 @@ class ArdupilotConnection:
             return func()
         self.log("Mission monitoring timed out", "error")
         return False
-    def set_mission_waypoint(self, wp:int):
+
+    def set_mission_waypoint(self, wp: int):
         return self.master.mav.mission_set_current_send(
-            self.master.target_system,
-            self.master.target_component,
-            wp
+            self.master.target_system, self.master.target_component, wp
         )
 
     def monitor_mission_progressv2(
@@ -673,9 +671,11 @@ class ArdupilotConnection:
                 # if msg:
                 #   print("Checking for mission progress...")
 
-                #TODO: set state for initial condition. for idx=0. drop and raise hook but no stabilization
-                if reached and idx > 1: 
-                    print(f"{reached=}   {idx=} {self.num_wp-1} {self._last_reached_seq}")
+                # TODO: set state for initial condition. for idx=0. drop and raise hook but no stabilization
+                if reached and idx > 1:
+                    print(
+                        f"{reached=}   {idx=} {self.num_wp - 1} {self._last_reached_seq}"
+                    )
                     print(f"Reached waypoint {idx}")
 
                     if idx >= self.num_wp - 1:
@@ -683,9 +683,9 @@ class ArdupilotConnection:
                             status_callback(current=idx, done=True, state="AUTO")
                         print("Mission completed")
                         if hasattr(self, "_target_lat"):
-                          delattr(self, "_target_lat")
+                            delattr(self, "_target_lat")
                         if hasattr(self, "_target_lon"):
-                          delattr(self, "_target_lon")
+                            delattr(self, "_target_lon")
                         self._last_reached_seq = 0
 
                         return True

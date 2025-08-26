@@ -1,12 +1,11 @@
 import enum
-import time
 import traceback
 
+# pylint: disable=E0611
 from PySide6.QtCore import QObject, QTimer, Signal
 from qfluentwidgets import MessageBox
 
 from src.controls.mavlink import ardupilot, mission_types
-from src.controls.mavlink.mission_types import Waypoint
 from src.mq.crane import ZMQTopics
 from src.mq.zmq_client import ZMQClient
 
@@ -297,7 +296,7 @@ class DroneClient(QObject):
 
     def upload_mission(
         self,
-        _waypoints: list[Waypoint],
+        _waypoints: list[mission_types.Waypoint],
         hold: int,
         interleaved=False,
         interleaved_alt=5,
@@ -317,7 +316,7 @@ class DroneClient(QObject):
                 return False
             for wp in _waypoints:
                 waypoints.append(
-                    Waypoint(
+                    mission_types.Waypoint(
                         lat=pose["lat"],
                         lon=pose["lon"],
                         alt=interleaved_alt,
@@ -326,7 +325,7 @@ class DroneClient(QObject):
                     )
                 )
                 waypoints.append(
-                    Waypoint(
+                    mission_types.Waypoint(
                         lat=wp.lat,
                         lon=wp.lon,
                         hold=hold,
@@ -336,7 +335,7 @@ class DroneClient(QObject):
                 )
 
             waypoints.append(
-                Waypoint(
+                mission_types.Waypoint(
                     lat=float(pose["lat"]),
                     lon=float(pose["lon"]),
                     alt=interleaved_alt,

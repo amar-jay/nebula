@@ -1392,7 +1392,9 @@ class DroneControlApp(QMainWindow):
             if current_wp > 0 and total_wp > 0:
                 progress = int(current_wp * 100 / total_wp)
                 self.mission_progress_bar.setValue(progress)
-                self.mission_status_label.setText(f"WP: {current_wp}/{total_wp} ({state_wp})")
+                self.mission_status_label.setText(
+                    f"WP: {current_wp}/{total_wp} ({state_wp})"
+                )
                 if current_wp != total_wp:
                     self.battery_label.setText(f"Mission:")
                     self.battery_progress.setValue(progress)

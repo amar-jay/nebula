@@ -1,27 +1,19 @@
 import os
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, NamedTuple, Tuple
 
 import numpy as np
 import yaml
 
 
-class Waypoint:
-    def __init__(self, lat=0, lon=0, alt=0.0, hold=3, relative_to=None, auto=True):
-        if relative_to is None:
-            self.lat = lat
-            self.lon = lon
-            self.alt = alt
-            self.auto = auto
-            self.hold = hold
-            return
-        else:
-            self.x = lat - relative_to[0]
-            self.y = lon - relative_to[1]
-            self.z = alt
-            self.hold = hold
-            self.auto = auto
+class Waypoint(NamedTuple):
+    lat: float
+    lon: float
+    alt: float
+    hold: int
+    # relative_to: Tuple[float, float, float] | None
+    auto: bool
 
 
 @dataclass

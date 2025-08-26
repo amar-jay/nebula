@@ -45,10 +45,25 @@ class ArdupilotConnection:
             "position": None,
             "orientation": None,
             "mission_active": False,
-            "current_waypoint": None,
+            "current_waypoint": -1,
             "total_waypoints": 0,
             "battery": 100,
         }
+
+    def fetch_home(self):
+        self.master.mav.command_long_send(
+            self.master.target_system,
+            self.master.target_component,
+            mavutil.mavlink.MAV_CMD_GET_HOME_POSITION,
+            0,  # confirmation
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,  # unused parameters
+        )
 
     def _set_logger(self, logger):
         # if logger is an instance of logging.Logger, set it
@@ -140,7 +155,7 @@ class ArdupilotConnection:
         self.log(f"Heartbeat received from system {self.master.target_system}", "info")
 
         # Set mode to GUIDED (or equivalent)
-        self.set_mode("GUIDED")
+        # self.set_mode("GUIDED")
 
         # Arm the vehicle
         self.log("Arming motors...", "info")
@@ -280,7 +295,7 @@ class ArdupilotConnection:
             )
             if i != num_wp - 1:
                 self.ack_sync("MISSION_REQUEST")
-                self.log(f"Waypoint {i} uploaded: {waypoint.__dict__}", "info")
+                self.log(f"Waypoint {i} uploaded", "info")
 
         self.ack_sync("MISSION_ACK")
         self.log("Mission upload complete.", "info")
@@ -288,15 +303,15 @@ class ArdupilotConnection:
     def clear_mission(self):
         # Clear mission
         self.log("Clearing all missions. Hack...", "info")
+        # Set to GUIDED mode explicitly (you can also use MAV_MODE_AUTO if that suits your logic)
+        # self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
         self.master.mav.mission_clear_all_send(
             self.master.target_system, self.master.target_component
         )
-        # time.sleep(0.5)  # Give the FCU some breathing room
-        self.ack_sync("MISSION_ACK")
+        ack = self.master.recv_match(type='MISSION_ACK', blocking=True, timeout=3)
         self.num_wp = 0
+        return ack
 
-        # Set to GUIDED mode explicitly (you can also use MAV_MODE_AUTO if that suits your logic)
-        # self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
 
     def start_mission(self):
         self.master.mav.command_long_send(
@@ -423,10 +438,11 @@ class ArdupilotConnection:
             if not msg:
                 continue
             if msg.get_type() == "HOME_POSITION":
+                print("home position")
                 self.status["home"] = {
-                    "lat": msg.lat / 1e7,
-                    "lon": msg.lon / 1e7,
-                    "alt": msg.alt / 1e3,
+                    "lat": msg.latitude / 1e7,
+                    "lon": msg.longitude / 1e7,
+                    "alt": msg.altitude / 1e3,
                 }
 
             if msg.get_type() == "HEARTBEAT":
@@ -470,6 +486,35 @@ class ArdupilotConnection:
         delattr(self, "master")
         self.log("Mavlink Connection closed.", "info")
 
+    def goto_waypoint(
+        self,
+        lat: float,
+        lon: float,
+        alt: float,
+    ):
+        """
+        Send command to move to the specified latitude, longitude, and altitude using MAV_CMD_NAV_WAYPOINT.
+        Initiate waypoint navigation. This does not block.
+        """
+        self.log(f"Waypoint Set: lat={lat}, lon={lon}, alt={alt}", "info")
+        self.master.mav.command_int_send(
+            self.master.target_system,
+            self.master.target_component,
+            dialect.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+            dialect.MAV_CMD_NAV_WAYPOINT,
+            0,  # Current
+            0,  # Autocontinue
+            0,  # hold time
+            0,  # acceptance radius
+            0,  # pass radius
+            float("nan"),  # yaw nan by default
+            int(lat * 1e7),
+            int(lon * 1e7),
+            alt,
+        )
+        self.log(f"Waypoint Sent: lat={lat}, lon={lon}, alt={alt}", "info")
+        return
+
     def goto_waypointv2(
         self,
         lat: float,
@@ -493,10 +538,10 @@ class ArdupilotConnection:
             dialect.MAV_CMD_DO_REPOSITION,
             0,  # Current
             0,  # Autocontinue
-            speed,  # speed in m/s
-            0,  # bitmask (unused)
-            0,  # loiter radius
-            float("nan"),  # Params 2-4 (unused)
+            0,  # Hold time at waypoint (param1)
+            speed if speed > 0 else 1,  # Acceptance radius (param2)
+            0,  # Pass through waypoint (param3)
+            0,  # Desired yaw angle (param4)
             int(lat * 1e7),
             int(lon * 1e7),
             alt,
@@ -550,7 +595,7 @@ class ArdupilotConnection:
             self._last_reached_seq = 0
 
         # Refresh status to get latest MISSION_CURRENT
-        self.get_status()  # must update self.status["current_waypoint"]
+        # self.get_status()  # must update self.status["current_waypoint"]. Its autoupdated
 
         seq = int(self.status.get("current_waypoint", -1))
         if seq > self._last_reached_seq:
@@ -594,9 +639,16 @@ class ArdupilotConnection:
             return func()
         self.log("Mission monitoring timed out", "error")
         return False
+    def set_mission_waypoint(self, wp:int):
+        return self.master.mav.mission_set_current_send(
+            self.master.target_system,
+            self.master.target_component,
+            wp
+        )
 
     def monitor_mission_progressv2(
         self,
+        is_auto=None,
         status_callback=None,
         helipad_gps=None,
         drop_hook=None,
@@ -609,9 +661,9 @@ class ArdupilotConnection:
         """
 
         def func():
-            print(f"{self.current_state=}")
             if self.current_state == WaypointState.FLYING_AUTO:
                 reached, idx = self.waypoint_reached()
+                # THIS METHOD DOESNT WORK SINCE MISSION ITEM REACHED IS RETURNED ONCE
                 # if reached:
                 # msg = self.master.recv_match(type=["MISSION_ITEM_REACHED"], blocking=False)
                 # print(f"{idx=}")
@@ -621,16 +673,24 @@ class ArdupilotConnection:
                 # if msg:
                 #   print("Checking for mission progress...")
 
-                if reached and idx > 0:
+                #TODO: set state for initial condition. for idx=0. drop and raise hook but no stabilization
+                if reached and idx > 1: 
+                    print(f"{reached=}   {idx=} {self.num_wp-1} {self._last_reached_seq}")
                     print(f"Reached waypoint {idx}")
 
                     if idx >= self.num_wp - 1:
                         if status_callback:
                             status_callback(current=idx, done=True, state="AUTO")
                         print("Mission completed")
-                        delattr(self, "target_lat")
-                        delattr(self, "target_lon")
+                        if hasattr(self, "_target_lat"):
+                          delattr(self, "_target_lat")
+                        if hasattr(self, "_target_lon"):
+                          delattr(self, "_target_lon")
+                        self._last_reached_seq = 0
+
                         return True
+                    if is_auto is not None and not is_auto(idx):
+                        return False
 
                     # Switch to guided mode and start positioning
                     self.set_mode("GUIDED")
@@ -639,6 +699,8 @@ class ArdupilotConnection:
                         print("Helipad GPS coordinates not provided")
                         self.log("Helipad GPS coordinates not provided", "error")
                         self.current_state = WaypointState.FLYING_AUTO
+                        self.set_mission_waypoint(self._last_reached_seq)
+                        self.set_mode("AUTO")
                         return False
                     self._target_lat, self._target_lon = helipad_gps
                     if self._target_lat is not None and self._target_lon is not None:
@@ -656,6 +718,8 @@ class ArdupilotConnection:
                         self.log("Invalid helipad GPS coordinates", "error")
                         self.current_state = WaypointState.FLYING_AUTO
                         status_callback(current=idx, done=False, state="AUTO")
+                        self.set_mission_waypoint(self._last_reached_seq)
+                        self.set_mode("AUTO")
 
             elif self.current_state == WaypointState.POSITIONING:
                 if self.check_reposition_reached(
@@ -678,6 +742,7 @@ class ArdupilotConnection:
                     print("Hook dropped, waiting for raise...")
                 else:
                     # Skip hook operations, go back to auto
+                    self.set_mission_waypoint(self._last_reached_seq)
                     self.set_mode("AUTO")
                     print("Skipping hook operations, returning to AUTO mode")
                     self.current_state = WaypointState.FLYING_AUTO
@@ -692,6 +757,7 @@ class ArdupilotConnection:
                     print("Hook raise cancelled")
 
                 # Resume auto flight
+                self.set_mission_waypoint(self._last_reached_seq)
                 self.set_mode("AUTO")
                 status_callback(
                     current=self._last_reached_seq, done=False, state="AUTO"

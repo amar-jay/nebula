@@ -183,7 +183,7 @@ class AttitudeIndicator(QWidget):
         painter.setPen(QPen(self.red, 2))
 
         # Calculate roll pointer position
-        roll_rad = math.radians(-self.roll - 90)
+        roll_rad = math.radians(self.roll - 90)
         pointer_x = center_x + (radius - 15) * math.cos(roll_rad)
         pointer_y = center_y + (radius - 15) * math.sin(roll_rad)
 

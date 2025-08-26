@@ -98,6 +98,7 @@ if (isNaN(inp_initial_location[0]) || isNaN(inp_initial_location[1])) {
 
 // Marker Handles
 let pos_marker;
+let home_marker;
 let uav_marker;
 let target_marker;
 let kamikaze_marker;
@@ -110,6 +111,19 @@ function moveMarkerByClick(e) {
         pos_marker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
     }
 }
+function setHomeMarker(loc) {
+    // map.flyTo(loc);
+    if (home_marker) {
+        home_marker.setLatLng({ lat: loc[0], lng: loc[1] });
+        map.setView({ lat: loc[0], lng: loc[1] });
+    } else {
+        home_marker = L.marker(loc, {
+            icon: homeIcon,
+        }).addTo(map);
+        map.setView({ lat: loc[0], lng: loc[1] });
+    }
+}
+
 
 function updateUavMarker(loc) {
     // map.flyTo(loc);

@@ -60,6 +60,7 @@ from qfluentwidgets import TableWidget as QTableWidget
 from qfluentwidgets import TextEdit as QTextEdit
 from qfluentwidgets import (
     Theme,
+    ToolButton,
     setTheme,
     setThemeColor,
 )
@@ -93,36 +94,36 @@ class MissionWaypointTable(QTableWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setColumnCount(7)
-        self.setHorizontalHeaderLabels(
-            ["#", "Latitude", "Longitude", "Altitude (m)", "Hold", "Auto", "Actions"]
-        )
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.setColumnCount(4)
+        self.setHorizontalHeaderLabels(["Latitude", "Longitude", "Auto", "Actions"])
+        header = self.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Latitude
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Longitude
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Auto
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Actions
         self.setEditTriggers(QTableWidget.DoubleClicked)
-        self.verticalHeader().setVisible(False)
-        self.setShowGrid(True)
+        self.verticalHeader().setVisible(True)
+        # Optionally, set minimum widths for small columns
+        self.setColumnWidth(2, 60)  # Auto
+        self.setColumnWidth(3, 60)  # Actions
+        # self.setShowGrid(True)
 
-    def add_waypoint(self, index, lat, lon, alt, hold=10, auto=True):
+    def add_waypoint(self, lat: float, lon: float, auto=True):
         """Add a new waypoint to the table."""
+
         row = self.rowCount()
         self.insertRow(row)
 
         # Add waypoint data
-        self.setItem(row, 0, QTableWidgetItem(str(index)))
-        self.setItem(row, 1, QTableWidgetItem(str(lat)))
-        self.setItem(row, 2, QTableWidgetItem(str(lon)))
-        self.setItem(row, 3, QTableWidgetItem(str(alt)))
-        self.setItem(row, 4, QTableWidgetItem(str(hold)))
+        # self.setItem(row, 0, QTableWidgetItem(str(row+1)))
+        self.setItem(row, 0, QTableWidgetItem(str(lat)))
+        self.setItem(row, 1, QTableWidgetItem(str(lon)))
 
         # Add checkbox for Auto
         auto_checkbox = QCheckBox()
         auto_checkbox.setChecked(auto)
-        auto_widget = QWidget()
-        auto_layout = QHBoxLayout(auto_widget)
-        auto_layout.addWidget(auto_checkbox)
-        auto_layout.setAlignment(auto_checkbox, Qt.AlignCenter)
-        auto_layout.setContentsMargins(0, 0, 0, 0)
-        self.setCellWidget(row, 5, auto_widget)
+        # micro-TODO:align it to center
+        self.setCellWidget(row, 2, auto_checkbox)
 
         # Add delete button
         delete_btn = QPushButton("❌")
@@ -130,7 +131,8 @@ class MissionWaypointTable(QTableWidget):
         delete_btn.clicked.connect(
             lambda: self.removeRow(self.indexAt(delete_btn.pos()).row())
         )
-        self.setCellWidget(row, 6, delete_btn)
+        self.setCellWidget(row, 3, delete_btn)
+        self.setRowHeight(row, 32)
 
     def clear_waypoints(self):
         """Clear all waypoints from the table."""
@@ -140,14 +142,13 @@ class MissionWaypointTable(QTableWidget):
         """Get all waypoints from the table."""
         waypoints: list[Waypoint] = []
         for row in range(self.rowCount()):
-            auto_widget = self.cellWidget(row, 5)
-            auto_checkbox = auto_widget.findChild(QCheckBox)
+            auto_checkbox = self.cellWidget(row, 2)
             waypoint = Waypoint(
-                lat=float(self.item(row, 1).text()),
-                lon=float(self.item(row, 2).text()),
-                alt=float(self.item(row, 3).text()),
-                hold=int(self.item(row, 4).text()),
+                lat=float(self.item(row, 0).text()),
+                lon=float(self.item(row, 1).text()),
                 auto=auto_checkbox.isChecked(),
+                alt=0,
+                hold=0,
             )
             waypoints.append(waypoint)
         return waypoints
@@ -301,7 +302,6 @@ class DroneControlApp(QMainWindow):
 
         self.drone_client.connection_status.connect(self._on_connection_status_changed)
         self.drone_client.drone_status_update.connect(self._on_drone_status_update)
-        self.drone_client.mission_progress.connect(self._on_mission_progress)
 
         # Set window properties
         self.setWindowTitle("MATEK Drone Control Center")
@@ -633,6 +633,8 @@ class DroneControlApp(QMainWindow):
         self.tank_gps_label = QLabel("N/A")
         self.mode_label = QLabel("N/A")
         self.mode_label.setStyleSheet("color: #0078d4;")
+
+        self.battery_label = QLabel("Battery:")
         self.battery_progress = QProgressBar()
         self.battery_progress.setRange(0, 100)
 
@@ -661,7 +663,7 @@ class DroneControlApp(QMainWindow):
         _label.setStyleSheet("color: #0078d4;")
         status_layout.addWidget(_label, 3, 0)
         status_layout.addWidget(self.mode_label, 3, 1)
-        status_layout.addWidget(QLabel("Battery:"), 3, 2)
+        status_layout.addWidget(self.battery_label, 3, 2)
         status_layout.addWidget(self.battery_progress, 3, 3, 1, 2)
 
         basic_control_layout.addWidget(self.map_btn_group)
@@ -677,7 +679,7 @@ class DroneControlApp(QMainWindow):
 
         # Mission waypoints table
         mission_layout.addWidget(QLabel("Mission Waypoints:"))
-        self.waypoint_table = MissionWaypointTable()
+        self.waypoint_table = MissionWaypointTable(self)
         mission_layout.addWidget(self.waypoint_table)
 
         # Add waypoint controls
@@ -694,6 +696,9 @@ class DroneControlApp(QMainWindow):
         self.waypoint_lon_input.setDecimals(7)
         self.waypoint_lon_input.setSingleStep(0.0001)
 
+        self.add_waypoint_btn = PrimaryPushButton("Add")
+        self.add_waypoint_btn.clicked.connect(self._on_add_waypoint_clicked)
+
         self.waypoint_alt_input = QDoubleSpinBox()
         self.waypoint_alt_input.setRange(0, 500)
         self.waypoint_alt_input.setDecimals(1)
@@ -705,18 +710,16 @@ class DroneControlApp(QMainWindow):
         self.waypoint_hold_input.setValue(10)
         self.waypoint_hold_input.setSingleStep(1)
 
-        self.add_waypoint_btn = QPushButton("Add")
-        self.add_waypoint_btn.clicked.connect(self._on_add_waypoint_clicked)
-
-        add_waypoint_layout.addWidget(QLabel("Latitude:"))
+        add_waypoint_layout.addWidget(QLabel("Lat:"))
         add_waypoint_layout.addWidget(self.waypoint_lat_input)
-        add_waypoint_layout.addWidget(QLabel("Longitude:"))
+        add_waypoint_layout.addWidget(QLabel("Lon:"))
         add_waypoint_layout.addWidget(self.waypoint_lon_input)
-        add_waypoint_layout.addWidget(QLabel("Altitude (m):"))
+        add_waypoint_layout.addWidget(self.add_waypoint_btn)
+        add_waypoint_layout.addWidget(QWidget(), stretch=1)  # Spacer
+        add_waypoint_layout.addWidget(QLabel("Alt (m):"))
         add_waypoint_layout.addWidget(self.waypoint_alt_input)
         add_waypoint_layout.addWidget(QLabel("Hold (s):"))
         add_waypoint_layout.addWidget(self.waypoint_hold_input)
-        add_waypoint_layout.addWidget(self.add_waypoint_btn)
 
         # Mission file operations
         mission_file_layout = QHBoxLayout()
@@ -733,7 +736,6 @@ class DroneControlApp(QMainWindow):
         mission_file_layout.addWidget(self.load_mission_btn)
         mission_file_layout.addWidget(self.save_mission_btn)
         mission_file_layout.addWidget(self.clear_mission_btn)
-        # mission_file_layout.addStretch()
 
         # Mission execution controls
         mission_exec_layout = QHBoxLayout()
@@ -973,9 +975,6 @@ class DroneControlApp(QMainWindow):
             self.safety_btn.setEnabled(True)
             self.upload_mission_btn.setEnabled(True)
             self.console.append_message(f"Connected to {address}:{port}", "success")
-            # Set home marker on the map
-            pose = self.drone_client.initial_position
-            self.dock_content.set_home_marker(pose["lat"], pose["lon"])
         else:
             self._show_error(f"Failed to connect to {connection_string}")
             self.console.append_message(
@@ -1072,11 +1071,8 @@ class DroneControlApp(QMainWindow):
 
     def _on_stabilize_clicked(self):
         """Handle return to home button click."""
-        if not self.drone_client.helipad_gps:
-            self._show_error("Helipad not detected")
-        if self.drone_client.goto_coordinates(
-            *self.drone_client.helipad_gps, self.takeoff_alt_input.value()
-        ):
+        if self.drone_client.stabilize(self.takeoff_alt_input.value()):
+            self._show_error("Can not center on landing pad")
             self.console.append_message("Stabilizing on helipad", "success")
         else:
             self.console.append_message("Failed to stabilize", "error")
@@ -1089,10 +1085,7 @@ class DroneControlApp(QMainWindow):
             self.console.append_message("Failed to return to home", "error")
 
     def _on_open_map_clicked(self):
-        if self.isFullScreen():
-            self.showNormal()
-        else:
-            self.showMaximized()
+        self.showMaximized()
 
     def _on_goto_clicked(self):
         """Handle go to position button click."""
@@ -1112,13 +1105,14 @@ class DroneControlApp(QMainWindow):
         """Handle add waypoint button click."""
         lat = self.waypoint_lat_input.value()
         lon = self.waypoint_lon_input.value()
-        alt = self.waypoint_alt_input.value()
-
+        if lat == 0.0 or lon == 0.0:
+            self._show_error("Latitude and Longitude must be non-zero.")
+            return
         # Add waypoint to the table
-        index = self.waypoint_table.rowCount() + 1
-        self.waypoint_table.add_waypoint(index, lat, lon, alt)
+        self.waypoint_table.add_waypoint(lat, lon)
         self.console.append_message(
-            f"Added waypoint {index}: Lat {lat}, Lon {lon}, Alt {alt}m", "info"
+            f"Added waypoint {self.waypoint_table.rowCount()}: Lat {lat}, Lon {lon}",
+            "info",
         )
 
     def _on_clear_mission_clicked(self):
@@ -1142,13 +1136,11 @@ class DroneControlApp(QMainWindow):
 
             self.waypoint_table.clear_waypoints()
 
-            for i, waypoint in enumerate(mission_data.get("waypoints", [])):
+            for waypoint in mission_data.get("waypoints", []):
                 self.waypoint_table.add_waypoint(
-                    i + 1,
                     waypoint.get("lat", 0),
                     waypoint.get("lon", 0),
-                    waypoint.get("alt", 0),
-                    waypoint.get("hold", 10),
+                    auto=bool(waypoint.get("auto", True)),
                 )
 
             self.console.append_message(f"Loaded mission from {file_path}", "success")
@@ -1200,7 +1192,7 @@ class DroneControlApp(QMainWindow):
         #     self.dock_content.page().runJavaScript("chooseField();")
         elif event == "sync":
             self.dock_content.page().runJavaScript("setMission('ddd');")
-            self.dock_content.page().runJavaScript("setPosition();")
+            # self.dock_content.page().runJavaScript("setPosition();")
 
     def _create_tab_icon(self, svg_path, size=32):
         renderer = QSvgRenderer(svg_path)
@@ -1243,7 +1235,10 @@ class DroneControlApp(QMainWindow):
 
         try:
             mission_data = {
-                "waypoints": [w.__dict__ for w in self.waypoint_table.get_waypoints()]
+                "waypoints": [
+                    dict(lat=w.lat, lon=w.lon, auto=w.auto)
+                    for w in self.waypoint_table.get_waypoints()
+                ]
             }
 
             if not file_path.endswith(".mission"):
@@ -1264,32 +1259,16 @@ class DroneControlApp(QMainWindow):
             return
 
         _waypoints = self.waypoint_table.get_waypoints()
-        waypoints = []
-        altitude = self.takeoff_alt_input.value()
-        pose = self.drone_client.initial_position
-        for wp in _waypoints:
-            waypoints.append(
-                Waypoint(
-                    lat=pose["lat"],
-                    lon=pose["lon"],
-                    alt=altitude,
-                    hold=wp.hold,
-                )
-            )
-            waypoints.append(wp)
+        altitude = float(self.waypoint_alt_input.value())
+        hold = int(self.waypoint_hold_input.value())
+        interleaved = True
 
-        waypoints.append(
-            Waypoint(
-                lat=float(pose["lat"]),
-                lon=float(pose["lon"]),
-                alt=float(altitude),
-                hold=_waypoints[0].hold,
-            )
-        )
-
-        if self.drone_client.upload_mission(waypoints):
+        if self.drone_client.upload_mission(
+            _waypoints, hold=hold, interleaved=interleaved, interleaved_alt=altitude
+        ):
+            wp_count = len(_waypoints) if interleaved else len(_waypoints) * 2
             self.console.append_message(
-                f"Uploaded mission with {len(waypoints)} waypoints", "success"
+                f"Uploaded mission with {wp_count} waypoints", "success"
             )
             self.start_mission_btn.setEnabled(True)
         else:
@@ -1331,6 +1310,10 @@ class DroneControlApp(QMainWindow):
         mode_status = status.get("mode", "Unknown")
         self.mode_label.setText(f"{mode_status}")
 
+        home = status.get("home", None)
+        if home:
+            self.dock_content.set_home_marker(home["lat"], home["lon"])
+
         is_armemd = status.get("armed", False)
         self.armed_status_label.setText("Armed" if is_armemd else "Disarmed")
         self.safety_btn.setEnabled(self.drone_client.connected)
@@ -1344,7 +1327,6 @@ class DroneControlApp(QMainWindow):
         self.land_btn.setEnabled(is_armemd and is_flying)
         self.rtl_btn.setEnabled(is_armemd and is_flying)
         self.flight_status_label.setText("Flying" if is_flying else "Not Flying")
-        self.stabilize_btn.setEnabled(self.drone_client.helipad_gps is not None)
 
         # Update position
         position = status.get("position", {})
@@ -1358,17 +1340,14 @@ class DroneControlApp(QMainWindow):
             self.altitude_gauge.set_value(alt)
             self.altitude_gauge_mini.set_value(alt)
 
-            pose = self.drone_client.initial_position
-            # print(f"Updating home marker to new position: {lat}, {lon}")
-            # print(f"Old home marker position: {pose['lat']}, {pose['lon']}")
-            # print(f"Difference: {abs(pose['lat'] - lat)}, {abs(pose['lon'] - lon)}")
             if (
                 lat is not None
                 and lon is not None
-                and pose["lat"] != 0
-                and pose["lon"] != 0
-                and abs(pose["lat"] - lat) > 1e-6
-                and abs(pose["lon"] - lon) > 1e-6
+                and home is not None
+                and home["lat"] != 0
+                and home["lon"] != 0
+                and abs(home["lat"] - lat) > 1e-6
+                and abs(home["lon"] - lon) > 1e-6
             ):
                 self.dock_content.set_drone_marker(lat, lon)
 
@@ -1385,7 +1364,8 @@ class DroneControlApp(QMainWindow):
             self.compass_widget_mini.set_heading(yaw)
 
         self.battery_gauge.set_value(status.get("battery", 100))
-        self.battery_progress.setValue(status.get("battery", 100))
+        if not status.get("mission_active", False):
+            self.battery_progress.setValue(status.get("battery", 100))
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
 
@@ -1395,6 +1375,8 @@ class DroneControlApp(QMainWindow):
             self.helipad_gps_label.setText(
                 f"({helipad_gps[0]:.7f}, {helipad_gps[1]:.7f})"
             )
+            self.stabilize_btn.setEnabled(True)
+
         tank_gps = status.get("tank_gps", None)
         if tank_gps:
             self.tank_gps_label.setText(f"({tank_gps[0]:.7f}, {tank_gps[1]:.7f})")
@@ -1406,16 +1388,17 @@ class DroneControlApp(QMainWindow):
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
-
+            state_wp = status.get("mission_state", "N/A")
             if current_wp > 0 and total_wp > 0:
                 progress = int(current_wp * 100 / total_wp)
                 self.mission_progress_bar.setValue(progress)
-                self.mission_status_label.setText(f"Waypoint {current_wp}/{total_wp}")
-
-    def _on_mission_progress(self, progress, message):
-        """Handle mission progress updates."""
-        self.mission_progress_bar.setValue(progress)
-        self.mission_status_label.setText(message)
+                self.mission_status_label.setText(f"WP: {current_wp}/{total_wp} ({state_wp})")
+                if current_wp != total_wp:
+                    self.battery_label.setText(f"Mission:")
+                    self.battery_progress.setValue(progress)
+                else:
+                    self.battery_label.setText(f"Battery:")
+                    self.battery_progress.setValue(status.get("battery", 100))
 
     def _disable_control_buttons(self):
         """Disable all control buttons."""

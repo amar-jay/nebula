@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from qfluentwidgets import MessageBox
 
 from src.controls.mavlink import ardupilot, mission_types
+from src.controls.mavlink.mission_types import Waypoint
 from src.mq.crane import ZMQTopics
 from src.mq.zmq_client import ZMQClient
 
@@ -25,7 +26,6 @@ class DroneClient(QObject):
 
     drone_status_update = Signal(dict)
     connection_status = Signal(bool, str)
-    mission_progress = Signal(int, str)
 
     def __init__(
         self,
@@ -54,6 +54,11 @@ class DroneClient(QObject):
             self._control_address = mission_types.get_control_address()
         except Exception as e:
             self.log(e)
+
+    def stabilize(self, alt):
+        if self._helipad_gps is None:
+            return False
+        return self.goto_coordinates(*self._helipad_gps, alt)
 
     def drop_load(self):
         """Drop load command."""
@@ -165,6 +170,7 @@ class DroneClient(QObject):
                 )
                 self.connected = True
                 self.master_connection.set_mode("GUIDED")
+                self.master_connection.fetch_home()
 
                 # Start status updates
                 self.log("Starting ZMQ client...")
@@ -289,13 +295,60 @@ class DroneClient(QObject):
         self.master_connection.goto_waypointv2(lat, lon, alt)
         return True
 
-    def upload_mission(self, waypoints):
+    def upload_mission(
+        self,
+        _waypoints: list[Waypoint],
+        hold: int,
+        interleaved=False,
+        interleaved_alt=5,
+    ):
         """Upload a mission with waypoints."""
         if not self.connected:
             return False
+        if len(_waypoints) == 0:
+            self.log("No waypoints to upload", "error")
+            return False
 
-        self.mission_waypoints = waypoints
-        self.master_connection.upload_mission(waypoints)
+        if interleaved:
+            waypoints = []
+            pose = self._status.get("home", None)
+            if pose is None:
+                self.log("Home position not set", "error")
+                return False
+            for wp in _waypoints:
+                waypoints.append(
+                    Waypoint(
+                        lat=pose["lat"],
+                        lon=pose["lon"],
+                        alt=interleaved_alt,
+                        hold=hold,
+                        auto=wp.auto,
+                    )
+                )
+                waypoints.append(
+                    Waypoint(
+                        lat=wp.lat,
+                        lon=wp.lon,
+                        hold=hold,
+                        alt=interleaved_alt,
+                        auto=wp.auto,
+                    )
+                )
+
+            waypoints.append(
+                Waypoint(
+                    lat=float(pose["lat"]),
+                    lon=float(pose["lon"]),
+                    alt=interleaved_alt,
+                    auto=_waypoints[-1].auto,  # TODO: find a better way of doing this
+                    hold=hold,
+                )
+            )
+            self.mission_waypoints = waypoints
+        else:
+            self.mission_waypoints = _waypoints
+
+        self.master_connection.upload_mission(self.mission_waypoints)
         return True
 
     def start_mission(self):
@@ -307,16 +360,15 @@ class DroneClient(QObject):
         self.mission_completed = False
 
         self.master_connection.start_mission()
-        self.mission_progress.emit(0, "Mission started")
 
         return True
 
     def cancel_mission(self):
         """Cancel the current mission."""
-        self.master_connection.clear_mission()
-        self.current_waypoint_index = -1
-        self.mission_progress.emit(0, "Mission cancelled")
-        return True
+        if self.master_connection.clear_mission():
+            self.current_waypoint_index = -1
+            return True
+        return False
 
     def kamikaze(self):
         if not self.k_connected:
@@ -333,10 +385,16 @@ class DroneClient(QObject):
     def _update_status_hook(self, current, done, state="AUTO"):
         self.current_waypoint_index = current
         self.mission_completed = done
-        msg = f"State: {state}"
-        self.mission_progress.emit(
-            int((current) * 100 / len(self.mission_waypoints)), msg
-        )
+        self._status["mission_state"] = state
+        if done:
+            self._status["mission_state"] = "COMPLETED"
+            # self._state["current_waypoint"] = 0
+            self._status["mission_active"] = False
+            # self._status["total_waypoints"] = 0
+        # msg = f"State: {state}"
+        # self.mission_progress.emit(
+        #     int((current) * 100 / len(self.mission_waypoints)), msg
+        # )
 
     def _update_status(self):
         """Update and emit drone status information."""
@@ -374,15 +432,13 @@ class DroneClient(QObject):
                 return False
 
             if self.master_connection.monitor_mission_progressv2(
+                is_auto=lambda idx: self.mission_waypoints[idx].auto,
                 status_callback=self._update_status_hook,
                 helipad_gps=self._helipad_gps,
                 drop_hook=drop_hook,
                 raise_hook=raise_hook,
             ):
-                self.mission_progress.emit(100, "Mission completed")
                 delattr(self, "mission_completed")
-        else:
-            self.mission_progress.emit(0, "Mission not started")
 
         status["helipad_gps"] = self._helipad_gps
         status["tank_gps"] = self._tank_gps

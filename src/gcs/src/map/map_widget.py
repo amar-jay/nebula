@@ -63,9 +63,9 @@ class WebEnginePage(QWebEnginePage):
         if msg[0] == "m":
             self.parent.clear_mission_fn()
             pairs = msg[1:].split("&")
-            for i, pair in enumerate(pairs):
+            for pair in pairs:
                 waypoint = list(map(float, pair.split(",")))
-                self.parent.update_mission_fn(i + 1, waypoint[0], waypoint[1], 10)
+                self.parent.update_mission_fn(waypoint[0], waypoint[1])
                 # self.parent.mission.append(list(map(float, pair.split(","))))
         if msg[0] == "p":  # single marker point
             markers_pos = msg[1:].split(",")
@@ -156,8 +156,8 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
     def addMissionCallback(self, fn):
         self.update_mission_fn = fn
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+    # def resizeEvent(self, event):
+    #     super().resizeEvent(event)
 
     def clearMissionCallback(self, fn):
         self.clear_mission_fn = fn
@@ -167,7 +167,7 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
 
     def set_marker(self, lat, lon):
         return self.page().runJavaScript(
-            f"var homeMarker = L.marker({[lat + 1, lon + 1]}).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
+            f"var marker = L.marker({[lat + 1, lon + 1]}).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
         )
 
     def set_drone_marker(self, lat, lon):
@@ -182,10 +182,11 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
         return self.page().runJavaScript(f"updateTargetMarker({[lat, lon]});")
 
     def set_home_marker(self, lat, lon):
-        print(f"Setting home marker at: {lat}, {lon}")
-        return self.page().runJavaScript(
-            f"var homeMarker = L.marker({[lat, lon]},{{icon: homeIcon,}},).addTo(map); map.setView({[lat, lon]}, {self.zoom_start});"
-        )
+        # Only update if coordinates have changed
+        if getattr(self, "_curr_home", None) == (lat, lon):
+            return
+        self._curr_home = (lat, lon)
+        return self.page().runJavaScript(f"setHomeMarker({[lat, lon]});")
 
     def get_markers_pos(self):
         def process_result(_):

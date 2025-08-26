@@ -36,8 +36,8 @@ class ArdupilotConnection:
         )
         self.current_state = WaypointState.FLYING_AUTO
 
-        self.home_position = self.get_relative_gps_location()
         self.status = {
+            "home": None,
             "mode": self.master.flightmode,
             "connected": False,
             "armed": False,
@@ -410,6 +410,7 @@ class ArdupilotConnection:
             msg = self.master.recv_match(
                 type=[
                     "HEARTBEAT",
+                    "HOME_POSITION",
                     "GLOBAL_POSITION_INT",
                     "ATTITUDE",
                     "MISSION_CURRENT",
@@ -421,6 +422,12 @@ class ArdupilotConnection:
 
             if not msg:
                 continue
+            if msg.get_type() == "HOME_POSITION":
+                self.status["home"] = {
+                    "lat": msg.lat / 1e7,
+                    "lon": msg.lon / 1e7,
+                    "alt": msg.alt / 1e3,
+                }
 
             if msg.get_type() == "HEARTBEAT":
                 self.status["connected"] = True
@@ -469,7 +476,7 @@ class ArdupilotConnection:
         lon: float,
         alt: float,
         timeout=20,
-        speed=1,  # speed in m/s, default is 1 m/s
+        speed=-1,  # speed in m/s, default is 1 m/s
     ):
         """
         Send command to move to the specified latitude, longitude, and current altitude
@@ -497,11 +504,27 @@ class ArdupilotConnection:
         self.log(f"Waypoint Sent: lat={lat}, lon={lon}, alt={alt}", "info")
         return
 
+    def set_speed(self, speed):
+        self.master.mav.command_long_send(
+            self.master.target_system,
+            self.master.target_component,
+            dialect.MAV_CMD_DO_CHANGE_SPEED,
+            0,  # Confirmation
+            1,  # Speed type: 1 = ground speed
+            speed,  # Speed in m/s
+            0,  # Throttle (no change)
+            0,
+            0,
+            0,
+            0,  # Unused
+        )
+
     # Send kamikaze GPS coordinate
     def goto_kamikaze(self, lat, lon):
         self.set_mode("GUIDED")
+        self.set_speed(15)
         self.takeoff(20)
-        self.goto_waypointv2(lat, lon, 3, speed=15)
+        self.goto_waypointv2(lat, lon, 1)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         location = self.get_relative_gps_location()
@@ -573,7 +596,12 @@ class ArdupilotConnection:
         return False
 
     def monitor_mission_progressv2(
-        self, get_helipad_gps=None, drop_hook=None, raise_hook=None, timeout=None
+        self,
+        status_callback=None,
+        helipad_gps=None,
+        drop_hook=None,
+        raise_hook=None,
+        timeout=None,
     ):
         """
         `callback` is called when a waypoint is reached it takes
@@ -584,9 +612,12 @@ class ArdupilotConnection:
             print(f"{self.current_state=}")
             if self.current_state == WaypointState.FLYING_AUTO:
                 reached, idx = self.waypoint_reached()
-                if reached:
-                    # msg = self.master.recv_match(type=["MISSION_ITEM_REACHED"], blocking=False)
-                    print(f"{idx=}")
+                # if reached:
+                # msg = self.master.recv_match(type=["MISSION_ITEM_REACHED"], blocking=False)
+                # print(f"{idx=}")
+                # if status_callback:
+                #     status_callback(current=idx, done=False, state="AUTO")
+
                 # if msg:
                 #   print("Checking for mission progress...")
 
@@ -594,6 +625,8 @@ class ArdupilotConnection:
                     print(f"Reached waypoint {idx}")
 
                     if idx >= self.num_wp - 1:
+                        if status_callback:
+                            status_callback(current=idx, done=True, state="AUTO")
                         print("Mission completed")
                         delattr(self, "target_lat")
                         delattr(self, "target_lon")
@@ -602,37 +635,55 @@ class ArdupilotConnection:
                     # Switch to guided mode and start positioning
                     self.set_mode("GUIDED")
                     print("Switching to GUIDED mode")
-                    self.target_lat, self.target_lon = get_helipad_gps(idx)
-                    if self.target_lat is not None and self.target_lon is not None:
+                    if helipad_gps is None:
+                        print("Helipad GPS coordinates not provided")
+                        self.log("Helipad GPS coordinates not provided", "error")
+                        self.current_state = WaypointState.FLYING_AUTO
+                        return False
+                    self._target_lat, self._target_lon = helipad_gps
+                    if self._target_lat is not None and self._target_lon is not None:
                         self.goto_waypointv2(
                             alt=5,
-                            lat=self.target_lat,
-                            lon=self.target_lon,
+                            lat=self._target_lat,
+                            lon=self._target_lon,
                             timeout=100,
                             speed=1,
                         )
+                        status_callback(current=idx, done=False, state="POSITIONING")
                         self.current_state = WaypointState.POSITIONING
                     else:
                         print("Invalid helipad GPS coordinates")
                         self.log("Invalid helipad GPS coordinates", "error")
                         self.current_state = WaypointState.FLYING_AUTO
+                        status_callback(current=idx, done=False, state="AUTO")
 
             elif self.current_state == WaypointState.POSITIONING:
                 if self.check_reposition_reached(
-                    _alt=5, _lat=self.target_lat, _lon=self.target_lon
+                    _alt=5, _lat=self._target_lat, _lon=self._target_lon
                 ):
                     self.current_state = WaypointState.WAITING_DROP
+                    status_callback(
+                        current=self._last_reached_seq,
+                        done=False,
+                        state="DROPPING LOAD",
+                    )
                     print("Positioning reached, waiting for drop...")
 
             elif self.current_state == WaypointState.WAITING_DROP:
                 if drop_hook is not None and drop_hook():
                     self.current_state = WaypointState.WAITING_RAISE
+                    status_callback(
+                        current=self._last_reached_seq, done=False, state="RAISING LOAD"
+                    )
                     print("Hook dropped, waiting for raise...")
                 else:
                     # Skip hook operations, go back to auto
                     self.set_mode("AUTO")
                     print("Skipping hook operations, returning to AUTO mode")
                     self.current_state = WaypointState.FLYING_AUTO
+                    status_callback(
+                        current=self._last_reached_seq, done=False, state="AUTO"
+                    )
 
             elif self.current_state == WaypointState.WAITING_RAISE:
                 if raise_hook is not None and raise_hook():
@@ -642,6 +693,9 @@ class ArdupilotConnection:
 
                 # Resume auto flight
                 self.set_mode("AUTO")
+                status_callback(
+                    current=self._last_reached_seq, done=False, state="AUTO"
+                )
                 self.current_state = WaypointState.FLYING_AUTO
             return False
 

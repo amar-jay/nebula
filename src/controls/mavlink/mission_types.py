@@ -149,6 +149,28 @@ def get_camera_params():
     }
 
 
+def get_control_address() -> str:
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+            config = yaml.safe_load(file)
+            server_config = config.get("communication", {})
+            if not server_config:
+                raise ValueError(
+                    f"Server configuration not found in YAML config file at '{CONFIG_PATH}'. "
+                    f"Please add a 'communication:' section to your config.yaml file."
+                )
+            if "control_address" not in server_config:
+                raise ValueError(
+                    f"Missing 'control_address' field in communication section of '{CONFIG_PATH}'. "
+                    f"Please add: communication.control_address: 'tcp://<host>:<port>'"
+                )
+            return server_config["control_address"]
+    except Exception as e:
+        raise ValueError(
+            f"Configuration file '{CONFIG_PATH}' is empty or contains no valid YAML content. \n{e}"
+        ) from e
+
+
 def get_server_config() -> ServerConfig:
     # check the config/default.yaml for the server configuration
     try:

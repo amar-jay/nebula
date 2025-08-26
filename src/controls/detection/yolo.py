@@ -1,9 +1,8 @@
+# pylint: disable=E1101
 import csv
 import logging
-import math
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -23,18 +22,7 @@ logging.basicConfig(
 )
 
 
-@dataclass
-class Dataset:
-    """Dataset type for Rotation Optimization"""
-
-    pixel: Tuple[int, int]
-    gps_true: Tuple[float, float]
-    drone_gps: Tuple[float, float, float]
-    drone_att: Tuple[float, float, float]
-
-
-@dataclass
-class Detection:
+class Detection(NamedTuple):
     """Detection result with all relevant information"""
 
     center_pixel: Tuple[int, int]
@@ -43,18 +31,6 @@ class Detection:
     class_id: int
     size: Tuple[float, float]
     track_id: Optional[int] = None
-
-
-def compute_K(
-    hfov_rad: float, frame_width: int = 640, frame_height: int = 640
-) -> np.ndarray:
-    # Compute camera intrinsics from HFOV
-    fx = (frame_width / 2) / math.tan(hfov_rad / 2)
-    fy = fx * (frame_width / frame_height)
-    cx, cy = frame_width / 2, frame_height / 2
-
-    K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
-    return K
 
 
 class YoloObjectTracker:
@@ -84,7 +60,7 @@ class YoloObjectTracker:
                     f"{', '.join(self.names)}"
                 )
 
-    def detect(
+    def _detect(
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
@@ -189,7 +165,7 @@ class YoloObjectTracker:
         dLon = east / (EARTH_RADIUS_M * np.cos(np.deg2rad(lat)))
         return lat + np.rad2deg(dLat), lon + np.rad2deg(dLon)
 
-    def pixel_to_gps(
+    def _pixel_to_gps(
         self,
         pixel_coords: Tuple[int, int],
         drone_gps: Tuple[float, float, float],
@@ -227,12 +203,12 @@ class YoloObjectTracker:
         pixel_homog = np.array([u, v, 1.0])
 
         try:
-            K_inv = np.linalg.inv(K)
+            k_inv = np.linalg.inv(K)
         except np.linalg.LinAlgError:
             logger.error("Camera intrinsic matrix is singular")
             return None
 
-        cam_ray = K_inv @ pixel_homog
+        cam_ray = k_inv @ pixel_homog
         cam_ray = cam_ray / np.linalg.norm(cam_ray)
 
         # Transform to world coordinates
@@ -256,6 +232,21 @@ class YoloObjectTracker:
         )
 
         return target_lat, target_lon
+
+    def _calculate_gps_error(
+        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
+    ) -> float:
+        """Haversine distance calculation using numpy"""
+        phi1 = np.deg2rad(gt_lat)
+        phi2 = np.deg2rad(pred_lat)
+        dphi = np.deg2rad(pred_lat - gt_lat)
+        dlambda = np.deg2rad(pred_lon - gt_lon)
+
+        a = (
+            np.sin(dphi / 2) ** 2
+            + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2) ** 2
+        )
+        return float(2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
     def write_on_frame(
         self,
@@ -352,7 +343,7 @@ class YoloObjectTracker:
 
         if "helipad" in gps_coords:
             helipad_latlon = gps_coords["helipad"]
-            dist = self.calculate_gps_error(
+            dist = self._calculate_gps_error(
                 curr_lat, curr_lon, helipad_latlon[0], helipad_latlon[1]
             )
             gps_text_lines.append(f"D: {dist:.1f} m")
@@ -483,7 +474,7 @@ class YoloObjectTracker:
         Returns:
             Tuple of (annotated_frame, gps_coordinates, pixel_coordinates)
         """
-        detections = self.detect(
+        detections = self._detect(
             frame, confidence_threshold=threshold, object_classes=object_classes
         )
 
@@ -493,8 +484,8 @@ class YoloObjectTracker:
 
         # self.log(f"Detected {len(detections)} objects")
 
-        gps_coords = {}
-        pixel_coords = {}
+        gps_coords: dict[str, Tuple[float, float]] = {}
+        pixel_coords: dict[str, Tuple[int, int]] = {}
 
         for object_class, detection in detections.items():
             # Draw bounding box and center
@@ -521,7 +512,7 @@ class YoloObjectTracker:
             )
 
             # Compute GPS coordinates
-            gps_result = self.pixel_to_gps(
+            gps_result = self._pixel_to_gps(
                 pixel_coords=center,
                 drone_gps=drone_gps,
                 drone_attitude=drone_attitude,
@@ -550,21 +541,6 @@ class YoloObjectTracker:
             logger.error(f"Error writing dataset: {e}")
             raise
 
-    def calculate_gps_error(
-        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
-    ) -> float:
-        """Haversine distance calculation using numpy"""
-        phi1 = np.deg2rad(gt_lat)
-        phi2 = np.deg2rad(pred_lat)
-        dphi = np.deg2rad(pred_lat - gt_lat)
-        dlambda = np.deg2rad(pred_lon - gt_lon)
-
-        a = (
-            np.sin(dphi / 2) ** 2
-            + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2) ** 2
-        )
-        return float(2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
-
 
 def main():
     """Example usage of the improved tracker"""
@@ -588,8 +564,6 @@ def main():
 
     # Camera intrinsics (adjust for your camera)
     K = np.array([[959.41, 0.0, 626.26], [0.0, 960.10, 357.03], [0.0, 0.0, 1.0]])
-
-    # K = compute_K(hfov_rad=1.0, frame_width=width, frame_height=height)
 
     # Initialize tracker
     estimator = YoloObjectTracker(

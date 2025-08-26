@@ -4,7 +4,7 @@ import re
 import sys
 import time
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -156,42 +156,44 @@ class MissionWaypointTable(QTableWidget):
 class KamikazeConfirmationBox(MessageBoxBase):
     """Confirmation dialog for kamikaze mode activation"""
 
-    def __init__(self, parent=None):
+    def __init__(self, lat=0.0, lon=0.0, parent=None):
         super().__init__(parent)
-        self.latitude = 0.0
-        self.longitude = 0.0
+        self.latitude = lat
+        self.longitude = lon
 
         # Title
-        self.titleLabel = SubtitleLabel("Kamikaze Mode Confirmation")
+        self.title_label = SubtitleLabel("Kamikaze Mode Confirmation")
         # toggle if to use main drone
 
-        self.use_main_drone = QCheckBox("⚠️ DANGEROUS: USE MAIN DRONE INSTEAD")
+        self.use_main_drone = QCheckBox(
+            "⚠️ DANGEROUS: This command cannot be undone! CONTINUE?"
+        )
         self.use_main_drone.setTextColor("#cf1010", QColor(255, 28, 32))
         self.use_main_drone.setChecked(False)
 
         # Warning message
-        self.messageLabel = QLabel(
+        self.message_label = QLabel(
             "Are you sure you want to activate kamikaze mode? "
             "This will make the drone fly to the last known GPS coordinates."
         )
-        self.messageLabel.setWordWrap(True)
+        self.message_label.setWordWrap(True)
 
         # Coordinates display
-        self.coordsLabel = CaptionLabel(
+        self.coords_label = CaptionLabel(
             f"Target Coordinates: {self.latitude:.6f}, {self.longitude:.6f}"
         )
-        self.coordsLabel.setTextColor("#666666", QColor(102, 102, 102))
+        self.coords_label.setTextColor("#666666", QColor(102, 102, 102))
 
         # Warning icon/text
-        self.warningLabel = CaptionLabel("⚠️ This action cannot be undone!")
-        self.warningLabel.setTextColor("#cf1010", QColor(255, 28, 32))
+        self.warning_label = CaptionLabel("⚠️ This action cannot be undone!")
+        self.warning_label.setTextColor("#cf1010", QColor(255, 28, 32))
 
         # Add widgets to layout
-        self.viewLayout.addWidget(self.titleLabel)
-        self.viewLayout.addWidget(self.messageLabel)
+        self.viewLayout.addWidget(self.title_label)
+        self.viewLayout.addWidget(self.message_label)
         self.viewLayout.addWidget(self.use_main_drone)
-        self.viewLayout.addWidget(self.coordsLabel)
-        self.viewLayout.addWidget(self.warningLabel)
+        self.viewLayout.addWidget(self.coords_label)
+        self.viewLayout.addWidget(self.warning_label)
 
         # Set minimum width
         self.widget.setMinimumWidth(400)
@@ -199,43 +201,47 @@ class KamikazeConfirmationBox(MessageBoxBase):
 
 def showKamikazeConfirmation(parent, drone_client: DroneClient):
     """Show kamikaze mode confirmation dialog"""
-    w = KamikazeConfirmationBox(parent=parent)
-    # if drone_client.helipad_gps is None:
-    #   return
-    # w.latitude = drone_client.helipad_gps[0]
-    # w.longitude = drone_client.helipad_gps[1]
-    if w.exec():
-        drone_client.kamikaze_connection.arm()
-        time.sleep(2)
-        drone_client.kamikaze_connection.takeoff(10)
-        # message box to tell to wait
-        m = MessageBox(
-            "Kamikaze",
-            "Kamikaze in Progress. Click OK if ready to LAND",
-            parent,
+    if drone_client.tank_gps is None or len(drone_client.tank_gps) != 2:
+        msg = MessageBox(
+            title="Kamikaze",
+            content="Please set the tank GPS before proceeding.",
+            parent=parent,
         )
+        msg.exec()
+        return
+    w = KamikazeConfirmationBox(
+        lat=drone_client.tank_gps[0], lon=drone_client.tank_gps[1], parent=parent
+    )
+    if w.exec():
 
-        time.sleep(5)
-        tank_gps = drone_client.tank_gps
-        if tank_gps is None:
+        def after_arm():
+            drone_client.kamikaze_connection.takeoff(10)
+            # Show message box after takeoff
             m = MessageBox(
                 "Kamikaze",
-                "Tank GPS not set. Please set the tank GPS before proceeding.",
+                "Kamikaze in Progress. Click OK if ready to LAND",
                 parent,
             )
-            m.exec()
-            return False
-        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
-        if m.exec():
-            m = MessageBox(
-                "Kamikaze",
-                "Landing in Progress",
-                parent,
-            )
-            m.exec()
-            drone_client.kamikaze_connection.repeat_relay(10)
-            drone_client.kamikaze_connection.set_mode("LAND")
 
+            def after_takeoff():
+                tank_gps = drone_client.tank_gps
+                drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
+                if m.exec():
+                    m2 = MessageBox(
+                        "Kamikaze",
+                        "Landing in Progress",
+                        parent,
+                    )
+                    m2.exec()
+                    drone_client.kamikaze_connection.repeat_relay(10)
+                    drone_client.kamikaze_connection.set_mode("LAND")
+
+            # Wait 5 seconds before goto_kamikaze
+            QTimer.singleShot(5000, after_takeoff)
+
+        drone_client.kamikaze_connection.arm()
+        # Wait 2 seconds before takeoff
+        QTimer.singleShot(2000, after_arm)
         return True
     else:
         print("Kamikaze mode cancelled")

@@ -5,11 +5,12 @@ from src.controls.mavlink.mission_types import Waypoint
 
 drone = ardupilot.ArdupilotConnection(connection_string="udp:127.0.0.1:14550")
 drone.set_mode("GUIDED")
+home_position = drone.get_relative_gps_location()
 drone.arm()
 drone.takeoff(target_altitude=10)
 
 mission_waypoints = [
-    Waypoint(*drone.home_position),
+    Waypoint(*home_position),
     Waypoint(40.95896591, 29.13568128, 5, 3),
     Waypoint(40.95897731, 29.13589263, 5, 3),
     Waypoint(40.95876277, 29.13590910, 5, 3),

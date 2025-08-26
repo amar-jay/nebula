@@ -18,12 +18,15 @@ class ZMQTopics(Enum):
     TANK_GPS = "TANK_GPS"
 
 
-# This is a part of that is responsible for control of crane actuators
 class CraneControls:
+    """
+    This is a part of that is responsible for control of crane actuators
+    """
+
     def __init__(self, connection_string="/dev/ttyUSB0", baudrate=9600):
         self.ser = serial.Serial(connection_string, baudrate)
         self.ser.flushInput()
-        self.hook_state = "dropped"  # Initial state of the hook
+        self.hook_state = "raised"  # Initial state of the hook
 
     def _wait_for_ready(self, expected_response):
         while True:
@@ -40,6 +43,7 @@ class CraneControls:
         if response == "YUK_AL_TAMAM":
             print("Yuk Al Görevi Tamamlandı.")
             print("Yeni göreve geçmeye hazırsınız.")
+            self.hook_state = "raised"
         return True
 
     def drop_load(self):
@@ -49,6 +53,7 @@ class CraneControls:
         if response == "YUK_BIRAK_TAMAM":
             print("Yuk Birak Görevi Tamamlandı.")
             print("Yeni göreve geçmeye hazırsınız.")
+            self.hook_state = "dropped"
             return True
         else:
             print("Bir hata oluştu, lütfen tekrar deneyin.")
@@ -69,21 +74,17 @@ class CraneControls:
             self.pick_load()
             return "ACK: Load picked"
         elif command == ZMQTopics.RAISE_HOOK.name:
-            return
-            # TODO:
-            # if self.hook_state == "raised":
-            #     return "ACK: Hook already raised"
-            # else:
-            #     self.hook_state = "raised"
-            #     return "ACK: Hook raised"
+            if self.hook_state == "raised":
+                return "ACK: Hook already raised"
+            else:
+                self.hook_state = "raised"
+                return "ACK: Hook raised"
         elif command == ZMQTopics.DROP_HOOK.name:
-            return
-            # TODO:
-            # if self.hook_state == "dropped":
-            #     return "ACK: Hook already dropped"
-            # else:
-            #     self.hook_state = "dropped"
-            #     return "ACK: Hook dropped"
+            if self.hook_state == "dropped":
+                return "ACK: Hook already dropped"
+            else:
+                self.hook_state = "dropped"
+                return "ACK: Hook dropped"
         elif command == ZMQTopics.STATUS.name:
             return f"ACK: Hook is {self.hook_state}"
         else:

@@ -1,3 +1,13 @@
+This branch is a change in the shift of how image recognition inference is done. Our initial strategy of performing inference was on edge. However that prove problematic since we found difficulty in transmitting image frames across it. First we tried through MJPEG frames. then we tried RTSP. then we tried using herelink as the intermediary. After all these strategies we still found difficulty doing so on edge. So for now. in this branch, since there is limited time to the compettition. We will try the strategy of performing this inference locally, reducing the load on the herelink and orin nano. So it will only handle the crane controls and the alternative mavlink commands
+
+### Tasks
+
+- [ ] Set up ZMQ and structuring system
+- [ ] Setup local server for AI inference and GPS detection
+- [ ] General autonomous workflow using mavlink on edge
+
+---
+
 <p align="center">
   <a href="https://github.com/amar-jay/nebula">
     <img src="./src/gcs/assets/images/logo.png" height="96">
@@ -39,15 +49,18 @@ An application system consisting of an edge server and a desktop client (built w
 ### Setup
 
 1. **Clone the repository** (uses Git submodules):
+
    ```bash
    git clone https://github.com/amar-jay/nebula.git --recursive
    ```
 
 2. **Setup ArduPilot**:
+
    - Follow [ArduPilot Linux setup guide](https://ardupilot.org/dev/docs/building-setup-linux.html)
    - Follow [Gazebo and GStreamer setup guide](https://ardupilot.org/dev/docs/sitl-with-gazebo.html#sitl-with-gazebo)
 
 3. **Install Python packages**:
+
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
@@ -60,16 +73,19 @@ An application system consisting of an edge server and a desktop client (built w
 ### Running the Simulation
 
 1. **Start simulation**:
+
    ```bash
    make run_sim
    ```
 
 2. **Launch Control Station**:
+
    ```bash
    make app
    ```
 
 3. **Launch Controls** (optional):
+
    ```bash
     make sim_server  # for real drone use `make server`
    ```

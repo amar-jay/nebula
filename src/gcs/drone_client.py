@@ -5,7 +5,7 @@ import traceback
 from PySide6.QtCore import QObject, QTimer, Signal
 from qfluentwidgets import MessageBox
 
-from src.controls.mavlink import ardupilot
+from src.controls.mavlink import ardupilot, mission_types
 from src.mq.crane import ZMQTopics
 from src.mq.zmq_client import ZMQClient
 
@@ -34,10 +34,9 @@ class DroneClient(QObject):
         super().__init__()
         self.connected = False
         self.k_connected = False
-        self.initial_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
-        self.k_current_position = {"lat": 0.0, "lon": 0.0, "alt": 0.0}
-        self.helipad_gps = None
-        self.tank_gps = None  # (40.9589782, 29.1358378)
+        self._helipad_gps = None
+        self._tank_gps = None  # (40.9589782, 29.1358378)
+        self._status = None
         self.mission_waypoints = []
         self.current_waypoint_index = -1
         self.master_connection = None
@@ -49,8 +48,12 @@ class DroneClient(QObject):
         # Setup status update timer
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._update_status)
-        self.status_timer.setInterval(1000)  # Update every second
-        self.status = None
+        self.status_timer.setInterval(500)  # Update every half second
+
+        try:
+            self._control_address = mission_types.get_control_address()
+        except Exception as e:
+            self.log(e)
 
     def drop_load(self):
         """Drop load command."""
@@ -94,7 +97,7 @@ class DroneClient(QObject):
             try:
                 lat = float(helipad_gps[0])
                 lon = float(helipad_gps[1])
-                self.helipad_gps = (lat, lon)
+                self._helipad_gps = (lat, lon)
                 return True
             except ValueError:
                 self.log("Invalid helipad GPS format")
@@ -113,15 +116,13 @@ class DroneClient(QObject):
         tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
         tank_gps = tank_gps.split(",") if tank_gps else None
         if tank_gps and len(tank_gps) == 2:
-            # print(f"Tank GPS: {tank_gps}")
             try:
                 lat = float(tank_gps[0])
                 lon = float(tank_gps[1])
-                self.tank_gps = (lat, lon)
+                self._tank_gps = (lat, lon)
                 return True
             except ValueError:
-                self.log("Invalid tank GPS format")
-                print("Invalid tank GPS format")
+                self.log("Invalid tank GPS format", "error")
         return False
 
     def raise_hook(self):
@@ -149,10 +150,6 @@ class DroneClient(QObject):
     def connect_to_drone(self, connection_string, is_kamikaze=False):
         """Connect to drone at the specified TCP address and port."""
 
-        # if connection_string.startswith("udp:") or connection_string.startswith("tcp:"):
-        # address, port = connection_string[4:].split(":")
-        # port = int(port)
-
         try:
             if is_kamikaze:
                 self.kamikaze_connection = ardupilot.ArdupilotConnection(
@@ -161,35 +158,23 @@ class DroneClient(QObject):
                 self.k_connected = True
                 self.kamikaze_connection.set_mode("GUIDED")
                 # self.kamikaze_connection.wait_heartbeat()
-                location = self.kamikaze_connection.get_relative_gps_location()
-                if location is not None:
-                    lat, lon, alt = location
-                    self.k_current_position = {"lat": lat, "lon": lon, "alt": alt}
             else:
                 self.master_connection = ardupilot.ArdupilotConnection(
                     connection_string=connection_string,
                     logger=self.log,
-                    # world="delivery_runway",
-                    # model_name="iris_with_stationary_gimbal",
-                    # camera_link="tilt_link",
-                    # logger=lambda *message: self.log(
-                    # f"[MAVLink] {' '.join(map(str, message))}",
-                    # ),
                 )
                 self.connected = True
                 self.master_connection.set_mode("GUIDED")
-                location = self.master_connection.get_relative_gps_location()
-                if location is not None:
-                    lat, lon, alt = location
-                    self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
 
                 # Start status updates
                 self.log("Starting ZMQ client...")
                 if connection_string.startswith("tcp:"):
                     address = connection_string[4:].split(":")[0]
                     # parse the connection string and get the ip
-                    print("ADDRESS: ", connection_string, address)
-                    self.zmq_client = ZMQClient()
+                    print("ZMQ ADDRESS: ", connection_string, address)
+                    self.zmq_client = ZMQClient(
+                        _logger=self.log,
+                    )
                     self.zmq_client.connect()
                     self.log("ZMQ client started")
                 self.log("Starting status timer...")
@@ -253,11 +238,11 @@ class DroneClient(QObject):
         """Disarm the drone."""
         if not self.connected:
             return False
-        if not self.status:
+        if not self._status:
             return False
 
         # Check if the drone is armed from the status update
-        armed = self.status.get("armed", False)
+        armed = self._status.get("armed", False)
         if not armed:
             self.log("Disarming a unarmed or not flying drone")
             return False
@@ -267,7 +252,7 @@ class DroneClient(QObject):
 
     def takeoff(self, altitude):
         """Take off to the specified altitude."""
-        armed = self.status.get("armed", False)
+        armed = self._status.get("armed", False)
         if not self.connected or not armed:
             return False
 
@@ -295,14 +280,13 @@ class DroneClient(QObject):
         """Move to the specified coordinates."""
         # armed = self.status.get("armed", False)
         if relative:
-            lat += self.initial_position["lat"]
-            lon += self.initial_position["lon"]
+            if not self._status.get("home", None):
+                return False
+            lat += self._status["home"]["lat"]
+            lon += self._status["home"]["lon"]
         self.log(f"Moving to coordinates: {lat}, {lon}, {alt} (relative={relative})")
-        self.log(f"Initial position: {self.initial_position}")
 
         self.master_connection.goto_waypointv2(lat, lon, alt)
-
-        self.initial_position = {"lat": lat, "lon": lon, "alt": alt}
         return True
 
     def upload_mission(self, waypoints):
@@ -338,7 +322,7 @@ class DroneClient(QObject):
         if not self.k_connected:
             self.log("Kamikaze connection not established")
             return False
-        gps = self.status.get("tank_gps", None)
+        gps = self._tank_gps
         if gps is None:
             self.log("Target GPS not available", "error")
             return False
@@ -346,107 +330,13 @@ class DroneClient(QObject):
         self.log("Kamikaze mode activated", "success")
         return True
 
-    def _update_status_hook(self, current, done):
+    def _update_status_hook(self, current, done, state="AUTO"):
         self.current_waypoint_index = current
         self.mission_completed = done
-        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
+        msg = f"State: {state}"
         self.mission_progress.emit(
             int((current) * 100 / len(self.mission_waypoints)), msg
         )
-
-    def _update_status_hookv2(self, current, done):
-        # Check if we reached a new waypoint
-        # Update mission progress
-        if self.master_connection is None:
-            print("not connected!!!!")
-            return
-        msg = f"Moving to waypoint {current}/{len(self.mission_waypoints)}"
-        self.mission_progress.emit(
-            int((current) * 100 / len(self.mission_waypoints)), msg
-        )
-        if self.current_waypoint_index < current:
-            print("✓ Reached waypoint")
-            print(
-                f">>>>> Waypoint status: last={self.current_waypoint_index}, current={current}, done={done}"
-            )
-
-            # Initialize state variables if this is a new waypoint
-            if not hasattr(self, "waypoint_hold_state"):
-                self.waypoint_hold_state = WaypointHoldState.START
-                self.temp_goto_coords = None
-                self.update_hook_timer = None
-
-            current_mode = self.master_connection.get_mode()
-
-            if self.waypoint_hold_state == WaypointHoldState.START:
-                print("Current State is ", self.waypoint_hold_state)
-                # Switch to GUIDED mode temporarily
-                if current_mode == "AUTO":
-                    self.master_connection.set_mode("GUIDED")
-                    print("→ Switched to GUIDED mode")
-
-                # Get current GPS location
-                detected_helipad_gps = self.status["helipad_gps"]
-                if detected_helipad_gps is None:
-                    print("DETECTED GPS NOT FOUND")
-                    location = self.master_connection.get_relative_gps_location()
-                    if location is None:
-                        return
-                    lat, lon, alt = location
-                    # if the helipad gps is not detected go higher.
-                    delattr(self, "waypoint_hold_state")
-                    self.master_connection.goto_waypointv2(lat, lon, alt + 3)
-                    return
-
-                # Calculate temporary hold position
-                self.temp_goto_coords = (
-                    detected_helipad_gps[0],
-                    detected_helipad_gps[1],
-                    15.0,
-                )
-                self.master_connection.goto_waypointv2(*self.temp_goto_coords)
-                print(f"↪ Relocating temporarily to {self.temp_goto_coords}")
-
-                self.waypoint_hold_state = WaypointHoldState.MOVING
-
-            elif self.waypoint_hold_state == WaypointHoldState.MOVING:
-                print("Current State is ", self.waypoint_hold_state)
-                # Check if repositioning is complete
-                if (
-                    self.temp_goto_coords
-                    and self.master_connection.check_reposition_reached(
-                        *self.temp_goto_coords
-                    )
-                ):
-                    print("✓ Reached temporary coordinate")
-                    self.waypoint_hold_state = WaypointHoldState.HOLD
-                    self.update_hook_timer = time.time()
-                    print("⏱️ Timer started")
-
-            elif self.waypoint_hold_state == WaypointHoldState.HOLD:
-                print("Current State is ", self.waypoint_hold_state)
-                # Check the wait timer
-                if self.update_hook_timer:
-                    elapsed = time.time() - self.update_hook_timer
-                    print(f"⏱️ Elapsed at hold: {elapsed:.2f} seconds")
-
-                    if (
-                        elapsed > 2
-                    ):  # TODO: HOLD UNTIL CONFRIMATION FROM CONTROLLER STATE
-                        # Done waiting, return to AUTO mode
-                        self.master_connection.set_mode("AUTO")
-                        print("↩ Returning to AUTO mode")
-
-                        # Update internal waypoint index
-                        self.current_waypoint_index = current
-
-                        # Clean up state variables
-                        delattr(self, "waypoint_hold_state")
-                        self.temp_goto_coords = None
-                        self.update_hook_timer = None
-
-                        # Mark mission as completed if `done` is True
-                        self.mission_completed = done
 
     def _update_status(self):
         """Update and emit drone status information."""
@@ -457,7 +347,6 @@ class DroneClient(QObject):
         self.fetch_tank_gps()
 
         if hasattr(self, "mission_completed"):
-            print("mission in progress")
             # if self.master_connection.monitor_mission_progress(
             #     callback=self._update_status_hook
             # ):
@@ -484,10 +373,9 @@ class DroneClient(QObject):
                     return True
                 return False
 
-            # print((lambda _: self.helipad_gps)(1))
             if self.master_connection.monitor_mission_progressv2(
-                get_helipad_gps=lambda _: self.helipad_gps,
-                # drop_hook=self.zmq_client.drop_hook,
+                status_callback=self._update_status_hook,
+                helipad_gps=self._helipad_gps,
                 drop_hook=drop_hook,
                 raise_hook=raise_hook,
             ):
@@ -496,11 +384,11 @@ class DroneClient(QObject):
         else:
             self.mission_progress.emit(0, "Mission not started")
 
-        status["helipad_gps"] = self.helipad_gps
-        status["tank_gps"] = self.tank_gps
+        status["helipad_gps"] = self._helipad_gps
+        status["tank_gps"] = self._tank_gps
         if self.kamikaze_connection and self.k_connected:
             status[
                 "kamikaze_gps"
             ] = self.kamikaze_connection.get_relative_gps_location()
         self.drone_status_update.emit(status)
-        self.status = status
+        self._status = status

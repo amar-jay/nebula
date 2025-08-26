@@ -112,7 +112,7 @@ function moveMarkerByClick(e) {
 }
 
 function updateUavMarker(loc) {
-    map.flyTo(loc);
+    // map.flyTo(loc);
     if (uav_marker) {
         uav_marker.setLatLng({ lat: loc[0], lng: loc[1] });
     } else {
@@ -123,7 +123,7 @@ function updateUavMarker(loc) {
 }
 
 function updateTargetMarker(loc) {
-    map.flyTo(loc);
+    // map.flyTo(loc);
     if (target_marker) {
         target_marker.setLatLng({ lat: loc[0], lng: loc[1] });
     } else {
@@ -134,7 +134,7 @@ function updateTargetMarker(loc) {
 }
 
 function updateKamikazeMarker(loc) {
-    map.flyTo(loc);
+    // map.flyTo(loc);
     if (kamikaze_marker) {
         kamikaze_marker.setLatLng({ lat: loc[0], lng: loc[1] });
     } else {

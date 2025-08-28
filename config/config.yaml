@@ -28,13 +28,13 @@ camera:
     ]
 
 communication:
-  sandwich_video_pipe: ./camera_stream
   mavproxy_destination: 0.0.0.0:16550
   control_address: tcp://0.0.0.0:5556
   mavproxy_source: "udp:127.0.0.1:14550"
   timeout: 1000
   # video_source: 0
   video_source: rtsp://localhost:8554/raw
+  video_output: rtsp://localhost:8554/processed
   # controller_connection_string: /dev/ttyUSB0
   controller_baudrate: 9600
 video:

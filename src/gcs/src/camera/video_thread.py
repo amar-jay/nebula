@@ -2,23 +2,16 @@ import time
 
 import cv2
 import numpy as np
+import zmq
 
 # pylint: disable=E0611
 from PySide6.QtCore import QThread, Signal
 
 
 class VideoThread(QThread):
-    """QThread for reading video from RTSP streams"""
-
-    # Signals for communicating with the main thread
-    frame_ready = Signal(np.ndarray)  # Video frame
-    status_update = Signal(str)  # Status messages
-    fps_updated = Signal(float)  # FPS information
-    error_occurred = Signal(str)  # Error messages
-
-    def __init__(self, rtsp_url, parent=None, logger=None):
+    def __init__(self, url, parent=None, logger=None):
         super().__init__(parent)
-        self.rtsp_url = rtsp_url
+        self.url = url
         self.running = False
         self.cap = None
         self.logger = logger if logger else print
@@ -30,6 +23,169 @@ class VideoThread(QThread):
         self.recording_filepath = None
 
     def run(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def stop_recording(self):
+        if not self.is_recording:
+            return
+        self.is_recording = False
+        self.is_paused = False
+        if self.video_writer:
+            self.video_writer.release()
+            self.video_writer = None
+        self.logger(f"Recording stopped: {self.recording_filepath}", "info")
+        self.recording_filepath = None
+
+    def start_recording(self, filepath: str):
+        """Start video recording"""
+        if self.is_recording:
+            self.logger("Recording already in progress", "warning")
+            return
+
+        try:
+            # Create video writer - we'll get frame size from first frame
+            self.recording_filepath = filepath
+            self.is_recording = True
+            self.is_paused = False
+            self.logger(f"Recording started: {filepath}", "info")
+        except Exception as e:
+            self.logger(f"Failed to start recording: {e}", "error")
+            self.is_recording = False
+
+    def pause_recording(self):
+        """Pause video recording"""
+        if self.is_recording:
+            self.is_paused = True
+            self.logger("Recording paused", "info")
+
+    def resume_recording(self):
+        """Resume video recording"""
+        if self.is_recording:
+            self.is_paused = False
+            self.logger("Recording resumed", "info")
+
+    def _setup_video_writer(self, frame_shape):
+        """Setup video writer with frame dimensions"""
+        if self.video_writer is None and self.is_recording:
+            height, width = frame_shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            self.video_writer = cv2.VideoWriter(
+                self.recording_filepath, fourcc, 20.0, (width, height)
+            )
+
+
+class ZMQVideoThread(VideoThread):
+    """QThread for reading video from ZMQ streams"""
+
+    frame_ready = Signal(np.ndarray)  # Video frame
+    status_update = Signal(str)  # Status messages
+    fps_updated = Signal(float)  # FPS information
+    error_occurred = Signal(str)  # Error messages
+
+    def __init__(self, url, parent=None, logger=None):
+        super().__init__(url=url, parent=parent, logger=logger)
+        self.context = None
+        self.socket = None
+
+    def run(self):
+        self.running = True
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.connect(self.url)
+        self.socket.setsockopt(zmq.SUBSCRIBE, b"video")
+
+        fps_count = 0
+        fps_timer = time.time()
+
+        self.status_update.emit(f"Connected to ZMQ stream: {self.url}")
+
+        while self.running:
+            try:
+                # Poll for incoming frames with timeout
+                if self.socket.poll(1000, zmq.POLLIN):
+                    parts = self.socket.recv_multipart()
+                    if len(parts) == 2 and parts[0] == b"video":
+                        jpg_bytes = parts[1]
+                        frame = cv2.imdecode(
+                            np.frombuffer(jpg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR
+                        )
+                        if frame is not None:
+                            self.frame_ready.emit(frame)
+
+                            # Recording logic
+                            if (
+                                self.is_recording
+                                and not self.is_paused
+                                and self.running
+                            ):
+                                if self.video_writer is None:
+                                    self._setup_video_writer(frame.shape)
+                                if self.video_writer:
+                                    self.video_writer.write(frame)
+
+                            # FPS calculation
+                            fps_count += 1
+                            current_time = time.time()
+                            if current_time - fps_timer >= 1.0:
+                                fps = fps_count / (current_time - fps_timer)
+                                self.fps_updated.emit(fps)
+                                fps_count = 0
+                                fps_timer = current_time
+                        else:
+                            self.logger("Failed to decode frame", "error")
+                    else:
+                        self.logger("Malformed ZMQ message", "error")
+                else:
+                    self.msleep(10)
+            except Exception as e:
+                self.logger(f"ZMQ receive error: {e}", "error")
+                self.msleep(100)
+
+        self.status_update.emit("ZMQ video thread stopped")
+        if self.socket:
+            self.socket.close()
+        if self.context:
+            self.context.term()
+
+    def stop(self):
+        self.running = False
+        if self.is_recording:
+            self.stop_recording()
+        if self.socket:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            self.socket = None
+        if self.context:
+            try:
+                self.context.term()
+            except Exception:
+                pass
+            self.context = None
+        if self.isRunning():
+            self.quit()
+            if not self.wait(2000):
+                self.terminate()
+                self.wait(500)
+
+
+class RTSPVideoThread(VideoThread):
+    """QThread for reading video from RTSP streams"""
+
+    # Signals for communicating with the main thread
+    frame_ready = Signal(np.ndarray)  # Video frame
+    status_update = Signal(str)  # Status messages
+    fps_updated = Signal(float)  # FPS information
+    error_occurred = Signal(str)  # Error messages
+
+    def __init__(self, url, parent=None, logger=None):
+        super().__init__(url=url, parent=parent, logger=logger)
+
+    def run(self):
         """Main video capture loop for RTSP streams with robust reconnection"""
         self.running = True
         retry_count = 0
@@ -38,10 +194,10 @@ class VideoThread(QThread):
         last_successful_frame_time = time.time()
 
         # Try both secure and non-secure RTSP if original URL fails
-        urls_to_try = [self.rtsp_url]
-        if self.rtsp_url.startswith("rtsps://"):
+        urls_to_try = [self.url]
+        if self.url.startswith("rtsps://"):
             # Add fallback to non-secure RTSP
-            fallback_url = self.rtsp_url.replace("rtsps://", "rtsp://")
+            fallback_url = self.url.replace("rtsps://", "rtsp://")
             urls_to_try.append(fallback_url)
 
         while self.running and retry_count < max_retries:
@@ -250,54 +406,11 @@ class VideoThread(QThread):
                 self.terminate()  # Force terminate as last resort
                 self.wait(1000)  # Give it a short time to clean up
 
-    def start_recording(self, filepath: str):
-        """Start video recording"""
-        if self.is_recording:
-            self.logger("Recording already in progress", "warning")
-            return
 
-        try:
-            # Create video writer - we'll get frame size from first frame
-            self.recording_filepath = filepath
-            self.is_recording = True
-            self.is_paused = False
-            self.logger(f"Recording started: {filepath}", "info")
-        except Exception as e:
-            self.logger(f"Failed to start recording: {e}", "error")
-            self.is_recording = False
-
-    def stop_recording(self):
-        """Stop video recording"""
-        if not self.is_recording:
-            return
-
-        self.is_recording = False
-        self.is_paused = False
-
-        if self.video_writer:
-            self.video_writer.release()
-            self.video_writer = None
-
-        self.logger(f"Recording stopped: {self.recording_filepath}", "info")
-        self.recording_filepath = None
-
-    def pause_recording(self):
-        """Pause video recording"""
-        if self.is_recording:
-            self.is_paused = True
-            self.logger("Recording paused", "info")
-
-    def resume_recording(self):
-        """Resume video recording"""
-        if self.is_recording:
-            self.is_paused = False
-            self.logger("Recording resumed", "info")
-
-    def _setup_video_writer(self, frame_shape):
-        """Setup video writer with frame dimensions"""
-        if self.video_writer is None and self.is_recording:
-            height, width = frame_shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            self.video_writer = cv2.VideoWriter(
-                self.recording_filepath, fourcc, 20.0, (width, height)
-            )
+def get_video_thread(url: str, parent=None, logger=None) -> VideoThread:
+    if url.startswith("rtsp"):
+        return RTSPVideoThread(url, parent=parent, logger=logger)
+    elif url.startswith("tcp") or url.startswith("ipc"):
+        return ZMQVideoThread(url, parent=parent, logger=logger)
+    else:
+        raise ValueError(f"Unsupported video source: {url}")

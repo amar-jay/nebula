@@ -739,5 +739,5 @@ paths:
   # If sourceOnDemand is "yes", readers will be put on hold until the source is
   processed:
   raw:
-    runOnInit: make raw_camera_stream
+    runOnInit: make my_camera_stream #make raw_camera_stream
     runOnInitRestart: yes

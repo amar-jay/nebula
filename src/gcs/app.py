@@ -908,9 +908,9 @@ class DroneControlApp(QMainWindow):
         connection_string = f"{_type}:{address}:{port}"
         if self.drone_client.connect_to_drone(connection_string, is_kamikaze=True):
             # Set target marker on the map
-            pose = self.drone_client.k_current_position
+            # pose = self.drone_client.get_kamikaze_gps()
             # print(f"Setting kamikaze marker at {pose}")
-            self.dock_content.set_kamikaze_marker(pose["lat"], pose["lon"])
+            # self.dock_content.set_kamikaze_marker(*pose[:2])
             self.k_connect_btn.setEnabled(False)
             self.k_disconnect_btn.setEnabled(True)
             self.console.append_message(
@@ -923,16 +923,7 @@ class DroneControlApp(QMainWindow):
             )
 
     def _on_kamikaze_clicked(self):
-        # dialog to confirm kamikaze
-        # reply = QMessageBox.question(
-        #     self,
-        #     "Kamikaze Confirmation",
-        #     "Are you sure you want to activate kamikaze mode? This will make the drone fly to the last known GPS coordinates.",
-        #     QMessageBox.Yes | QMessageBox.No,
-        #     QMessageBox.No,
-        # )
         result = showKamikazeConfirmation(self, self.drone_client)
-        # , self.drone_client.k_current_position["lat"], self.drone_client.k_current_position["lon"])
         if result == QMessageBox.Yes:
             self.console.append_message("Activating kamikaze mode...", "warning")
             # Call kamikaze method on drone client

@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""
-Real-time USB Camera Streaming System
-Captures frames from USB camera and streams to named pipe for ffplay consumption
-"""
-
 import os
 import subprocess
 
 import cv2
 import numpy as np
+import zmq
 
 
 class VideoWriter:
@@ -24,6 +20,17 @@ class VideoWriter:
 
     def close(self):
         pass
+
+
+def get_video_writer(source: str, width: int, height: int, fps: int) -> VideoWriter:
+    if source.startswith("rtsp"):
+        return RTSPVideoWriter(source, width, height, fps)
+    elif source.startswith("tcp") or source.startswith("ipc"):
+        return ZMQVideoWriter(source, width, height, fps)
+    elif source.endswith(".ts"):
+        return TSVideoWriter(source, width, height, fps)
+    else:
+        raise ValueError(f"Unsupported video source: {source}")
 
 
 class TSVideoWriter(VideoWriter):
@@ -196,7 +203,70 @@ class TSVideoWriter(VideoWriter):
         self._running = False
 
 
-class RTSPVideoWriter:
+class ZMQVideoWriter(VideoWriter):
+    def __init__(self, source: str, width: int, height: int, fps: int):
+        """
+        ZeroMQ Video Writer.
+        :param source: ZMQ bind URL (e.g., 'tcp://*:5555' or 'ipc:///tmp/video.sock')
+        :param width: Frame width in pixels
+        :param height: Frame height in pixels
+        :param fps: Frames per second (not enforced, just for reference)
+        """
+        self.pipe_path = source
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self._running = True
+
+        # ZMQ PUB socket
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PUB)
+        self.socket.bind(self.pipe_path)
+
+    def isOpened(self) -> bool:
+        """Checks if the ZMQ socket is open and running."""
+        return self._running and self.socket is not None
+
+    def write(self, frame: np.ndarray) -> bool:
+        """
+        Sends a frame via ZeroMQ after JPEG encoding.
+        :param frame: NumPy array (BGR)
+        :return: True if sent successfully, False otherwise
+        """
+        if not self._running or frame is None:
+            return False
+
+        # Resize if necessary
+        if frame.shape[1] != self.width or frame.shape[0] != self.height:
+            frame = cv2.resize(frame, (self.width, self.height))
+
+        # JPEG encode for transport efficiency
+        success, encoded = cv2.imencode(
+            ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+        )
+        if not success:
+            return False
+
+        try:
+            # Send as multipart: [topic, frame-bytes]
+            self.socket.send_multipart([b"video", encoded.tobytes()])
+            return True
+        except zmq.ZMQError:
+            self._running = False
+            return False
+
+    def close(self):
+        """Closes the ZMQ socket."""
+        if self._running:
+            self._running = False
+            try:
+                self.socket.close()
+                self.context.term()
+            except Exception:
+                pass
+
+
+class RTSPVideoWriter(VideoWriter):
     def __init__(self, source: str, width: int, height: int, fps: int):
         """
         RTSP Video Writer using FFmpeg subprocess.

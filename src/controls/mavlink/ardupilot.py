@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pymavlink.dialects.v20.all as dialect
 from pymavlink import mavutil
 
-from src.controls.mavlink.mission_types import Waypoint, FrameData
+from src.controls.mavlink.mission_types import FrameData, Waypoint
 
 
 @dataclass
@@ -332,11 +332,15 @@ class ArdupilotConnection:
         """
         Get the current frame data from the drone.
         """
-        if not self.status.get("position", {}).get("lat", None) or not self.status.get("attitude", {}).get("yaw", None):
-            raise ConnectionError("MAVLink connection not established")
+        if not self.master:
+            raise ConnectionError("Mavlink connection not established")
+        if not self.status.get("position", {}).get("lat", None) or not self.status.get(
+            "orientation", {}
+        ).get("yaw", None):
+            raise ConnectionError("MAVLink connection telemetry error")
 
         pos: dict[str, float] = self.status.get("position", {})
-        att: dict[str, float] = self.status.get("attitude", {})
+        att: dict[str, float] = self.status.get("orientation", {})
         # yaw = self.status["attitude"]["yaw"]
         # Normalize yaw to [0, 2π]
         if att.get("yaw", 0) < 0:
@@ -345,7 +349,7 @@ class ArdupilotConnection:
             frame=None,
             mode=self.status["mode"],
             drone_position=(pos["lat"], pos["lon"], pos["alt"]),
-            ground_level=pos["amsl"] - self.status["alt"],
+            ground_level=pos["amsl"] - pos["alt"],
             drone_attitude=(att["roll"], att["pitch"], att["yaw"]),
             timestamp=self.status["timestamp"],
         )
@@ -505,7 +509,8 @@ class ArdupilotConnection:
         return self.status
 
     def close(self):
-        self.master.close()
+        if self.master:
+            self.master.close()
         delattr(self, "master")
         self.log("Mavlink Connection closed.", "info")
 

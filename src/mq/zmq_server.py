@@ -465,7 +465,7 @@ async def main():
     )
 
     args = parser.parse_args()
-    config = mission_types.get_server_config()
+    config = mission_types.get_config()
     print("Configuration loaded:\n", config)
 
     # Convert video_source to int if it's a number

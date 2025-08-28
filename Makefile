@@ -44,6 +44,10 @@ raw_camera_stream: enable_streaming
     -c:v copy -rtsp_transport tcp \
     -f rtsp rtsp://127.0.0.1:8554/raw >/dev/null 2>&1
 
+my_camera_stream:
+	@ffmpeg -f v4l2 -framerate 30 -video_size 1280x720 -i /dev/video0 \
+				-vcodec libx264 -preset ultrafast -tune zerolatency \
+				-f rtsp rtsp://127.0.0.1:8554/raw >/dev/null 2>&1
 
 
 # ! video/x-raw,framerate=60/1

@@ -109,6 +109,9 @@ class DroneClient(QObject):
                 return False
         return False
 
+    def get_kamikaze_gps(self):
+        return self.kamikaze_connection.get_relative_gps_location()
+
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
         if self.master_connection is None:
@@ -161,6 +164,7 @@ class DroneClient(QObject):
                 )
                 self.k_connected = True
                 self.kamikaze_connection.set_mode("GUIDED")
+                self.kamikaze_connection.fetch_home()
                 # self.kamikaze_connection.wait_heartbeat()
             else:
                 self.master_connection = ardupilot.ArdupilotConnection(

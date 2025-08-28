@@ -1,12 +1,15 @@
+import asyncio
 import logging
 import math
 import time
 from dataclasses import dataclass
 
 import pymavlink.dialects.v20.all as dialect
+from mavsdk import System
+from mavsdk.mission import MissionItem, MissionPlan
 from pymavlink import mavutil
 
-from src.controls.mavlink.mission_types import Waypoint, FrameData
+from src.controls.mavlink.mission_types import Waypoint
 
 
 @dataclass
@@ -17,28 +20,59 @@ class WaypointState:
     WAITING_RAISE = "waiting_raise"
 
 
-class ArdupilotConnection:
+class Px4Connection:
     def __init__(self, connection_string, wait_heartbeat=10, logger=None):
         self.connection_string = connection_string
         self.target_system = 1
         self.target_component = 1
-        self.master = mavutil.mavlink_connection(connection_string, baudrate=57600)
-        self.master.wait_heartbeat(timeout=wait_heartbeat)
+        self.master = System()
+        connection_string = connection_string.replace("udpin:", "udpin://")
+        print(connection_string)
+
+        async def print_status_text(drone):
+            try:
+                async for status_text in drone.telemetry.status_text():
+                    print(f"Status: {status_text.type}: {status_text.text}")
+            except asyncio.CancelledError:
+                return
+
+        async def _setup():
+            await self.master.connect(system_address=connection_string)
+            self.status_text_task = asyncio.ensure_future(
+                print_status_text(self.master)
+            )
+
+            print("Waiting for drone to connect...")
+            async for state in self.master.core.connection_state():
+                if state.is_connected:
+                    print(f"-- Connected to drone!")
+                    break
+
+            print("Waiting for drone to have a global position estimate...")
+            async for health in self.master.telemetry.health():
+                if health.is_global_position_ok and health.is_home_position_ok:
+                    print("-- Global position estimate OK")
+                    break
+
+        asyncio.run(_setup())
+
         # timeout for heartbeat
         if not self.master:
             raise ConnectionError(
                 f"Failed to connect to {connection_string} within {wait_heartbeat} seconds"
             )
+
         self.log = self._set_logger(logger)
         self.log(
-            f"Connected to {self.connection_string} with system ID {self.master.target_system}",
+            f"Connected to {self.connection_string} with system ID {self.master.component_information.name}",
             "info",
         )
+
         self.current_state = WaypointState.FLYING_AUTO
 
         self.status = {
             "home": None,
-            "mode": self.master.flightmode,
+            "mode": None,
             "connected": False,
             "armed": False,
             "flying": False,
@@ -49,21 +83,6 @@ class ArdupilotConnection:
             "total_waypoints": 0,
             "battery": 100,
         }
-
-    def fetch_home(self):
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_GET_HOME_POSITION,
-            0,  # confirmation
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,  # unused parameters
-        )
 
     def _set_logger(self, logger):
         # if logger is an instance of logging.Logger, set it
@@ -103,24 +122,74 @@ class ArdupilotConnection:
             return _logger
 
     def set_mode(self, mode):
-        mode_id = self.master.mode_mapping()[mode]
-        self.master.set_mode(mode_id)
+        self.master.action_server.set_flight_mode(mode)
+        mode_id = dict(
+            ACRO=12,
+            ALTCTL=10,
+            FOLLOW_ME=8,
+            HOLD=3,
+            LAND=6,
+            MANUAL=9,
+            MISSION=4,
+            OFFBOARD=7,
+            POSCTL=11,
+            READY=1,
+            RETURN_TO_LAUNCH=5,
+            STABILIZED=13,
+            TAKEOFF=2,
+            UNKNOWN=0,
+        )[mode]
+        self.master.action_server.set_flight_mode(mode_id)
 
     def get_mode(self):
-        return self.master.flightmode
+        mode = asyncio.run(self.master.telemetry.flight_mode())
+        return mode
 
-    def ack_sync(self, msg, timeout=10):
-        now = time.time()
-        while True:
-            if time.time() - now > timeout:
-                return
-            m = self.master.recv_match(type=msg, blocking=True)
-            if m is not None:
-                if m.get_type() == msg:
-                    return m
-                self.log(f"Received {m.get_type()} instead of {msg}", "warning")
-            else:
-                continue
+    def fetch_home(self):
+        # home = asyncio.run(self.master.telemetry.home())
+        # return home
+        pass
+
+    def arm(self):
+        """
+        Arms the vehicle and sets it to GUIDED mode.
+        """
+        # Arm the vehicle
+        self.log("Arming motors...", "info")
+        asyncio.run(self.master.action.arm())
+
+    def safety_switch(self, state):
+        self.master.mav.set_mode_send(
+            self.master.target_system,
+            mavutil.mavlink.MAV_MODE_FLAG_DECODE_POSITION_SAFETY,
+            1 if state else 0,
+        )
+
+    def disarm(self):
+        """
+        Disarms the vehicle.
+        """
+        self.log("Disarming motors...", "info")
+        asyncio.run(self.master.action.disarm())
+        self.log("Vehicle disarmed!", "info")
+
+    def takeoff(self, target_altitude=5.0, wait_time=10):
+        """
+        Initiates takeoff to target altitude in meters.
+        """
+        self.log(f"Taking off to {target_altitude} meters...", "info")
+        asyncio.run(self.master.action.takeoff(target_altitude))
+        # Optional: wait for some time or monitor altitude via message stream
+        time.sleep(wait_time)  # crude wait; replace with altitude monitor if needed
+        self.log("Takeoff command sent.", "info")
+
+    def return_to_launch(self):
+        asyncio.run(self.master.action.return_to_launch())
+
+    def land(self):
+        self.log("Landing...", "info")
+        asyncio.run(self.master.action.land())
+        self.log("Landing command sent.", "info")
 
     def repeat_relay(self, delay=10):
         """
@@ -144,370 +213,196 @@ class ArdupilotConnection:
             0,  # Arm (1 to arm, 0 to disarm)
         )
 
-    def arm(self):
-        """
-        Arms the vehicle and sets it to GUIDED mode.
-        """
-        print("Arming the vehicle...")
-        # Wait for a heartbeat from the vehicle
-        self.log("Waiting for heartbeat...", "info")
-        self.master.wait_heartbeat()
-        self.log(f"Heartbeat received from system {self.master.target_system}", "info")
-
-        # Set mode to GUIDED (or equivalent)
-        # self.set_mode("GUIDED")
-
-        # Arm the vehicle
-        self.log("Arming motors...", "info")
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-            0,  # Confirmation
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,  # Arm (1 to arm, 0 to disarm)
-        )
-
-    def safety_switch(self, state):
-        self.master.mav.set_mode_send(
-            self.master.target_system,
-            mavutil.mavlink.MAV_MODE_FLAG_DECODE_POSITION_SAFETY,
-            1 if state else 0,
-        )
-        # self.ack_sync("COMMAND_ACK")
-
-    def disarm(self):
-        """
-        Disarms the vehicle.
-        """
-        self.log("Disarming motors...", "info")
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-            0,  # Confirmation
-            0,  # Disarm (1 to arm, 0 to disarm)
-            0,  # param2 (force, can be set to 21196 to force disarming)
-            0,  # param3 (unused)
-            0,  # param4 (unused)
-            0,  # param5 (unused)
-            0,  # param6 (unused)
-            0,  # param7 (unused)
-        )
-
-        self.master.motors_disarmed_wait()
-        self.log("Vehicle disarmed!", "info")
-
-    def takeoff(self, target_altitude=5.0, wait_time=10):
-        """
-        Initiates takeoff to target altitude in meters.
-        """
-
-        # Send takeoff command
-        self.log(f"Taking off to {target_altitude} meters...", "info")
-        self.set_mode("GUIDED")  # Ensure we're in GUIDED mode
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-            0,  # Confirmation
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            target_altitude,  # Altitude
-        )
-
-        # Optional: wait for some time or monitor altitude via message stream
-        time.sleep(wait_time)  # crude wait; replace with altitude monitor if needed
-
-        self.log("Takeoff command sent.", "info")
-
-    def return_to_launch(self):
-        self.set_mode("GUIDED")
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
-            0,  # Confirmation
-            0,  # Param1: unused
-            0,  # Param2: unused
-            0,  # Param3: unused
-            0,  # Param4: unused
-            0,  # Param5: unused
-            0,  # Param6: unused
-            0,  # Param7: unused
-        )
-        self.ack_sync("COMMAND_ACK")
-
-    def land(self):
-        self.log("Landing...", "info")
-        self.set_mode("GUIDED")
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_NAV_LAND,
-            0,  # Confirmation
-            0,  # Param1: unused
-            0,  # Param2: unused
-            0,  # Param3: unused
-            0,  # Param4: unused
-            0,  # Param5: unused
-            0,  # Param6: unused
-            0,  # Param7: unused
-        )
-        self.ack_sync("COMMAND_ACK")
-
     def upload_mission(self, waypoints: list[Waypoint]):
         num_wp = len(waypoints)
         self.num_wp = num_wp
-        self.log(f"Uploading {num_wp} waypoints...", "info")
-
-        # send mission count
-        self.master.mav.mission_count_send(
-            self.master.target_system, self.master.target_component, num_wp
-        )
-        self.ack_sync("MISSION_REQUEST")
-        for i, waypoint in enumerate(waypoints):
-            # send mission item
-            self.master.mav.mission_item_send(
-                target_system=self.master.target_system,  # System ID
-                target_component=self.master.target_component,  # Component ID
-                seq=i,  # Sequence number for item within mission (indexed from 0).
-                frame=dialect.MAV_FRAME_GLOBAL_RELATIVE_ALT,  # The coordinate system of the waypoint.
-                command=dialect.MAV_CMD_NAV_WAYPOINT,
-                current=(1 if i == 0 else 0),
-                autocontinue=0,
-                param1=waypoint.hold,  # 	Hold time. (ignored by fixed wing, time to stay at waypoint for rotary wing)
-                param2=0,  # Acceptance radius (if the sphere with this radius is hit, the waypoint counts as reached)
-                param3=0,  # 	Pass the waypoint to the next waypoint (0 = no, 1 = yes)
-                param4=0,  # Desired yaw angle at waypoint (rotary wing). NaN to use the current system yaw heading mode (e.g. yaw towards next waypoint, yaw to home, etc.).
-                x=waypoint.lat,  # Latitude in degrees * 1E7
-                y=waypoint.lon,  # Longitude in degrees * 1E7
-                z=waypoint.alt,  # Altitude in meters (AMSL) DOESN'T TAKE alt/1000 nor compensated altitude
+        mission_items = []
+        for wp in waypoints:
+            mission_items.append(
+                MissionItem(
+                    wp.lat,
+                    wp.lon,
+                    wp.alt,
+                    wp.hold,
+                    True,
+                    float("nan"),
+                    float("nan"),
+                    MissionItem.CameraAction.NONE,
+                    float("nan"),
+                    float("nan"),
+                    float("nan"),
+                    float("nan"),
+                    float("nan"),
+                    MissionItem.VehicleAction.NONE,
+                )
             )
-            if i != num_wp - 1:
-                self.ack_sync("MISSION_REQUEST")
-                self.log(f"Waypoint {i} uploaded", "info")
-
-        self.ack_sync("MISSION_ACK")
+        mission_plan = MissionPlan(mission_items)
+        asyncio.run(self.master.mission.upload_mission(mission_plan))
         self.log("Mission upload complete.", "info")
 
     def clear_mission(self):
         # Clear mission
         self.log("Clearing all missions. Hack...", "info")
-        # Set to GUIDED mode explicitly (you can also use MAV_MODE_AUTO if that suits your logic)
-        # self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
-        self.master.mav.mission_clear_all_send(
-            self.master.target_system, self.master.target_component
-        )
-        ack = self.master.recv_match(type="MISSION_ACK", blocking=True, timeout=3)
-        self.num_wp = 0
-        return ack
+        asyncio.run(self.master.mission.clear_mission())
+        return True
 
     def start_mission(self):
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            mavutil.mavlink.MAV_CMD_MISSION_START,
-            0,  # Confirmation
-            0,  # Param1: unused
-            0,  # Param2: unused
-            0,  # Param3: unused
-            0,  # Param4: unused
-            0,  # Param5: unused
-            0,  # Param6: unused
-            0,  # Param7: unused
-        )
-        self.ack_sync("COMMAND_ACK")
+        asyncio.run(self.master.mission.start_mission())
 
-    def get_frame_data(self) -> FrameData:
+    def get_relative_gps_location(self, timeout=1.0):
         """
-        Get the current frame data from the drone.
+        Blocking call to get the current GPS location.
+        Returns: (latitude, longitude, relative_altitude)
         """
-        if not self.status.get("position", {}).get("lat", None) or not self.status.get("attitude", {}).get("yaw", None):
-            raise ConnectionError("MAVLink connection not established")
 
-        pos: dict[str, float] = self.status.get("position", {})
-        att: dict[str, float] = self.status.get("attitude", {})
-        # yaw = self.status["attitude"]["yaw"]
-        # Normalize yaw to [0, 2π]
-        if att.get("yaw", 0) < 0:
-            att["yaw"] += 2 * math.pi
-        return FrameData(
-            frame=None,
-            mode=self.status["mode"],
-            drone_position=(pos["lat"], pos["lon"], pos["alt"]),
-            ground_level=pos["amsl"] - self.status["alt"],
-            drone_attitude=(att["roll"], att["pitch"], att["yaw"]),
-            timestamp=self.status["timestamp"],
-        )
+        async def _get_gps():
+            try:
+                async for pos in self.drone.telemetry.position():
+                    return pos.latitude_deg, pos.longitude_deg, pos.relative_altitude_m
+            except Exception:
+                return None
 
-    def get_relative_gps_location(self, blocking=True, timeout=1.0):
-        """
-        Get the current GPS location of the drone.
-        Args:
-                relative (bool): If True, returns relative altitude; otherwise, returns (relative altitude, absolute altitude) as altitude.
-                timeout (float): Timeout for receiving GPS data.
-        """
-        msg = self.master.recv_match(
-            type="GLOBAL_POSITION_INT", blocking=blocking, timeout=timeout
-        )
-        if not msg:
-            if blocking:
-                self.log("Timeout: Failed to receive GPS data.", "error")
+        try:
+            return asyncio.run(asyncio.wait_for(_get_gps(), timeout=timeout))
+        except asyncio.TimeoutError:
             return None
 
-        _lat = msg.lat / 1e7  # Convert from 1e7-scaled degrees to float degrees
-        _lon = msg.lon / 1e7
-        _ralt = (
-            msg.relative_alt / 1000.0
-        )  # Convert mm to meters (altitude above ground)
-        # Select altitude based on `relative` flag
-        return _lat, _lon, _ralt
+    def get_relative_gps_location(self, timeout=1.0):
+        """
+        Blocking call to get the current GPS location.
+        Returns: (latitude, longitude, relative_altitude)
+        """
 
-    def get_amsl_gps_location(self, blocking=True, timeout=1.0):
-        """
-        Get the current GPS location of the drone.
-        Args:
-                relative (bool): If True, returns relative altitude; otherwise, returns (relative altitude, absolute altitude) as altitude.
-                timeout (float): Timeout for receiving GPS data.
-        """
-        msg = self.master.recv_match(
-            type="GLOBAL_POSITION_INT", blocking=blocking, timeout=timeout
-        )
-        if not msg:
-            if blocking:
-                self.log("Timeout: Failed to receive GPS data.", "error")
+        async def _get_gps():
+            try:
+                async for pos in self.drone.telemetry.position():
+                    return pos.latitude_deg, pos.longitude_deg, pos.absolute_altitude_m
+            except Exception:
+                return None
+
+        try:
+            return asyncio.run(asyncio.wait_for(_get_gps(), timeout=timeout))
+        except asyncio.TimeoutError:
             return None
 
-        _lat = msg.lat / 1e7  # Convert from 1e7-scaled degrees to float degrees
-        _lon = msg.lon / 1e7
-        _ralt = (
-            msg.relative_alt / 1000.0
-        )  # Convert mm to meters (altitude above ground)
-
-        _alt = msg.alt / 1000.0  # Convert mm to meters (altitude AMSL)
         return _lat, _lon, _ralt, _alt
 
-    def get_current_attitude(self, blocking=True, timeout=1.0):
+    def get_current_attitude(self, timeout=1.0):
         """
-        Get the current attitude (roll, pitch, yaw) of the drone in radians.
+        Blocking call to get the current attitude (roll, pitch, yaw) of the drone in radians.
 
         Returns:
             tuple: (roll, pitch, yaw) in radians
-            None: If attitude data is not available
+            None: if attitude data is not available within timeout
         """
-        try:
-            # Request attitude data
-            # self.master.mav.request_data_stream_send(
-            # 	self.master.target_system,
-            # 	self.master.target_component,
-            # 	mavutil.mavlink.MAV_DATA_STREAM_EXTRA1,  # Attitude data
-            # 	10,  # 10 Hz rate
-            # 	1,  # Start sending
-            # )
 
-            # Wait for the attitude message
-            # now = time.time()
-            msg = self.master.recv_match(
-                type="ATTITUDE", blocking=blocking, timeout=timeout
-            )
-
-            if msg:
-                roll = msg.roll  # Roll angle in radians
-                pitch = msg.pitch  # Pitch angle in radians
-                yaw = msg.yaw  # Yaw angle in radians
-
-                # Normalize yaw to [0, 2π] range if needed
-                if yaw < 0:
-                    yaw += 2 * math.pi
-                # print("Time to fetch gps", time.time() - now)
-                return (roll, pitch, yaw)
-            else:
-                if blocking:
-                    self.log("Failed to get attitude data", "error")
+        async def _get_attitude():
+            try:
+                async for att in self.drone.telemetry.attitude_euler():
+                    roll = math.radians(att.roll_deg)
+                    pitch = math.radians(att.pitch_deg)
+                    yaw = math.radians(att.yaw_deg)
+                    if yaw < 0:
+                        yaw += 2 * math.pi
+                    return roll, pitch, yaw
+            except Exception:
                 return None
 
-        except Exception:
-            self.log("MAVLink Error getting attitude", "error")
+        try:
+            return asyncio.run(asyncio.wait_for(_get_attitude(), timeout=timeout))
+        except asyncio.TimeoutError:
             return None
 
-    def get_status(self):
-        # Try receiving a few messages quickly
-        for _ in range(20):
-            msg = self.master.recv_match(
-                type=[
-                    "HEARTBEAT",
-                    "HOME_POSITION",
-                    "GLOBAL_POSITION_INT",
-                    "ATTITUDE",
-                    "MISSION_CURRENT",
-                    "BATTERY_STATUS",
-                    "VFR_HUD",
-                ],
-                blocking=False,
-            )
-
-            if not msg:
-                continue
-            if msg.get_type() == "HOME_POSITION":
-                print("home position")
+    async def _get_status(self):
+        # HOME_POSITION
+        try:
+            async for home in self.master.telemetry.home():
                 self.status["home"] = {
-                    "lat": msg.latitude / 1e7,
-                    "lon": msg.longitude / 1e7,
-                    "alt": msg.altitude / 1e3,
+                    "lat": home.latitude_deg,
+                    "lon": home.longitude_deg,
+                    "alt": home.absolute_altitude_m,
                 }
+                break  # Only read once
+        except Exception:
+            pass
 
-            if msg.get_type() == "HEARTBEAT":
-                self.status["connected"] = True
-                self.status["armed"] = bool(self.master.motors_armed())
-                self.status["flying"] = (
-                    msg.system_status == mavutil.mavlink.MAV_STATE_ACTIVE
-                )
-
-            elif msg.get_type() == "GLOBAL_POSITION_INT":
+        # GLOBAL POSITION
+        try:
+            async for pos in self.master.telemetry.position():
                 self.status["position"] = {
-                    "lat": msg.lat / 1e7,
-                    "lon": msg.lon / 1e7,
-                    "alt": msg.relative_alt / 1e3,
-                    "amsl": msg.alt / 1e3,
+                    "lat": pos.latitude_deg,
+                    "lon": pos.longitude_deg,
+                    "alt": pos.relative_altitude_m,
                 }
-            elif msg.get_type() == "ATTITUDE":
+                break
+        except Exception:
+            pass
+
+        # ATTITUDE
+        try:
+            async for attitude in self.master.telemetry.attitude_euler():
                 self.status["orientation"] = {
-                    "roll": math.degrees(msg.roll),
-                    "pitch": math.degrees(msg.pitch),
-                    "yaw": math.degrees(msg.yaw),
+                    "roll": math.degrees(attitude.roll_deg),
+                    "pitch": math.degrees(attitude.pitch_deg),
+                    "yaw": math.degrees(attitude.yaw_deg),
                 }
+                break
+        except Exception:
+            pass
 
-            elif msg.get_type() == "VFR_HUD":
-                self.status["speed"] = msg.groundspeed  # In m/s
+        # VFR_HUD / Speed
+        try:
+            async for vfr in self.master.telemetry.velocity_ned():
+                # Compute groundspeed from NED components
+                gs = math.sqrt(vfr.north_m_s ** 2 + vfr.east_m_s ** 2)
+                self.status["speed"] = gs
+                break
+        except Exception:
+            pass
 
-            elif msg.get_type() == "MISSION_CURRENT":
-                if hasattr(msg, "seq"):
-                    self.status["current_waypoint"] = msg.seq
-                    self.status["mission_active"] = msg.seq > 0  # or some other logic
-                if hasattr(msg, "total"):
-                    self.status["total_waypoints"] = msg.total
+        # BATTERY
+        try:
+            async for battery in self.master.telemetry.battery():
+                self.status["battery"] = battery.remaining_percent
+                break
+        except Exception:
+            pass
 
-            elif msg.get_type() == "BATTERY_STATUS":
-                self.status["battery"] = msg.battery_remaining
-            self.status["mode"] = self.master.flightmode
+        # ARMED & FLIGHT MODE
+        try:
+            async for armed_state in self.master.telemetry.armed():
+                self.status["armed"] = armed_state
+                break
+        except Exception:
+            pass
 
-        self.status["timestamp"] = time.time()
-        return self.status
+        try:
+            async for flight_mode in self.master.telemetry.flight_mode():
+                self.status["mode"] = flight_mode
+                break
+        except Exception:
+            pass
 
-    def close(self):
-        self.master.close()
-        delattr(self, "master")
-        self.log("Mavlink Connection closed.", "info")
+        # MISSION CURRENT WAYPOINT
+        try:
+            async for mission_progress in self.master.mission.mission_progress():
+                self.status["current_waypoint"] = mission_progress.current
+                self.status["total_waypoints"] = mission_progress.total
+                self.status["mission_active"] = mission_progress.current > 0
+                break
+        except Exception:
+            pass
+
+        # FLYING STATUS
+        self.status["flying"] = (
+            self.status["armed"] and self.status["mode"] != "STABILIZE"
+        )
+
+        return
+
+    def get_status(self):
+        asyncio.run(self._get_status())
+        return
 
     def goto_waypoint(
         self,
@@ -587,7 +482,6 @@ class ArdupilotConnection:
             0,  # Unused
         )
 
-    # Send kamikaze GPS coordinate
     def goto_kamikaze(self, lat, lon):
         self.set_mode("GUIDED")
         self.set_speed(15)
@@ -799,9 +693,14 @@ class ArdupilotConnection:
         self.log("Mission monitoring timed out", "error")
         return False
 
+    def close(self):
+        self.master.close()
+        delattr(self, "master")
+        self.log("Mavlink Connection closed.", "info")
+
 
 if __name__ == "__main__":
-    connection = ArdupilotConnection("udp:127.0.0.1:14550")
+    connection = Px4Connection("udpin:127.0.0.1:14550")
 
     connection.arm()
     connection.takeoff(10)

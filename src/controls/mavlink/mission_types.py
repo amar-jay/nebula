@@ -16,8 +16,7 @@ class Waypoint(NamedTuple):
     auto: bool
 
 
-@dataclass
-class FrameData:
+class FrameData(NamedTuple):
     """Drone data fetched across MAVLink Proxy for image recognition and gps estimation"""
 
     frame: np.ndarray | None = None
@@ -28,8 +27,7 @@ class FrameData:
     mode: str = "UNKNOWN"
 
 
-@dataclass
-class ProcessedResult:
+class ProcessedResult(NamedTuple):
     """Result of frame processing"""
 
     processed_frame: np.ndarray
@@ -290,6 +288,18 @@ def get_server_config() -> ServerConfig:
         controller_connection_string=controller_connection_string,
         controller_baudrate=controller_baudrate,
     )
+
+
+def is_simulation_mode() -> bool:
+    """Check if the simulation mode is enabled."""
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+            config = yaml.safe_load(file)
+    except Exception as e:
+        raise ValueError(
+            f"Configuration file '{CONFIG_PATH}' error or contains no valid YAML content that could be loaded. {e}"
+        ) from e
+    return config.get("simulation", {}).get("enabled", False)
 
 
 def get_gazebo_config() -> GazeboConfig:

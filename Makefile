@@ -26,7 +26,7 @@ demo_app:
 	@python -m src.gcs.src.main.demo
 
 gz:
-	gz sim -v4 -r ${RUNWAY} 
+	gz sim -v4 -r ${RUNWAY}.sdf
 
 ardupilot_gz:
 	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL_NAME} --model JSON --map --console
@@ -92,6 +92,12 @@ sim_server_zmq:
 
 server_zmq:
 	@python -m src.mq.zmq_server
+
+local_server_zmq:
+	@python -m src.mq.local_detection
+
+local_sim_server_zmq:
+	@python -m src.mq.local_detection --is-simulation
 
 sim_server:
 	@bash -c '\

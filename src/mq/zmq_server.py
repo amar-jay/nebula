@@ -141,8 +141,7 @@ class ZMQServer:
         """Initialize video capture and video writer"""
         try:
             if self.is_simulation:
-                # self.cap = gz.GazeboVideoCapture(fps=10)
-                self.cap = cv2.VideoCapture(self.video_source)
+                self.cap = gz.GazeboVideoCapture(fps=10)
             else:
                 self.cap = cv2.VideoCapture(self.video_source)
 

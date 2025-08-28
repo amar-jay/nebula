@@ -2,12 +2,17 @@ import logging
 
 import zmq
 
+from src.controls.mavlink import mission_types
+
 
 class ZMQClient:
     """ZMQ client for drone control commands"""
 
-    def __init__(self, control_address: str = "tcp://localhost:5556", _logger=None):
-        self.control_address = control_address
+    def __init__(self, _logger=None):
+        self.control_address = mission_types.get_control_address()
+        if self.control_address is None or self.control_address == "":
+            raise ValueError("Control address is not set")
+
         self.log = (
             _logger
             if callable(_logger)
@@ -17,7 +22,7 @@ class ZMQClient:
         self.socket = None
         self.connected = False
 
-        self.log(f"ZMQ Client initialized - Control: {control_address}", "info")
+        self.log(f"ZMQ Client initialized - Control: {self.control_address}", "info")
 
     def connect(self) -> bool:
         """Connect to ZMQ control server"""
@@ -141,7 +146,7 @@ if __name__ == "__main__":
     logger.info("Control Address: %s", args.control_address)
 
     # Create ZMQ client
-    client = ZMQClient(control_address=args.control_address)
+    client = ZMQClient()
 
     # Connect and test commands
     if client.start():

@@ -16,6 +16,7 @@ class ZMQTopics(Enum):
     PROCESSED_VIDEO = "PROCESSED_VIDEO"
     HELIPAD_GPS = "HELIPAD_GPS"
     TANK_GPS = "TANK_GPS"
+    FPS = "FPS"
 
 
 class CraneControls:

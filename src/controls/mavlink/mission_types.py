@@ -37,7 +37,8 @@ class ProcessedResult(NamedTuple):
 
 class Config(NamedTuple):
     mavproxy_source: str
-    control_address: str
+    remote_control_address: str
+    control_address: str # local_control address
     timeout: float
     video_source: int
     video_output: str
@@ -193,6 +194,13 @@ def get_config() -> Config:
             f"Please add: communication.control_address: 'tcp://<host>:<port>'"
         )
 
+    if "remote_control_address" not in server_config or not server_config[
+        "remote_control_address"
+    ].startswith("tcp://"):
+        raise ValueError(
+            f"Missing or invalid 'remote_control_address' field in communication section of '{CONFIG_PATH}'. "
+            f"Please add: communication.remote_control_address: 'tcp://<host>:<port>'"
+        )
     if (
         "mavproxy_source" not in server_config
         or len(server_config["mavproxy_source"].split(":")) < 2
@@ -268,6 +276,7 @@ def get_config() -> Config:
     return Config(
         mavproxy_source=server_config["mavproxy_source"],
         control_address=server_config["control_address"],
+        remote_control_address=server_config["remote_control_address"],
         timeout=timeout,
         video_source=server_config["video_source"],
         video_output=server_config["video_output"],

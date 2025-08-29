@@ -50,6 +50,7 @@ class LocalZMQServer:
         self,
         video_output: str,
         video_source: int | str,
+        mavproxy_source: str,
         control_address: int = 5556,
         is_simulation: bool = False,
         object_classes=("helipad", "tank"),
@@ -57,6 +58,7 @@ class LocalZMQServer:
         self.control_address = control_address
         self.video_source = video_source
         self.video_output = video_output
+        self.mavproxy_source = mavproxy_source
         self.is_simulation = is_simulation
         self.object_classes = object_classes
         self.running = False
@@ -97,10 +99,9 @@ class LocalZMQServer:
                 if self.is_simulation
                 else "src/controls/detection/main.pt"
             )
-            config = mission_types.get_config()
 
             self.drone_client = ardupilot.ArdupilotConnection(
-                connection_string=config.mavproxy_source,
+                connection_string=self.mavproxy_source,
                 logger=logger,
                 wait_heartbeat=True,
             )
@@ -133,9 +134,7 @@ class LocalZMQServer:
                 * 640
             )
             # pylint: disable=E1101
-            self.fps = (
-                int(self.cap.get(cv2.CAP_PROP_FPS)) or 10
-            )  
+            self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 10
 
             # Initialize video writer
             self.video_writer = get_video_writer(
@@ -429,9 +428,10 @@ async def main():
 
     # Initialize server
     server = LocalZMQServer(
-        control_address=config.control_address,
         video_source=config.video_source,
         video_output=config.video_output,  # "rtsp://localhost:8554/processed",
+        mavproxy_source=config.mavproxy_source,
+        control_address=config.control_address,
         is_simulation=gz_config.is_simulation,
         object_classes=object_classes,
     )

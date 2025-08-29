@@ -190,23 +190,24 @@ class YoloObjectTracker:
 
         drone_lat, drone_lon, drone_alt_masl = drone_gps
         roll, pitch, _yaw = drone_attitude
+        #pylint: disable=W0105
         """
-        NOTE on Yaw Handling:
-        !!!!!!!!!!!!!!!!DO NOT TOUCH!!!!!!!!!!!!!!
+            NOTE on Yaw Handling:
+            !!!!!!!!!!!!!!!!DO NOT TOUCH!!!!!!!!!!!!!!
 
-        In MAVLink/NED convention, the drone's yaw angle may be reported
-        with a sign opposite to the mathematical convention used in the
-        camera rotation calculation. As a result, when converting pixel
-        coordinates to GPS coordinates, the yaw must be negated to align
-        the camera's orientation with the NED frame.
+            In MAVLink/NED convention, the drone's yaw angle may be reported
+            with a sign opposite to the mathematical convention used in the
+            camera rotation calculation. As a result, when converting pixel
+            coordinates to GPS coordinates, the yaw must be negated to align
+            the camera's orientation with the NED frame.
 
-        This fixes the issue where the computed target GPS point is
-        significantly offset even for nadir-facing cameras.
+            This fixes the issue where the computed target GPS point is
+            significantly offset even for nadir-facing cameras.
         """
         roll, pitch, yaw = np.deg2rad([roll, pitch, -_yaw])
 
         # Height above ground
-        height_above_ground = drone_alt_masl #- ground_level_masl
+        height_above_ground = drone_alt_masl  # - ground_level_masl
         if height_above_ground <= 0:
             logger.warning("Drone is at or below ground level — cannot compute GPS")
             return None

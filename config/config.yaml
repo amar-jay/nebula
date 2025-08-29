@@ -30,7 +30,7 @@ camera:
 communication:
   mavproxy_destination:   0.0.0.0:16550
   control_address:  tcp://0.0.0.0:5556
-  remote_control_address: tcp://0.0.0.0:5556
+  remote_control_address: tcp://0.0.0.0:5557
   mavproxy_source:        "udp:127.0.0.1:14550"
   timeout:                1000
   video_source:           rtsp://localhost:8554/raw # 0

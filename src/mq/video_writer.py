@@ -238,9 +238,12 @@ class ZMQVideoWriter(VideoWriter):
 
         # Resize if necessary
         if frame.shape[1] != self.width or frame.shape[0] != self.height:
-            frame = cv2.resize(frame, (self.width, self.height))
+            frame = cv2.resize(
+                frame, (self.width, self.height)
+            )  # pylint: disable=E1101
 
         # JPEG encode for transport efficiency
+        # pylint: disable=E1101
         success, encoded = cv2.imencode(
             ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         )
@@ -326,7 +329,9 @@ class RTSPVideoWriter(VideoWriter):
         if not self._running or frame is None:
             return False
         if frame.shape[1] != self.width or frame.shape[0] != self.height:
-            frame = cv2.resize(frame, (self.width, self.height))
+            frame = cv2.resize(
+                frame, (self.width, self.height)
+            )  # pylint: disable=E1101
         try:
             self.process.stdin.write(frame.tobytes())
             self.process.stdin.flush()  # Ensure data is sent immediately

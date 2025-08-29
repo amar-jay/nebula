@@ -10,7 +10,7 @@ from folium.plugins import MousePosition
 from PIL import Image
 from PySide6 import QtWebEngineWidgets
 from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 
 def image_to_base64(image_path, size=(100, 100)):
@@ -59,6 +59,15 @@ class WebEnginePage(QWebEnginePage):
         super().__init__()
         self.parent = parent
 
+    def show_internet_error(self, msg: str):
+        error_dialog = QMessageBox()
+        error_dialog.setIcon(QMessageBox.Critical)
+        error_dialog.setWindowTitle("Internet Connection Error")
+        error_dialog.setText("Cannot load map.")
+        error_dialog.setInformativeText(f"Details:\n{msg}")
+        error_dialog.setStandardButtons(QMessageBox.Ok)
+        error_dialog.exec()
+
     def javaScriptConsoleMessage(self, level, msg, line, sourceID):
         if msg[0] == "m":
             self.parent.clear_mission_fn()
@@ -67,15 +76,20 @@ class WebEnginePage(QWebEnginePage):
                 waypoint = list(map(float, pair.split(",")))
                 self.parent.update_mission_fn(waypoint[0], waypoint[1])
                 # self.parent.mission.append(list(map(float, pair.split(","))))
-        if msg[0] == "p":  # single marker point
+        elif msg[0] == "p":  # single marker point
             markers_pos = msg[1:].split(",")
             self.parent.markers_pos = list(map(float, markers_pos))
             self.parent.update_pos_fn(
                 self.parent.markers_pos[0], self.parent.markers_pos[1]
             )
             print(msg)
+
+        elif "Uncaught ReferenceError" in msg:
+            self.show_internet_error(msg)
+
+            # print("JavaScript Console Message(Error):", msg)
         else:
-            print("JavaScript Console Message(Error):", msg)
+            print("JavaScript Console Message(Error):", msg, level, line, sourceID)
 
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
@@ -89,11 +103,11 @@ class MapWidget(QtWebEngineWidgets.QWebEngineView):
             f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{{z}}/{{x}}/{{y}}@2x"
             f"?access_token={MAPBOX_TOKEN}"
         )
-        print(f"Mapbox tiles URL: {mapbox_tiles}")
-        satellite_tiles = (
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
-            "tile/{z}/{y}/{x}"
-        )
+        # print(f"Mapbox tiles URL: {mapbox_tiles}")
+        # satellite_tiles = (
+        #     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
+        #     "tile/{z}/{y}/{x}"
+        # )
 
         self.fmap = folium.Map(
             location=center_coord,

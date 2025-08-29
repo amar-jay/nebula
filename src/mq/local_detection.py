@@ -29,6 +29,7 @@ FPS_LOG_INTERVAL = 5  # seconds
 log_file = os.path.join(os.path.expanduser("~"), "local_zmq_server.log")
 logger = logging.getLogger("local-zmq-server")
 logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.INFO)
 
 if not logger.hasHandlers():
     formatter = logging.Formatter("%(asctime)s - %(message)s")
@@ -71,6 +72,7 @@ class LocalZMQServer:
         # State management
         self.last_result: Optional[mission_types.ProcessedResult] = None
         self.frame_skip_counter = 0
+        self.fps = 0
 
         # Initialize object tracker
         self._setup_tracker()
@@ -117,7 +119,7 @@ class LocalZMQServer:
         """Initialize video capture and writer"""
         try:
             # Initialize video capture
-            self.cap = cv2.VideoCapture(self.video_source)
+            self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
 
             if not self.cap.isOpened():
                 logger.error(f"Failed to open video source: {self.video_source}")
@@ -126,18 +128,21 @@ class LocalZMQServer:
             # Get video properties
             width = MAX_FRAME_WIDTH  # int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(
-                int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                / int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  # pylint: disable=E1101
+                / int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))  # pylint: disable=E1101
                 * 640
             )
-            self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 10
+            # pylint: disable=E1101
+            self.fps = (
+                int(self.cap.get(cv2.CAP_PROP_FPS)) or 10
+            )  
 
             # Initialize video writer
             self.video_writer = get_video_writer(
                 source=self.video_output,
                 width=width,
                 height=height,
-                fps=self.fps,  # TODO: 10
+                fps=self.fps,
             )
 
             logger.info(
@@ -149,7 +154,7 @@ class LocalZMQServer:
             logger.error(f"Video initialization error: {e}")
             return False
 
-    def _fetch_gps_data(self) -> Optional[Tuple[float, float, float]]:
+    def _fetch_gps_data(self) -> Optional[mission_types.FrameData]:
         """Fetch GPS data from the drone"""
         if not self.drone_client:
             logger.error("Drone client not initialized")
@@ -158,7 +163,8 @@ class LocalZMQServer:
         try:
             return self.drone_client.get_frame_data()
         except Exception as e:
-            logger.error(f"Failed to fetch GPS data: {e}")
+            logger.warning(f"Failed to fetch GPS data: {e}")
+            # print(traceback.format_exc())
             return None
 
     async def _fetch_gps_data_loop(self):
@@ -193,16 +199,15 @@ class LocalZMQServer:
 
                 gps_data = self._fetch_gps_data()
                 if not gps_data:
-                    logger.error(f"Failed to fetch GPS data")
                     await asyncio.sleep(0.1)
                     continue
 
                 # Skip duplicate frames
                 current_hash = hash(frame.tobytes())
                 if prev_frame_hash == current_hash:
-                    logger.debug("Duplicate frame skipped")
-                    await asyncio.sleep(0.1)
-                    continue
+                    logger.warning("Duplicate frame skipped")
+                    # await asyncio.sleep(0.1)
+                    # continue
                 prev_frame_hash = current_hash
 
                 now = time.time()
@@ -218,7 +223,7 @@ class LocalZMQServer:
                 data = mission_types.FrameData(
                     drone_attitude=gps_data.drone_attitude,
                     drone_position=gps_data.drone_position,
-                    ground_level=gps_data.ground_level,
+                    # ground_level=gps_data.ground_level, #TODO: get rid of this
                     mode=gps_data.mode,
                     timestamp=time.time(),
                     frame=self._resize_frame(frame.copy()),
@@ -233,7 +238,7 @@ class LocalZMQServer:
                 # Performance monitoring
                 frame_count += 1
                 if time.time() - fps_timer > FPS_LOG_INTERVAL:
-                    self.fps = frame_count / FPS_LOG_INTERVAL
+                    self.fps = frame_count / FPS_LOG_INTERVAL * 10
                     logger.debug(f"Processing at {self.fps:.1f} FPS")
                     frame_count = 0
                     fps_timer = time.time()
@@ -254,6 +259,7 @@ class LocalZMQServer:
             scale = MAX_FRAME_WIDTH / width
             new_width = int(width * scale)
             new_height = int(height * scale)
+            # pylint: disable=E1101
             frame = cv2.resize(frame, (new_width, new_height))
         return frame
 
@@ -267,7 +273,6 @@ class LocalZMQServer:
                 frame=frame_data.frame,
                 drone_gps=frame_data.drone_position,
                 drone_attitude=frame_data.drone_attitude,
-                ground_level_masl=frame_data.ground_level,
                 object_classes=self.object_classes,
             )
 
@@ -279,6 +284,7 @@ class LocalZMQServer:
                 pixel_coords=pixel_coords,
                 mode=frame_data.mode,
                 object_classes=self.object_classes,
+                fps=self.fps,
             )
 
             return mission_types.ProcessedResult(
@@ -401,7 +407,7 @@ async def main():
 
     # Load configuration
     config = mission_types.get_config()
-    logger.info(f"Configuration loaded: {config}")
+    logger.info(f"Configuration loaded:\n{config}")
 
     # Enable simulation video streaming if needed
     if args.is_simulation:
@@ -425,7 +431,7 @@ async def main():
     server = LocalZMQServer(
         control_address=config.control_address,
         video_source=config.video_source,
-        video_output="ipc:///tmp/video.sock",  # "rtsp://localhost:8554/processed",
+        video_output=config.video_output,  # "rtsp://localhost:8554/processed",
         is_simulation=gz_config.is_simulation,
         object_classes=object_classes,
     )

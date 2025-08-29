@@ -170,7 +170,6 @@ class YoloObjectTracker:
         pixel_coords: Tuple[int, int],
         drone_gps: Tuple[float, float, float],
         drone_attitude: Tuple[float, float, float],
-        ground_level_masl: float,
         K: Optional[np.ndarray] = None,
     ) -> Optional[Tuple[float, float]]:
         """
@@ -179,7 +178,7 @@ class YoloObjectTracker:
         Args:
             pixel_coords: (u, v) pixel coordinates
             drone_gps: (lat, lon, alt_masl) drone GPS position
-            drone_attitude: (roll, pitch, yaw) in radians
+            drone_attitude: (roll, pitch, yaw) in degrees
             ground_level_masl: Ground elevation in meters above sea level
             K: Camera intrinsic matrix (uses default if None)
 
@@ -190,10 +189,24 @@ class YoloObjectTracker:
             K = self.K
 
         drone_lat, drone_lon, drone_alt_masl = drone_gps
-        roll, pitch, yaw = drone_attitude
+        roll, pitch, _yaw = drone_attitude
+        """
+        NOTE on Yaw Handling:
+        !!!!!!!!!!!!!!!!DO NOT TOUCH!!!!!!!!!!!!!!
+
+        In MAVLink/NED convention, the drone's yaw angle may be reported
+        with a sign opposite to the mathematical convention used in the
+        camera rotation calculation. As a result, when converting pixel
+        coordinates to GPS coordinates, the yaw must be negated to align
+        the camera's orientation with the NED frame.
+
+        This fixes the issue where the computed target GPS point is
+        significantly offset even for nadir-facing cameras.
+        """
+        roll, pitch, yaw = np.deg2rad([roll, pitch, -_yaw])
 
         # Height above ground
-        height_above_ground = drone_alt_masl - ground_level_masl
+        height_above_ground = drone_alt_masl #- ground_level_masl
         if height_above_ground <= 0:
             logger.warning("Drone is at or below ground level — cannot compute GPS")
             return None
@@ -203,12 +216,12 @@ class YoloObjectTracker:
         pixel_homog = np.array([u, v, 1.0])
 
         try:
-            k_inv = np.linalg.inv(K)
+            K_inv = np.linalg.inv(K)
         except np.linalg.LinAlgError:
             logger.error("Camera intrinsic matrix is singular")
             return None
 
-        cam_ray = k_inv @ pixel_homog
+        cam_ray = K_inv @ pixel_homog
         cam_ray = cam_ray / np.linalg.norm(cam_ray)
 
         # Transform to world coordinates
@@ -258,6 +271,7 @@ class YoloObjectTracker:
         pixel_coords: Dict[str, Tuple[int, int]],
         mode="UNKNOWN",
         object_classes: Tuple[str, str] = ("helipad", "real_tank"),
+        fps=30.0,
     ):
         """Write overlay information on the frame"""
         _, frame_w = frame.shape[:2]
@@ -284,7 +298,7 @@ class YoloObjectTracker:
                 lat, lon = gps_coords.get(obj, (None, None))
 
                 text_color = (255, 255, 255)
-                accent_color = (130, 160, 255)
+                accent_color = (255, 160, 130)
 
                 cv2.circle(overlay, (px, py), 6, accent_color, -1)
 
@@ -336,6 +350,17 @@ class YoloObjectTracker:
             cv2.LINE_AA,
         )
 
+        fps_text = f"FPS: {fps:.2f}"
+        cv2.putText(
+            overlay,
+            fps_text,
+            (10, y),  # Position (x, y)
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (100, 100, 0),
+            2,
+        )
+
         # Draw current GPS and distance to helipad (bottom-left)
         gps_text_lines = []
         curr_lat, curr_lon, curr_alt = curr_gps
@@ -354,7 +379,7 @@ class YoloObjectTracker:
             rect_tl = (start_x - 6, start_y - th - 6 - i * int(1.5 * th))
             rect_br = (start_x + tw + 6, start_y + 4 - i * int(1.5 * th))
 
-            cv2.rectangle(overlay, rect_tl, rect_br, (30, 30, 50), -1)
+            cv2.rectangle(overlay, rect_tl, rect_br, (50, 30, 30), -1)
             cv2.putText(
                 overlay,
                 line,
@@ -463,7 +488,7 @@ class YoloObjectTracker:
         frame: np.ndarray,
         drone_gps: Tuple[float, float, float],
         drone_attitude: Tuple[float, float, float],
-        ground_level_masl: float,
+        # ground_level_masl: float,
         K: Optional[np.ndarray] = None,
         object_classes: Tuple[str, str] = ("helipad", "real_tank"),
         threshold: float = 0.5,
@@ -494,7 +519,7 @@ class YoloObjectTracker:
 
             color = (100, 255, 0)  # Could be made configurable
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.circle(frame, center, 8, (255, 0, 255), -1)
+            # cv2.circle(frame, center, 8, (255, 0, 255), -1)
 
             # Add label with tracking ID if available
             label = f"{object_class}: {detection.confidence:.2f}"
@@ -516,7 +541,6 @@ class YoloObjectTracker:
                 pixel_coords=center,
                 drone_gps=drone_gps,
                 drone_attitude=drone_attitude,
-                ground_level_masl=ground_level_masl,
                 K=K,
             )
 
@@ -592,7 +616,7 @@ def main():
                     frame,
                     drone_gps=(0, 0, 410),  # Replace with actual GPS
                     drone_attitude=(0, 0, 0),  # Replace with actual attitude
-                    ground_level_masl=387,
+                    # ground_level_masl=387,
                     K=K,
                     object_classes=object_classes,
                     threshold=0.5,

@@ -6,8 +6,8 @@ import traceback
 import cv2
 import numpy as np
 
-# pylint: disable=E0611
-from PySide6.QtCore import Qt, Slot
+# pylint: disable=E0611,E1101
+from PySide6.QtCore import Qt, QThread, Slot
 from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -132,7 +132,25 @@ class CameraWidget(QWidget):
         # Disconnect button - always enabled to allow force disconnect
         self.disconnect_btn = QPushButton("Disconnect")
         self.disconnect_btn.clicked.connect(self.disconnect_camera)
+        self.disconnect_menu = QMenu("Disconnect", self)
         self.disconnect_btn.setEnabled(True)  # Always allow disconnect
+        self.disconnect_menu.addAction(
+            Action(
+                icon=FIF.CONNECT,
+                text="Normal",
+                triggered=lambda: self.disconnect_camera(),  # pylint: disable=W0108
+            )
+        )
+
+        self.disconnect_menu.addAction(
+            Action(
+                icon=FIF.CONNECT,
+                text="Force",
+                triggered=lambda: self.disconnect_camera(is_force=True),
+            )
+        )
+
+        self.disconnect_btn.setMenu(self.disconnect_menu)
 
         # Reconnect button
         self.reconnect_btn = QPushButton("🔄")
@@ -166,7 +184,8 @@ class CameraWidget(QWidget):
         # Add controls to layout
         control_layout.addWidget(self.connect_btn)
         control_layout.addWidget(self.disconnect_btn)
-        control_layout.addWidget(self.reconnect_btn)
+        # TODO: Faulty across all RTSP/ TCP/ IPC. DO NOT USE IT
+        # control_layout.addWidget(self.reconnect_btn)
         control_layout.addWidget(self.record_btn)
         control_layout.addWidget(self.pause_btn)
         control_layout.addStretch()
@@ -210,21 +229,29 @@ class CameraWidget(QWidget):
         """Setup persistent video threads for both raw and processed streams"""
         try:
             # Create raw video thread
-            self.raw_thread = get_video_thread(self.raw_url, parent=self, logger=self.logger)
+            self.raw_thread = get_video_thread(
+                self.raw_url, parent=self, logger=self.logger
+            )
             self.raw_thread.frame_ready.connect(self._on_raw_frame)
-            self.raw_thread.status_update.connect(lambda msg: self._on_status_update(msg, "raw"))
-            
+            self.raw_thread.status_update.connect(
+                lambda msg: self._on_status_update(msg, "raw")
+            )
+
             # Create processed video thread
-            self.processed_thread = get_video_thread(self.processed_url, parent=self, logger=self.logger)
+            self.processed_thread = get_video_thread(
+                self.processed_url, parent=self, logger=self.logger
+            )
             self.processed_thread.frame_ready.connect(self._on_processed_frame)
-            self.processed_thread.status_update.connect(lambda msg: self._on_status_update(msg, "processed"))
-            
+            self.processed_thread.status_update.connect(
+                lambda msg: self._on_status_update(msg, "processed")
+            )
+
             # Start both threads but they won't display until connected
             self.raw_thread.start()
             self.processed_thread.start()
-            
+
             self.logger("Video threads initialized successfully", "info")
-            
+
         except Exception as e:
             self.logger(f"Error setting up video threads: {e}", "error")
             traceback.print_exc()
@@ -232,7 +259,7 @@ class CameraWidget(QWidget):
     def _cleanup_threads(self):
         """Clean up both video threads"""
         threads = [("raw", self.raw_thread), ("processed", self.processed_thread)]
-        
+
         for thread_name, thread in threads:
             if thread:
                 try:
@@ -241,18 +268,19 @@ class CameraWidget(QWidget):
                     thread.status_update.disconnect()
                 except (AttributeError, RuntimeError, TypeError):
                     pass
-                
+
                 try:
-                    # Stop thread
+                    thread.stop()  # Ensure thread's run loop exits
+                    thread.wait(10000)  # Wait for thread to finish (max 10 seconds)
                     if thread.isRunning():
-                        thread.stop()
-                        if not thread.wait(3000):  # 3 second timeout
-                            self.logger(f"Force terminating {thread_name} thread", "warning")
-                            thread.terminate()
-                            thread.wait(1000)
+                        self.logger(
+                            f"Force terminating {thread_name} thread", "warning"
+                        )
+                        thread.terminate()
+                        thread.wait(1000)
                 except Exception as e:
                     self.logger(f"Error stopping {thread_name} thread: {e}", "error")
-        
+
         # Clear references
         self.raw_thread = None
         self.processed_thread = None
@@ -294,42 +322,23 @@ class CameraWidget(QWidget):
 
     def reconnect_camera(self):
         """Robustly reconnect both camera threads, cleaning up signals and threads first."""
-        self.logger("Reconnecting both camera streams...", "info")
-        # Clean up threads and signals
-        for thread_name, thread in [("raw", self.raw_thread), ("processed", self.processed_thread)]:
-            if thread:
-                try:
-                    thread.frame_ready.disconnect()
-                    thread.status_update.disconnect()
-                except Exception:
-                    pass
-                try:
-                    if thread.isRunning():
-                        thread.stop()
-                        if not thread.wait(3000):
-                            self.logger(f"Force terminating {thread_name} thread", "warning")
-                            thread.terminate()
-                            thread.wait(1000)
-                except Exception as e:
-                    self.logger(f"Error stopping {thread_name} thread: {e}", "error")
-        # Recreate threads
-        try:
-            self.raw_thread = get_video_thread(self.raw_url, parent=self, logger=self.logger)
-            self.raw_thread.frame_ready.connect(self._on_raw_frame)
-            self.raw_thread.status_update.connect(lambda msg: self._on_status_update(msg, "raw"))
-            self.raw_thread.start()
-            self.processed_thread = get_video_thread(self.processed_url, parent=self, logger=self.logger)
-            self.processed_thread.frame_ready.connect(self._on_processed_frame)
-            self.processed_thread.status_update.connect(lambda msg: self._on_status_update(msg, "processed"))
-            self.processed_thread.start()
-            self.logger("Video threads re-initialized successfully", "info")
-        except Exception as e:
-            self.logger(f"Error re-initializing video threads: {e}", "error")
-            traceback.print_exc()
-        self.active_thread = None
-        self.is_connected = False
-        self.current_stream_type = None
-        self.show_placeholder()
+        self.reconnect_btn.setEnabled(False)
+        if not self.current_stream_type:
+            self.logger("No previous stream type to reconnect to", "warning")
+            return
+
+        # Store the current stream type
+        stream_type = self.current_stream_type
+
+        # Disconnect current display
+        self.disconnect_camera()
+
+        QThread.msleep(100)  # 100 ms
+
+        # Reconnect to the same stream type
+        self.connect_camera(_type=stream_type)
+
+        self.logger(f"Reconnecting to {stream_type} stream", "info")
 
     def connect_camera(self, _type: str = "processed"):
         """Switch to display specified stream type"""
@@ -340,30 +349,30 @@ class CameraWidget(QWidget):
 
         try:
             if self.raw_thread is None and self.processed_thread is None:
-              self._setup_video_threads()
+                self._setup_video_threads()
 
             # Disable UI elements during connection switch
             self.connect_btn.setEnabled(False)
-            
+
             # Check if threads are available
             target_thread = self.raw_thread if _type == "raw" else self.processed_thread
             if not target_thread:
                 self.logger(f"Error: {_type} thread not available", "error")
                 self.connect_btn.setEnabled(True)
                 return
-            
+
             # Switch active thread
             self.active_thread = target_thread
             self.current_stream_type = _type
             self.is_connected = True
-            
+
             # Update UI
             self.status_label.setText(f"Camera Connected ({_type})")
             self.record_btn.setEnabled(True)
             self.reconnect_btn.setEnabled(True)
-            
+
             self.logger(f"Switched to {_type} video stream", "info")
-            
+
         except Exception as e:
             self.logger(f"Error switching to {_type} stream: {e}", "error")
             traceback.print_exc()
@@ -381,7 +390,9 @@ class CameraWidget(QWidget):
     @Slot(np.ndarray)
     def _on_processed_frame(self, frame):
         """Handle frame from processed video thread"""
+        # print(frame.shape, self.is_connected)
         if self.is_connected and self.current_stream_type == "processed":
+            # print(frame.shape)
             self._update_display(frame)
 
     def _update_display(self, frame):
@@ -412,7 +423,7 @@ class CameraWidget(QWidget):
         # Only process status updates for the currently active stream
         if self.is_connected and self.current_stream_type == stream_type:
             self.logger(f"Video status ({stream_type}): {message}", "info")
-            
+
             if "connected successfully" in message.lower():
                 self.status_label.setText(f"Camera Connected ({stream_type})")
             elif "failed" in message.lower() or "error" in message.lower():
@@ -422,7 +433,7 @@ class CameraWidget(QWidget):
                 if "frame" not in message.lower():
                     self.status_label.setText(message)
 
-    def disconnect_camera(self):
+    def disconnect_camera(self, is_force: bool = False):
         """Disconnect camera display (threads keep running in background)"""
         try:
             # Set flags
@@ -433,6 +444,9 @@ class CameraWidget(QWidget):
             # Stop recording if active
             if self.is_recording:
                 self.stop_recording()
+
+            if is_force:
+                self._cleanup_threads()
 
             # Update UI
             self.reconnect_btn.setEnabled(False)
@@ -481,7 +495,8 @@ class CameraWidget(QWidget):
             os.makedirs("recordings", exist_ok=True)
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             self.recording_filename = os.path.join(
-                "recordings", f"drone_recording_{self.current_stream_type}_{timestamp}.mp4"
+                "recordings",
+                f"drone_recording_{self.current_stream_type}_{timestamp}.mp4",
             )
 
             # Start recording in the active video thread
@@ -492,7 +507,9 @@ class CameraWidget(QWidget):
             self.pause_btn.setEnabled(True)
             self.recording_indicator.show()
             self.recording_indicator.setStyleSheet("color: #d83b01; font-size: 20px;")
-            self.status_label.setText(f"Recording: {os.path.basename(self.recording_filename)}")
+            self.status_label.setText(
+                f"Recording: {os.path.basename(self.recording_filename)}"
+            )
 
         except Exception as e:
             self.logger(f"Error starting recording: {e}", "error")
@@ -513,12 +530,12 @@ class CameraWidget(QWidget):
             self.pause_btn.setEnabled(False)
             self.pause_btn.setText("⏸️")
             self.recording_indicator.hide()
-            
+
             status_text = "Recording Saved"
             if self.is_connected:
                 status_text = f"Camera Connected ({self.current_stream_type})"
             self.status_label.setText(status_text)
-            
+
         except Exception as e:
             self.logger(f"Error stopping recording: {e}", "error")
             traceback.print_exc()

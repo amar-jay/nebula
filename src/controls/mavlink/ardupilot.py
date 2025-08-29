@@ -1,7 +1,7 @@
+import enum
 import logging
 import math
 import time
-from dataclasses import dataclass
 
 import pymavlink.dialects.v20.all as dialect
 from pymavlink import mavutil
@@ -9,8 +9,7 @@ from pymavlink import mavutil
 from src.controls.mavlink.mission_types import FrameData, Waypoint
 
 
-@dataclass
-class WaypointState:
+class WaypointState(enum.Enum):
     FLYING_AUTO = "flying_auto"
     POSITIONING = "positioning"
     WAITING_DROP = "waiting_drop"
@@ -35,6 +34,7 @@ class ArdupilotConnection:
             "info",
         )
         self.current_state = WaypointState.FLYING_AUTO
+        self.num_wp = 0
 
         self.status = {
             "home": None,
@@ -334,22 +334,22 @@ class ArdupilotConnection:
         """
         if not self.master:
             raise ConnectionError("Mavlink connection not established")
-        if not self.status.get("position", {}).get("lat", None) or not self.status.get(
-            "orientation", {}
-        ).get("yaw", None):
-            raise ConnectionError("MAVLink connection telemetry error")
+        if not self.status:
+            raise ConnectionError("MAVLink connection status error")
+        if (
+            self.status["position"] is None
+            or not self.status["position"].get("lat", None)
+            or not self.status.get("orientation", {}).get("yaw", None)
+        ):
+            raise ConnectionError("MAVLink connection GPS telemetry error")
 
         pos: dict[str, float] = self.status.get("position", {})
         att: dict[str, float] = self.status.get("orientation", {})
-        # yaw = self.status["attitude"]["yaw"]
-        # Normalize yaw to [0, 2π]
-        if att.get("yaw", 0) < 0:
-            att["yaw"] += 2 * math.pi
         return FrameData(
             frame=None,
             mode=self.status["mode"],
             drone_position=(pos["lat"], pos["lon"], pos["alt"]),
-            ground_level=pos["amsl"] - pos["alt"],
+            # ground_level=pos["amsl"] - pos["alt"],
             drone_attitude=(att["roll"], att["pitch"], att["yaw"]),
             timestamp=self.status["timestamp"],
         )
@@ -404,6 +404,7 @@ class ArdupilotConnection:
     def get_current_attitude(self, blocking=True, timeout=1.0):
         """
         Get the current attitude (roll, pitch, yaw) of the drone in radians.
+        BECAREFUL. MIGHT BE FALSE. CROSS CHECK RAD TO DEG CONVERSION FIRST
 
         Returns:
             tuple: (roll, pitch, yaw) in radians
@@ -463,7 +464,6 @@ class ArdupilotConnection:
             if not msg:
                 continue
             if msg.get_type() == "HOME_POSITION":
-                print("home position")
                 self.status["home"] = {
                     "lat": msg.latitude / 1e7,
                     "lon": msg.longitude / 1e7,
@@ -509,10 +509,10 @@ class ArdupilotConnection:
         return self.status
 
     def close(self):
-        if self.master:
+        if hasattr(self, "master") and self.master:
             self.master.close()
-        delattr(self, "master")
-        self.log("Mavlink Connection closed.", "info")
+            delattr(self, "master")
+            self.log("Mavlink Connection closed.", "info")
 
     def goto_waypoint(
         self,
@@ -600,11 +600,11 @@ class ArdupilotConnection:
         self.goto_waypointv2(lat, lon, 1)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
-        location = self.get_relative_gps_location()
-        if location is None:
+        _loc = self.get_relative_gps_location()
+        if _loc is None:
             self.log("failed to get gps location", "error")
             return False
-        lat, lon, alt = location
+        lat, lon, alt = _loc
         # print(f"difference: {abs(_lat-lat)} , {abs(_lon-lon)}, {_alt}/{alt}")
         if abs(_lat - lat) < 5e-6 and abs(_lon - lon) < 5e-6 and abs(_alt - alt) < 1e-2:
             self.log("Reposition reached!", "success")
@@ -620,14 +620,14 @@ class ArdupilotConnection:
         """
         # Persistent storage for last waypoint handled
         if not hasattr(self, "_last_reached_seq"):
-            self._last_reached_seq = 0
+            self._last_reached_seq = 0  # pylint: disable=W0201
 
         # Refresh status to get latest MISSION_CURRENT
         # self.get_status()  # must update self.status["current_waypoint"]. Its autoupdated
 
         seq = int(self.status.get("current_waypoint", -1))
         if seq > self._last_reached_seq:
-            self._last_reached_seq = seq
+            self._last_reached_seq = seq  # pylint: disable=W0201
             return True, seq
 
         return False, self._last_reached_seq
@@ -715,7 +715,7 @@ class ArdupilotConnection:
                             delattr(self, "_target_lat")
                         if hasattr(self, "_target_lon"):
                             delattr(self, "_target_lon")
-                        self._last_reached_seq = 0
+                        self._last_reached_seq = 0  # pylint: disable=W0201
 
                         return True
                     if is_auto is not None and not is_auto(idx):
@@ -731,7 +731,11 @@ class ArdupilotConnection:
                         self.set_mission_waypoint(self._last_reached_seq)
                         self.set_mode("AUTO")
                         return False
-                    self._target_lat, self._target_lon = helipad_gps
+                    # pylint: disable=W0201
+                    (
+                        self._target_lat,
+                        self._target_lon,
+                    ) = helipad_gps
                     if self._target_lat is not None and self._target_lon is not None:
                         self.goto_waypointv2(
                             alt=5,

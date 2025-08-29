@@ -28,6 +28,7 @@ class DroneClient(QObject):
 
     def __init__(
         self,
+        control_address: str,
         logger=None,
     ):
         super().__init__()
@@ -41,6 +42,7 @@ class DroneClient(QObject):
         self.master_connection = None
         self.kamikaze_connection = None
         self.log = logger if logger is not None else print
+        self._control_address = control_address
 
         self.zmq_client = None
 
@@ -48,11 +50,6 @@ class DroneClient(QObject):
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._update_status)
         self.status_timer.setInterval(500)  # Update every half second
-
-        try:
-            self._control_address = mission_types.get_control_address()
-        except Exception as e:
-            self.log(e)
 
     def stabilize(self, alt):
         if self._helipad_gps is None:
@@ -176,26 +173,18 @@ class DroneClient(QObject):
                 self.master_connection.fetch_home()
 
                 # Start status updates
-                self.log("Starting ZMQ client...")
-                if connection_string.startswith("tcp:"):
-                    address = connection_string[4:].split(":")[0]
-                    # parse the connection string and get the ip
-                    print("ZMQ ADDRESS: ", connection_string, address)
-                    self.zmq_client = ZMQClient(
-                        _logger=self.log,
-                    )
-                    self.zmq_client.connect()
-                    self.log("ZMQ client started")
-                self.log("Starting status timer...")
+                self.zmq_client = ZMQClient(
+                    control_address=self._control_address,
+                    _logger=self.log,
+                )
+                self.zmq_client.connect()
                 self.status_timer.start()
-
-            if not is_kamikaze:
+                self.log("Connected to main drone successfully", "success")
                 self.connection_status.emit(
                     True,
-                    f"[MAVLink] Connected to {connection_string} for {'Kamikaze' if is_kamikaze else 'Drone'}",
+                    f"[MAVLink] Connected to {connection_string} for Drone",
                 )
 
-            # self.connection_status.emit(True, f"[MAVLink] Heartbeat from system {connection.target_system}, component {connection.target_component}")
             return True
         except:
             print(traceback.format_exc())
@@ -360,7 +349,7 @@ class DroneClient(QObject):
             return False
 
         self.current_waypoint_index = 1
-        self.mission_completed = False
+        self.mission_completed = False  # pylint: disable=W0201
 
         self.master_connection.start_mission()
 
@@ -387,7 +376,7 @@ class DroneClient(QObject):
 
     def _update_status_hook(self, current, done, state="AUTO"):
         self.current_waypoint_index = current
-        self.mission_completed = done
+        self.mission_completed = done  # pylint: disable=W0201
         self._status["mission_state"] = state
         if done:
             self._status["mission_state"] = "COMPLETED"

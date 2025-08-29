@@ -28,20 +28,15 @@ camera:
     ]
 
 communication:
-  mavproxy_destination: 0.0.0.0:16550
-  control_address: tcp://0.0.0.0:5556
-  mavproxy_source: "udp:127.0.0.1:14550"
-  timeout: 1000
-  # video_source: 0
-  video_source: rtsp://localhost:8554/raw
-  video_output: rtsp://localhost:8554/processed
-  # controller_connection_string: /dev/ttyUSB0
-  controller_baudrate: 9600
-video:
-  recording_format: mp4
-  raw_url: rtsp://localhost:8554/raw #rtsp://192.168.144.11:8554/fpv_stream #rtsp://localhost:8554/raw #rtsps://192.168.144.11:8554/fpv_stream #"rtsp://localhost:8554/raw"
-  processed_url: rtsp://localhost:8554/processed #rtsp://192.168.144.11:8554/fpv_stream #rtsps://192.168.144.11:8554/processed
-  #processed_url: "rtsp://localhost:8554/processed"
+  mavproxy_destination:   0.0.0.0:16550
+  control_address:  tcp://0.0.0.0:5556
+  remote_control_address: tcp://0.0.0.0:5556
+  mavproxy_source:        "udp:127.0.0.1:14550"
+  timeout:                1000
+  video_source:           rtsp://localhost:8554/raw # 0
+  video_output:           ipc:///tmp/matek_video.sock # rtsp://localhost:8554/processed # tcp://0.0.0.0:5555 # ipc:///tmp/matek_video.sock
+  controller_connection_string: /dev/ttyUSB0
+  controller_baudrate:    9600
 simulation:
   enabled: true
   world: "delivery_runway"

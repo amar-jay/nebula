@@ -1,7 +1,6 @@
 import os
 import warnings
-from dataclasses import dataclass
-from typing import Any, Dict, NamedTuple, Tuple
+from typing import Dict, NamedTuple, Tuple
 
 import numpy as np
 import yaml
@@ -23,7 +22,7 @@ class FrameData(NamedTuple):
     timestamp: float | None = None
     drone_position: tuple[float, float, float] | None = None
     drone_attitude: tuple[float, float, float] | None = None
-    ground_level: float | None = None
+    # ground_level: float | None = None
     mode: str = "UNKNOWN"
 
 
@@ -46,16 +45,34 @@ class Config(NamedTuple):
     controller_baudrate: int
 
     def __repr__(self):
-        return (
-            f"ServerConfig(mavproxy_source={self.mavproxy_source}\n"
-            f"\tcontrol_address={self.control_address},\n"
-            f"\video_output={self.video_output},\n"
-            f"\tcontroller_connection_string={self.controller_connection_string},\n"
-            f"\tcontroller_baudrate={self.controller_baudrate},\n"
-            f"\ttimeout={self.timeout},\n"
-            f"\tvideo_source={self.video_source}\n"
-            ")"
-        )
+        # Collect all attributes and their values
+        attrs = [
+            ("mavproxy_source", self.mavproxy_source),
+            ("control_address", self.control_address),
+            ("video_source", self.video_source),
+            ("video_output", self.video_output),
+            ("controller_connection_string", self.controller_connection_string),
+            ("controller_baudrate", self.controller_baudrate),
+            ("timeout", self.timeout),
+        ]
+
+        # Compute max widths for columns
+        col1_width = max(len(name) for name, _ in attrs)
+        col2_width = max(len(str(value)) for _, value in attrs)
+
+        # Table header
+        table = f"+{'-' * (col1_width + 2)}+{'-' * (col2_width + 2)}+\n"
+        table += f"| {'Config'.ljust(col1_width)} | {'Value'.ljust(col2_width)} |\n"
+        table += f"+{'-' * (col1_width + 2)}+{'-' * (col2_width + 2)}+\n"
+
+        # Table rows
+        for name, value in attrs:
+            table += f"| {name.ljust(col1_width)} | {str(value).ljust(col2_width)} |\n"
+
+        # Table footer
+        table += f"+{'-' * (col1_width + 2)}+{'-' * (col2_width + 2)}+"
+
+        return table
 
 
 class GazeboConfig(NamedTuple):
@@ -130,26 +147,26 @@ def get_camera_params():
     }
 
 
-def get_control_address() -> str:
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
-            config = yaml.safe_load(file)
-            server_config = config.get("communication", {})
-            if not server_config:
-                raise ValueError(
-                    f"Server configuration not found in YAML config file at '{CONFIG_PATH}'. "
-                    f"Please add a 'communication:' section to your config.yaml file."
-                )
-            if "control_address" not in server_config:
-                raise ValueError(
-                    f"Missing 'control_address' field in communication section of '{CONFIG_PATH}'. "
-                    f"Please add: communication.control_address: 'tcp://<host>:<port>'"
-                )
-            return server_config["control_address"]
-    except Exception as e:
-        raise ValueError(
-            f"Configuration file '{CONFIG_PATH}' is empty or contains no valid YAML content. \n{e}"
-        ) from e
+# def get_control_address() -> str:
+#     try:
+#         with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+#             config = yaml.safe_load(file)
+#             server_config = config.get("communication", {})
+#             if not server_config:
+#                 raise ValueError(
+#                     f"Server configuration not found in YAML config file at '{CONFIG_PATH}'. "
+#                     f"Please add a 'communication:' section to your config.yaml file."
+#                 )
+#             if "control_address" not in server_config:
+#                 raise ValueError(
+#                     f"Missing 'control_address' field in communication section of '{CONFIG_PATH}'. "
+#                     f"Please add: communication.control_address: 'tcp://<host>:<port>'"
+#                 )
+#             return server_config["control_address"]
+#     except Exception as e:
+#         raise ValueError(
+#             f"Configuration file '{CONFIG_PATH}' is empty or contains no valid YAML content. \n{e}"
+#         ) from e
 
 
 def get_config() -> Config:
@@ -181,7 +198,7 @@ def get_config() -> Config:
         or len(server_config["mavproxy_source"].split(":")) < 2
     ):
         print(
-            f"Warning: Invalid or missing 'mavproxy_source' in '{CONFIG_PATH}': '{mavproxy_src}'. "
+            f"Warning: Invalid or missing 'mavproxy_source' in '{CONFIG_PATH}': '{server_config['mavproxy_source']}'. "
             f"Should be in format 'udp:<host>:<port>' or 'tcp:<host>:<port>' or '/dev/tty*'. "
             f"Using default value 'udp:localhost:14550'."
         )
@@ -208,6 +225,23 @@ def get_config() -> Config:
         raise ValueError(
             f"Invalid 'communication.video_source' in '{CONFIG_PATH}': '{server_config['video_source']}' (type: {type(server_config['video_source']).__name__}). "
             f"Must be either an integer device ID (0, 1, 2, etc.) or rtsp://<host>:<port>"
+        )
+
+    if "video_output" in server_config:
+        if not (
+            server_config["video_output"].startswith("rtsp://")
+            or server_config["video_output"].startswith("rtsps://")
+            or server_config["video_output"].startswith("tcp://")
+            or server_config["video_output"].startswith("ipc://")
+        ):
+            raise ValueError(
+                f"Invalid string format for 'communication.video_output' in '{CONFIG_PATH}': '{server_config['video_output']}'. "
+                f"Value must be RTSP URLs starting with 'rtsp://' or 'rtsps://' or 'tcp://' or 'ipc://'."
+            )
+    else:
+        raise ValueError(
+            f"Invalid type of 'communication.video_output' in '{CONFIG_PATH}': '{server_config['video_output']}' (type: {type(server_config['video_output']).__name__}). "
+            f"Value must be RTSP URLs starting with 'rtsp://' or 'rtsps://' or 'tcp://' or 'ipc://'."
         )
 
     # get controller connection string and baudrate
@@ -287,5 +321,5 @@ def get_gazebo_config() -> GazeboConfig:
         world=world.strip(),
         model_name=model_name.strip(),
         camera_link=camera_link.strip(),
-        is_simulation_mode=is_simulation,
+        is_simulation=is_simulation,
     )

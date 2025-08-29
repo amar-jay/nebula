@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import zmq
 
-# pylint: disable=E0611
+# pylint: disable=E0611,E1101
 from PySide6.QtCore import QThread, Signal
 
 
@@ -14,6 +14,7 @@ class VideoThread(QThread):
         self.url = url
         self.running = False
         self.cap = None
+        self.fps = 20.0
         self.logger = logger if logger else print
 
         # Video recording attributes
@@ -73,7 +74,7 @@ class VideoThread(QThread):
             height, width = frame_shape[:2]
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             self.video_writer = cv2.VideoWriter(
-                self.recording_filepath, fourcc, 20.0, (width, height)
+                self.recording_filepath, fourcc, self.fps, (width, height)
             )
 
 
@@ -211,6 +212,7 @@ class RTSPVideoThread(VideoThread):
                 # Open RTSP stream
                 self.status_update.emit(f"Attempting to connect to RTSP: {current_url}")
                 self.cap = cv2.VideoCapture(current_url)
+                self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 20
 
                 # Check if we should stop after creating capture
                 if not self.running:

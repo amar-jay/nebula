@@ -60,12 +60,11 @@ from qfluentwidgets import TableWidget as QTableWidget
 from qfluentwidgets import TextEdit as QTextEdit
 from qfluentwidgets import (
     Theme,
-    ToolButton,
     setTheme,
     setThemeColor,
 )
 
-from src.controls.mavlink.mission_types import Waypoint
+from src.controls.mavlink.mission_types import Waypoint, get_config
 from src.gcs.drone_client import DroneClient
 from src.gcs.src.camera.camera_widget import CameraWidget
 from src.gcs.src.horizon.attitude_widget import AttitudeIndicator
@@ -294,7 +293,11 @@ class DroneControlApp(QMainWindow):
         QApplication.instance().setProperty("timestamp_fn", self._get_timestamp)
 
         # Initialize drone client
-        self.drone_client = DroneClient()
+
+        self.config = get_config()
+        self.drone_client = DroneClient(
+            control_address=self.config.control_address,
+        )
 
         # Initialize UI components
         self._init_ui()
@@ -810,7 +813,12 @@ class DroneControlApp(QMainWindow):
         console_layout.addWidget(self.console)
 
         # camera display tab
-        camera_widget = CameraWidget(parent=self, logger=self.console.append_message)
+        camera_widget = CameraWidget(
+            raw_url=self.config.video_source,
+            processed_url=self.config.video_output,
+            parent=self,
+            logger=self.console.append_message,
+        )
 
         # Add tabs to the tab widget
         self._create_tab(
@@ -1387,10 +1395,10 @@ class DroneControlApp(QMainWindow):
                     f"WP: {current_wp}/{total_wp} ({state_wp})"
                 )
                 if current_wp != total_wp:
-                    self.battery_label.setText(f"Mission:")
+                    self.battery_label.setText("Mission:")
                     self.battery_progress.setValue(progress)
                 else:
-                    self.battery_label.setText(f"Battery:")
+                    self.battery_label.setText("Battery:")
                     self.battery_progress.setValue(status.get("battery", 100))
 
     def _disable_control_buttons(self):

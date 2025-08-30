@@ -28,6 +28,7 @@ class DroneClient(QObject):
 
     def __init__(
         self,
+        remote_control_address: str,
         control_address: str,
         logger=None,
     ):
@@ -43,6 +44,7 @@ class DroneClient(QObject):
         self.kamikaze_connection = None
         self.log = logger if logger is not None else print
         self._control_address = control_address
+        self._remote_control_address = remote_control_address
 
         self.zmq_client = None
 
@@ -64,7 +66,7 @@ class DroneClient(QObject):
             self.log("server is not connected", "error")
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_LOAD.name)
+        msg = self.zmq_client.send_remote_command(ZMQTopics.DROP_LOAD.name)
         self.log(msg)
         return
 
@@ -77,7 +79,7 @@ class DroneClient(QObject):
             self.log("server is not connected", "error")
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.PICK_LOAD.name)
+        msg = self.zmq_client.send_remote_command(ZMQTopics.PICK_LOAD.name)
         self.log(msg)
         return
 
@@ -136,7 +138,7 @@ class DroneClient(QObject):
 
         if self.zmq_client is None:
             return False
-        msg = self.zmq_client.send_command(ZMQTopics.RAISE_HOOK.name)
+        msg = self.zmq_client.send_remote_command(ZMQTopics.RAISE_HOOK.name)
         self.log(msg)
         return
 
@@ -147,7 +149,7 @@ class DroneClient(QObject):
         if self.zmq_client is None:
             return False
 
-        msg = self.zmq_client.send_command(ZMQTopics.DROP_HOOK.name)
+        msg = self.zmq_client.send_remote_command(ZMQTopics.DROP_HOOK.name)
         self.log(msg)
         return
 
@@ -175,6 +177,7 @@ class DroneClient(QObject):
                 # Start status updates
                 self.zmq_client = ZMQClient(
                     control_address=self._control_address,
+                    remote_control_address=self._remote_control_address,
                     _logger=self.log,
                 )
                 self.zmq_client.connect()

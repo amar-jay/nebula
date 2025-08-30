@@ -296,6 +296,7 @@ class DroneControlApp(QMainWindow):
 
         self.config = get_config()
         self.drone_client = DroneClient(
+            remote_control_address=self.config.remote_control_address,
             control_address=self.config.control_address,
         )
 
@@ -1074,6 +1075,12 @@ class DroneControlApp(QMainWindow):
             self._show_error("Can not center on landing pad")
             self.console.append_message("Stabilizing on helipad", "success")
         else:
+            msg = MessageBox(
+                title="Error",
+                content="Helipad GPS coordinates are not available.",
+                parent=self,
+            )
+            msg.exec()
             self.console.append_message("Failed to stabilize", "error")
 
     def _on_rtl_clicked(self):

@@ -38,7 +38,7 @@ class ProcessedResult(NamedTuple):
 class Config(NamedTuple):
     mavproxy_source: str
     remote_control_address: str
-    control_address: str # local_control address
+    control_address: str  # local_control address
     timeout: float
     video_source: int
     video_output: str

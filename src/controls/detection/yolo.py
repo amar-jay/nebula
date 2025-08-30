@@ -190,7 +190,7 @@ class YoloObjectTracker:
 
         drone_lat, drone_lon, drone_alt_masl = drone_gps
         roll, pitch, _yaw = drone_attitude
-        #pylint: disable=W0105
+        # pylint: disable=W0105
         """
             NOTE on Yaw Handling:
             !!!!!!!!!!!!!!!!DO NOT TOUCH!!!!!!!!!!!!!!

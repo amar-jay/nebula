@@ -24,7 +24,7 @@ class CraneControls:
     This is a part of that is responsible for control of crane actuators
     """
 
-    def __init__(self, connection_string="/dev/ttyUSB0", baudrate=9600):
+    def __init__(self, connection_string, baudrate=9600):
         self.ser = serial.Serial(connection_string, baudrate)
         self.ser.flushInput()
         self.hook_state = "raised"  # Initial state of the hook

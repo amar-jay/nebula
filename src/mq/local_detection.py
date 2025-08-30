@@ -7,7 +7,7 @@ import os
 import signal
 import time
 import traceback
-from typing import Optional, Tuple
+from typing import Optional
 
 import cv2
 import zmq
@@ -398,7 +398,7 @@ class LocalZMQServer:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Optimized ZMQ Video Server")
+    parser = argparse.ArgumentParser(description="Local ZMQ Video Server")
     parser.add_argument(
         "--is-simulation", action="store_true", help="Run in simulation mode"
     )

@@ -6,8 +6,9 @@ import zmq
 class ZMQClient:
     """ZMQ client for drone control commands"""
 
-    def __init__(self, control_address: str, _logger=None):
+    def __init__(self, control_address: str, remote_control_address: str, _logger=None):
         self.control_address = control_address
+        self.remote_control_address = remote_control_address
         if self.control_address is None or self.control_address == "":
             raise ValueError("Control address is not set")
 
@@ -18,6 +19,7 @@ class ZMQClient:
         )
         self.context = zmq.Context()
         self.socket = None
+        self.remote_socket = None
         self.connected = False
 
         self.log(f"ZMQ Client initialized - Control: {self.control_address}", "info")
@@ -28,6 +30,9 @@ class ZMQClient:
             self.socket = self.context.socket(zmq.REQ)
             self.socket.connect(self.control_address)
             self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+            self.remote_socket = self.context.socket(zmq.REQ)
+            self.remote_socket.connect(self.remote_control_address)
+            self.remote_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
             self.connected = True
             self.log(
                 f"Connected to ZMQ control server at {self.control_address}", "info"
@@ -37,6 +42,22 @@ class ZMQClient:
             self.log(f"Failed to connect to ZMQ control server: {e}", "error")
             self.connected = False
             return False
+
+    def send_remote_command(self, command: str) -> str:
+        """Send command to remote server and get response"""
+        if not self.remote_socket or not self.connected:
+            return "ERROR: Not connected"
+
+        try:
+            self.remote_socket.send_string(command)
+            response = self.remote_socket.recv_string()
+            # self.log(f"Command '{command}' -> Response: '{response}'", "info")
+            return response
+        except zmq.Again:
+            return "ERROR: Timeout waiting for response"
+        except Exception as e:
+            self.log(f"Error sending command - REMOTE: ({command})- {e}", "error")
+            return f"ERROR: {e}"
 
     def send_command(self, command: str) -> str:
         """Send command to server and get response"""
@@ -51,7 +72,7 @@ class ZMQClient:
         except zmq.Again:
             return "ERROR: Timeout waiting for response"
         except Exception as e:
-            self.log(f"Error sending command: ({command})- {e}", "error")
+            self.log(f"Error sending command - LOCAL: ({command})- {e}", "error")
             return f"ERROR: {e}"
 
     def disconnect(self):
@@ -59,6 +80,8 @@ class ZMQClient:
         self.connected = False
         if self.socket:
             self.socket.close()
+        if self.remote_socket:
+            self.remote_socket.close()
         self.context.term()
         self.log("Disconnected from ZMQ control server", "info")
 
@@ -84,43 +107,11 @@ class ZMQClient:
         self.disconnect()
         self.log("ZMQ Client stopped", "info")
 
-    def get_helipad_gps(self) -> tuple:
-        """Get helipad GPS coordinates"""
-        response = self.send_command("HELIPAD_GPS")
-        if response.startswith("ACK>"):
-            coords = response[4:].split(",")
-            return float(coords[0]), float(coords[1])
-        return None
-
-    def get_tank_gps(self) -> tuple:
-        """Get tank GPS coordinates"""
-        response = self.send_command("TANK_GPS")
-        if response.startswith("ACK>"):
-            coords = response[4:].split(",")
-            return float(coords[0]), float(coords[1])
-        return None
-
-    def drop_hook(self) -> bool:
-        """Drop the hook"""
-        response = self.send_command("DROP_HOOK")
-        return response.startswith("ACK")
-
-    def retrieve_hook(self) -> bool:
-        """Retrieve the hook"""
-        response = self.send_command("RETRIEVE_HOOK")
-        return response.startswith("ACK")
-
-    def get_hook_status(self) -> str:
-        """Get hook status"""
-        response = self.send_command("HOOK_STATUS")
-        if response.startswith("ACK>"):
-            return response[4:]
-        return "Unknown"
-
 
 # Example usage
 if __name__ == "__main__":
     import argparse
+
     import src.controls.mavlink.mission_types as mission_types
 
     logger = logging.getLogger(__name__)
@@ -130,24 +121,31 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    config = mission_types.get_config()
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="ZMQ Control Client")
     parser.add_argument(
         "--control-address",
-        default="tcp://localhost:5556",
-        help="ZMQ control address (default: tcp://localhost:5556)",
+        default=config.control_address,
+        help=f"ZMQ control address (default: {config.control_address})",
     )
 
+    parser.add_argument(
+        "--remote-control-address",
+        default=config.remote_control_address,
+        help=f"ZMQ remote control address (default: {config.remote_control_address})",
+    )
     args = parser.parse_args()
 
     logger.info("Starting ZMQ control client")
     logger.info("Control Address: %s", args.control_address)
+    logger.info("Remote Control Address: %s", args.remote_control_address)
 
     # Create ZMQ client
-    config = mission_types.get_config()
     client = ZMQClient(
-      control_address=args.control_address,
+        control_address=args.control_address,
+        remote_control_address=args.remote_control_address,
     )
 
     # Connect and test commands
@@ -155,9 +153,16 @@ if __name__ == "__main__":
         print("Connected successfully!")
 
         # Test some commands
-        print("Hook Status:", client.get_hook_status())
-        helipad = client.get_helipad_gps()
-        if helipad:
+        response = client.send_remote_command("HOOK_STATUS")
+        if response.startswith("ACK>"):
+            print("Remote Hook Status:", response[4:])
+        else:
+            print("Failed to get Remote Hook Status")
+
+        response = client.send_command("HELIPAD_GPS")
+        if response.startswith("ACK>"):
+            coords = response[4:].split(",")
+            helipad = float(coords[0]), float(coords[1])
             print(f"Helipad GPS: {helipad[0]}, {helipad[1]}")
 
         client.stop()

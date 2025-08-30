@@ -2,9 +2,10 @@ This branch is a change in the shift of how image recognition inference is done.
 
 ### Tasks
 
-- [ ] Set up ZMQ and structuring system
-- [ ] Setup local server for AI inference and GPS detection
-- [ ] General autonomous workflow using mavlink on edge
+- [x] Set up ZMQ and structuring system
+- [x] Setup local server for AI inference and GPS detection
+- [x] Setup remote server to handle crane operations
+- [ ] General autonomous workflow using mavlink on edge *
 
 ---
 

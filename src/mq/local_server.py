@@ -120,10 +120,20 @@ class LocalZMQServer:
         """Initialize video capture and writer"""
         try:
             # Initialize video capture
-            self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
+            if self.video_source.startswith("rtsp"):
+                self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  # pylint: disable=E1101
+                # Set low-latency options if using FFMPEG
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pylint: disable=E1101 # try to keep only 1 frame in buffer to be safe
+            else:
+                self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
+
+
+            # 0  # rtsp://localhost:8554/raw
 
             if not self.cap.isOpened():
-                logger.error(f"Failed to open video source: {self.video_source}")
+                logger.error(
+                    f"Failed to open video source: {self.video_source if self.video_source.startswith('rtsp') else self.video_source}"
+                )
                 return False
 
             # Get video properties
@@ -195,6 +205,10 @@ class LocalZMQServer:
                     logger.warning("Failed to capture frame")
                     await asyncio.sleep(0.1)
                     continue
+
+                # Flush any old frames that accumulated
+                # while self.cap.grab():  # grab discards old frames
+                #     ret, frame = self.cap.retrieve()  # retrieve the most recent
 
                 gps_data = self._fetch_gps_data()
                 if not gps_data:
@@ -324,13 +338,20 @@ class LocalZMQServer:
             latest_gps = self.last_result.gps_coordinates
 
         if command == ZMQTopics.HELIPAD_GPS.name:
-            if latest_gps and "helipad" in latest_gps:
-                coords = latest_gps["helipad"]
+            heli_key = self.object_classes[0]
+            if "helipad" not in heli_key:
+                logger.error(f"Invalid helipad key: {heli_key}")
+                return "NACK: Errors with the keys. Please check the server code."
+            if latest_gps and heli_key in latest_gps:
+                coords = latest_gps[heli_key]
                 return f"ACK>{coords[0]},{coords[1]}"
             return "NACK: No helipad GPS data available"
 
         elif command == ZMQTopics.TANK_GPS.name:
-            tank_key = "tank" if self.is_simulation else "real_tank"
+            tank_key = self.object_classes[1]
+            if "tank" not in tank_key:
+                logger.error(f"Invalid tank key: {tank_key}")
+                return "NACK: Errors with the keys. Please check the server code."
             if latest_gps and tank_key in latest_gps:
                 coords = latest_gps[tank_key]
                 return f"ACK>{coords[0]},{coords[1]}"
@@ -399,8 +420,11 @@ class LocalZMQServer:
 
 async def main():
     parser = argparse.ArgumentParser(description="Local ZMQ Video Server")
+    gz_config = mission_types.get_gazebo_config()
     parser.add_argument(
-        "--is-simulation", action="store_true", help="Run in simulation mode"
+        "--is-simulation",
+        action="store_false" if not gz_config.is_simulation else "store_true",
+        help="Run in simulation mode",
     )
     args = parser.parse_args()
 
@@ -410,9 +434,7 @@ async def main():
 
     # Enable simulation video streaming if needed
     if args.is_simulation:
-        gz_config = mission_types.get_gazebo_config()
         logger.info("Enabling simulation video streaming")
-
         if not gz.enable_streaming(
             world=gz_config.world,
             model_name=gz_config.model_name,
@@ -432,7 +454,7 @@ async def main():
         video_output=config.video_output,  # "rtsp://localhost:8554/processed",
         mavproxy_source=config.mavproxy_source,
         control_address=config.control_address,
-        is_simulation=gz_config.is_simulation,
+        is_simulation=args.is_simulation,
         object_classes=object_classes,
     )
 

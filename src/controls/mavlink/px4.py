@@ -521,7 +521,7 @@ class Px4Connection:
 
         return False, self._last_reached_seq
 
-    def monitor_mission_progress(self, callback=None, timeout=None):
+    def monitor_mission_progress(self, status_callback=None, timeout=None):
         """
         `callback` is called when a waypoint is reached it takes
         the current waypoint index and a completion flag as arguments
@@ -535,13 +535,13 @@ class Px4Connection:
             if not msg:
                 return False
             elif msg.get_type() == "MISSION_ITEM_REACHED":
-                if callback:
-                    callback(msg.seq, False)
+                if status_callback:
+                    status_callback(msg.seq, False)
                 # Check if we've reached the final waypoint
                 if msg.seq == self.num_wp - 1:
                     self.log("Mission completed!", "success")
-                    if callback:
-                        callback(msg.seq, True)
+                    if status_callback:
+                        status_callback(msg.seq, True)
                     return True
             elif msg.get_type() == "MISSION_COUNT":
                 print("mission count...")

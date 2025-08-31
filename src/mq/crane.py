@@ -1,8 +1,9 @@
+import logging
 import time
 from enum import Enum
+
 import serial
 import serial.tools.list_ports
-import logging
 
 
 class ZMQTopics(Enum):
@@ -39,7 +40,10 @@ class CraneControls:
                     connection_string = port.device
                     break
             if connection_string is None:
-                raise ValueError("No Arduino device found! Available ports: " + str([p.device for p in ports]))
+                raise ValueError(
+                    "No Arduino device found! Available ports: "
+                    + str([p.device for p in ports])
+                )
 
         try:
             self.ser = serial.Serial(connection_string, baudrate)
@@ -99,7 +103,7 @@ class CraneControls:
         except serial.SerialException as e:
             print(f"Serial error during stop: {str(e)}")
             return False
-        
+
     def pick_load(self):
         """Send pick load command and wait for acknowledgment"""
         command = "Yuk_Al"
@@ -186,7 +190,7 @@ class CraneControls:
         
     def close(self):
         """Safely close the serial connection"""
-        if hasattr(self, 'ser') and self.ser.is_open:
+        if hasattr(self, "ser") and self.ser.is_open:
             try:
                 self.ser.close()
                 print("Serial connection closed.")
@@ -230,6 +234,104 @@ class CraneControls:
             elif command == "MANUEL A":
                 success = self.manuel_asagi()
                 return "ACK: Hook moving down" if success else "NACK: Failed to move hook down"
+            else:
+                return "NACK: Unknown command"
+        except Exception as e:
+            return f"NACK: Error handling command: {str(e)}"
+
+
+if __name__ == "__main__":
+    # Try to auto-connect to Arduino
+    try:
+        crane = CraneControls()
+        print("Connected to crane. Starting test sequence...")
+
+        try:
+            print("Testing pick load...")
+            crane.pick_load()
+
+            crane.stop()
+
+            print("Testing drop load...")
+            crane.drop_load()
+
+        except KeyboardInterrupt:
+            print("\nTest interrupted by user")
+        except Exception as e:
+            print(f"Error during test: {str(e)}")
+        finally:
+            crane.close()
+
+    except (ValueError, ConnectionError) as e:
+        print(f"Failed to initialize crane: {str(e)}")
+
+class ExampleController:
+    """
+    Simulated controller for testing without real serial hardware.
+    Uses user input to mimic crane responses.
+    """
+
+    def __init__(self):
+        self.hook_state = "raised"
+        print("ExampleController initialized (simulation mode).")
+
+    def _wait_for_ready(self, expected_response, timeout=10):
+        print(f"Simulating wait for '{expected_response}' (timeout {timeout}s)...")
+        response = input(f"Type 'y' to simulate response: ").strip()
+        if response == "y":
+            print(f"Simulated response received: {expected_response}")
+            return expected_response
+        print("Simulated timeout or wrong response.")
+        return None
+
+    def stop(self):
+        print("Simulating STOP command.")
+        input("Press Enter to simulate crane stopped...")
+        return True
+
+    def pick_load(self):
+        print("Simulating pick load command.")
+        response = self._wait_for_ready("YUK_AL_TAMAM")
+        if response == "YUK_AL_TAMAM":
+            print("Simulated: Yuk Al Görevi Tamamlandı.")
+            self.hook_state = "raised"
+            return True
+        print("Simulated: Failed to get confirmation.")
+        return False
+
+    def drop_load(self):
+        print("Simulating drop load command.")
+        response = self._wait_for_ready("YUK_BIRAK_TAMAM")
+        if response == "YUK_BIRAK_TAMAM":
+            print("Simulated: Yuk Birak Görevi Tamamlandı.")
+            self.hook_state = "dropped"
+            return True
+        print("Simulated: Bir hata oluştu.")
+        return False
+
+    def close(self):
+        print("Simulated: Controller closed.")
+
+    def handle_command(self, command):
+        try:
+            if command == ZMQTopics.DROP_LOAD.name:
+                success = self.drop_load()
+                return "ACK: Load dropped" if success else "NACK: Drop load failed"
+            elif command == ZMQTopics.PICK_LOAD.name:
+                success = self.pick_load()
+                return "ACK: Load picked" if success else "NACK: Pick load failed"
+            elif command == ZMQTopics.RAISE_HOOK.name:
+                if self.hook_state == "raised":
+                    return "ACK: Hook already raised"
+                self.hook_state = "raised"
+                return "ACK: Hook raised"
+            elif command == ZMQTopics.DROP_HOOK.name:
+                if self.hook_state == "dropped":
+                    return "ACK: Hook already dropped"
+                self.hook_state = "dropped"
+                return "ACK: Hook dropped"
+            elif command == ZMQTopics.STATUS.name:
+                return f"ACK: Hook is {self.hook_state}"
             else:
                 return "NACK: Unknown command"
         except Exception as e:

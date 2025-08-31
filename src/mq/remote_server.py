@@ -5,7 +5,7 @@ import time
 import zmq
 
 from src.controls.mavlink import mission_types
-from src.mq.crane import CraneControls
+from src.mq.crane import CraneControls, ExampleController
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("remote_zmq_server")
@@ -16,6 +16,7 @@ class RemoteZMQServer:
 
     def __init__(
         self,
+        is_simulation: bool,
         remote_control_address: str,
         controller_address: str,
         baudrate: int,
@@ -28,7 +29,11 @@ class RemoteZMQServer:
         self.socket = self.context.socket(zmq.REP)  # Reply socket
 
         # Initialize crane controls
-        self.crane = CraneControls(self.controller_address, self.baudrate)
+        if is_simulation:
+            self.crane = ExampleController()
+        else:
+            self.crane = CraneControls()
+            # connection_string=self.controller_address, baudrate=self.baudrate)
 
         logger.info(
             f"ZMQ Crane Server initialized on port {self.remote_control_address}"
@@ -94,7 +99,7 @@ def main():
     if not ccs:
         ccs = "tcp://localhost:5556"
 
-    parser = argparse.ArgumentParser(description="ZMQ Crane Control Server")
+    parser = argparse.ArgumentParser(description="Remote ZMQ Crane Control Server")
     parser.add_argument(
         "--remote-control-address",
         type=str,
@@ -110,10 +115,16 @@ def main():
         default=config.controller_baudrate,
         help="Serial baudrate",
     )
+    parser.add_argument(
+      "--is-simulation",
+      action="store_true",
+      help="Run in simulation mode"
+    )
 
     args = parser.parse_args()
 
     server = RemoteZMQServer(
+        is_simulation=args.is_simulation,
         remote_control_address=args.remote_control_address,
         controller_address=args.controller_address,
         baudrate=args.baudrate,

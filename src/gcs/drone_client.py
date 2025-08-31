@@ -54,9 +54,17 @@ class DroneClient(QObject):
         self.status_timer.setInterval(500)  # Update every half second
 
     def stabilize(self, alt):
-        if self._helipad_gps is None:
+        if self._status.get("mode", "UNKNOWN") == "AUTO":
+            self.log("Cannot stabilize in AUTO mode", "error")
             return False
-        return self.goto_coordinates(*self._helipad_gps, alt)
+
+        if self._status.get("mode", "UNKNOWN") == "GUIDED":
+            gps = self._status["helipad_gps"]
+            if gps is None:
+                self.log("Helipad GPS not available", "error")
+                return False
+            self.goto_coordinates(gps[0], gps[1], self._status["position"]["alt"])
+        return True
 
     def drop_load(self):
         """Drop load command."""
@@ -131,15 +139,13 @@ class DroneClient(QObject):
                 self.log("Invalid tank GPS format", "error")
         return False
 
-    def raise_hook(self):
-        """Raise hook command."""
+    def resume_mission(self):
+        """Resume mission command."""
         if self.master_connection is None:
             return False
 
-        if self.zmq_client is None:
-            return False
-        msg = self.zmq_client.send_remote_command(ZMQTopics.RAISE_HOOK.name)
-        self.log(msg)
+        self.master_connection.resume_mission()
+        self.log("Resumed mission")
         return
 
     def drop_hook(self):
@@ -425,16 +431,21 @@ class DroneClient(QObject):
                     print("Raising hook...")
                     return True
                 return False
-
-            if self.master_connection.monitor_mission_progressv2(
-                is_auto=lambda idx: self.mission_waypoints[idx].auto,
-                status_callback=self._update_status_hook,
-                helipad_gps=self._helipad_gps,
-                drop_hook=drop_hook,
-                raise_hook=raise_hook,
+            if self.master_connection.monitor_mission_progress(
+                status_callback=self._update_status_hook
             ):
+                # self.mission_progress.emit(100, "Mission completed")
                 delattr(self, "mission_completed")
+            # if self.master_connection.monitor_mission_progressv2(
+            #     is_auto=lambda idx: self.mission_waypoints[idx].auto,
+            #     status_callback=self._update_status_hook,
+            #     helipad_gps=self._helipad_gps,
+            #     drop_hook=drop_hook,
+            #     raise_hook=raise_hook,
+            # ):
+            #     delattr(self, "mission_completed")
 
+        status["in_mission"] = hasattr(self, "mission_completed")
         status["helipad_gps"] = self._helipad_gps
         status["tank_gps"] = self._tank_gps
         if self.kamikaze_connection and self.k_connected:

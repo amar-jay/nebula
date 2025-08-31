@@ -32,7 +32,7 @@ class ZMQClient:
             self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
             self.remote_socket = self.context.socket(zmq.REQ)
             self.remote_socket.connect(self.remote_control_address)
-            self.remote_socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+            self.remote_socket.setsockopt(zmq.RCVTIMEO, 10000)  # 10 second timeout
             self.connected = True
             self.log(
                 f"Connected to ZMQ control server at {self.control_address}", "info"
@@ -54,6 +54,11 @@ class ZMQClient:
             # self.log(f"Command '{command}' -> Response: '{response}'", "info")
             return response
         except zmq.Again:
+            self.log("Timeout waiting for response, resetting remote socket", "warning")
+            self.remote_socket.close()
+            self.remote_socket = self.context.socket(zmq.REQ)
+            self.remote_socket.connect(self.remote_control_address)
+            self.remote_socket.setsockopt(zmq.RCVTIMEO, 10000)
             return "ERROR: Timeout waiting for response"
         except Exception as e:
             self.log(f"Error sending command - REMOTE: ({command})- {e}", "error")

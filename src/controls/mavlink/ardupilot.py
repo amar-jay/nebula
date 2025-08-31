@@ -47,6 +47,7 @@ class ArdupilotConnection:
             "mission_active": False,
             "current_waypoint": -1,
             "total_waypoints": 0,
+            "sandwich_mode": False,
             "battery": 100,
         }
 
@@ -632,27 +633,42 @@ class ArdupilotConnection:
 
         return False, self._last_reached_seq
 
-    def monitor_mission_progress(self, callback=None, timeout=None):
+    def monitor_mission_progress(self, status_callback=None, timeout=None):
         """
-        `callback` is called when a waypoint is reached it takes
+        `status_callback` is called when a waypoint is reached it takes
         the current waypoint index and a completion flag as arguments
         """
 
         def func():
             msg = self.master.recv_match(
-                type=["MISSION_ITEM_REACHED", "MISSION_CURRENT", "MISSION_COUNT"],
+                type=["MISSION_CURRENT", "MISSION_COUNT", "MISSION_ITEM_REACHED"],
                 blocking=False,
             )
+            if self.status["mode"] == "AUTO" and self.status["sandwich_mode"]:
+                self.status["sandwich_mode"] = False
             if not msg:
                 return False
+            self.get_status()
+
+            if msg.get_type() == "MISSION_CURRENT":
+                reached, idx = self.waypoint_reached()
+                if reached and self.status["mode"] == "AUTO":
+                    self.status["sandwich_mode"] = True
+                    self.set_mode("GUIDED")
+                    return False
+
             elif msg.get_type() == "MISSION_ITEM_REACHED":
-                if callback:
-                    callback(msg.seq, False)
+                if status_callback:
+                    status_callback(msg.seq, False)
                 # Check if we've reached the final waypoint
+                if self.num_wp == 0:
+                    self.log("No waypoints in mission", "error")
+                    return True 
+
                 if msg.seq == self.num_wp - 1:
                     self.log("Mission completed!", "success")
-                    if callback:
-                        callback(msg.seq, True)
+                    if status_callback:
+                        status_callback(msg.seq, True)
                     return True
             elif msg.get_type() == "MISSION_COUNT":
                 print("mission count...")
@@ -672,12 +688,16 @@ class ArdupilotConnection:
         return self.master.mav.mission_set_current_send(
             self.master.target_system, self.master.target_component, wp
         )
+    def resume_mission(self):
+        self.set_mission_waypoint(self._last_reached_seq)
+        self.set_mode("AUTO")
+        return True
 
     def monitor_mission_progressv2(
         self,
         is_auto=None,
         status_callback=None,
-        helipad_gps=None,
+        get_helipad_gps=lambda: None,
         drop_hook=None,
         raise_hook=None,
         timeout=None,
@@ -723,19 +743,20 @@ class ArdupilotConnection:
 
                     # Switch to guided mode and start positioning
                     self.set_mode("GUIDED")
+                    self.status["sandwich_mode"] = True
                     print("Switching to GUIDED mode")
-                    if helipad_gps is None:
+                    if get_helipad_gps() is None:
                         print("Helipad GPS coordinates not provided")
                         self.log("Helipad GPS coordinates not provided", "error")
                         self.current_state = WaypointState.FLYING_AUTO
-                        self.set_mission_waypoint(self._last_reached_seq)
-                        self.set_mode("AUTO")
+                        self.status["sandwich_mode"] = False
+                        self.resume_mission()
                         return False
                     # pylint: disable=W0201
                     (
                         self._target_lat,
                         self._target_lon,
-                    ) = helipad_gps
+                    ) = get_helipad_gps()
                     if self._target_lat is not None and self._target_lon is not None:
                         self.goto_waypointv2(
                             alt=5,
@@ -751,8 +772,8 @@ class ArdupilotConnection:
                         self.log("Invalid helipad GPS coordinates", "error")
                         self.current_state = WaypointState.FLYING_AUTO
                         status_callback(current=idx, done=False, state="AUTO")
-                        self.set_mission_waypoint(self._last_reached_seq)
-                        self.set_mode("AUTO")
+                        self.resume_mission()
+                        self.status["sandwich_mode"] = False
 
             elif self.current_state == WaypointState.POSITIONING:
                 if self.check_reposition_reached(
@@ -775,8 +796,8 @@ class ArdupilotConnection:
                     print("Hook dropped, waiting for raise...")
                 else:
                     # Skip hook operations, go back to auto
-                    self.set_mission_waypoint(self._last_reached_seq)
-                    self.set_mode("AUTO")
+                    self.resume_mission()
+                    self.status["sandwich_mode"] = False
                     print("Skipping hook operations, returning to AUTO mode")
                     self.current_state = WaypointState.FLYING_AUTO
                     status_callback(
@@ -790,8 +811,8 @@ class ArdupilotConnection:
                     print("Hook raise cancelled")
 
                 # Resume auto flight
-                self.set_mission_waypoint(self._last_reached_seq)
-                self.set_mode("AUTO")
+                self.resume_mission()
+                self.status["sandwich_mode"] = False
                 status_callback(
                     current=self._last_reached_seq, done=False, state="AUTO"
                 )
@@ -866,7 +887,7 @@ if __name__ == "__main__":
                     prev_seq = seq
 
         connection.start_mission()
-        while not connection.monitor_mission_progress(callback=_update_status_hook):
+        while not connection.monitor_mission_progress(status_callback=_update_status_hook):
             time.sleep(1)
     except Exception as e:
         connection.log(f"Error during mission upload: {e}", "error")

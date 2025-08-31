@@ -25,12 +25,11 @@ class CraneControls:
     This is a part of that is responsible for control of crane actuators
     """
 
-    def __init__(self, connection_string=None, baudrate=9600, timeout=1):
+    def __init__(self, connection_string=None, baudrate=9600):
         """Initialize crane control with auto port detection
         Args:
             connection_string: Serial port path. If None, will auto-detect
             baudrate: Serial baudrate, defaults to 9600
-            timeout: Serial timeout in seconds, defaults to 1
         """
         if connection_string is None:
             # Try to auto-detect Arduino port
@@ -43,7 +42,7 @@ class CraneControls:
                 raise ValueError("No Arduino device found! Available ports: " + str([p.device for p in ports]))
 
         try:
-            self.ser = serial.Serial(connection_string, baudrate, timeout=timeout)
+            self.ser = serial.Serial(connection_string, baudrate)
             time.sleep(2)  # Wait for Arduino to reset
             self.ser.flushInput()
             self.ser.flushOutput()
@@ -52,21 +51,22 @@ class CraneControls:
         except serial.SerialException as e:
             raise ConnectionError(f"Failed to connect to {connection_string}: {str(e)}")
 
-    def _wait_for_ready(self, expected_response, timeout=10):
-        """Wait for expected response with timeout
+    def _wait_for_ready(self, expected_response):
+        """Wait for expected response indefinitely
         Args:
             expected_response: Response string to wait for
-            timeout: Maximum time to wait in seconds
         Returns:
-            Response string if received, None if timeout
+            Response string if received, None if error occurs
         """
-        start_time = time.time()
         self.ser.flushInput()  # Clear any pending input
 
         while True:
-            if time.time() - start_time > timeout:
-                print(f"Timeout waiting for {expected_response}")
-                return None
+
+            if self.manual_override and self.override_confirmation == expected_response:
+                print(f"Manual override confirmed: {expected_response}")
+                self.override_confirmation = None
+                self.manual_override = False
+                return expected_response
 
             if self.ser.in_waiting:  # Only try to read if there's data
                 try:
@@ -81,6 +81,13 @@ class CraneControls:
                     return None
 
             time.sleep(0.1)
+
+
+    def enable_manual_override(self):
+        print("Manual override activated!")
+        self.manual_override = True
+        self.stop()  # vinci hemen durdur
+
 
     def stop(self):
         """Send stop command and wait for acknowledgment"""
@@ -106,6 +113,12 @@ class CraneControls:
                 print("Yeni göreve geçmeye hazırsınız.")
                 self.hook_state = "raised"
                 return True
+            elif self.manual_override:
+                print("Manual override: Operator controlled the hook.")
+                print("Assuming YUK_AL_TAMAM")
+                self.hook_state = "raised"
+                self.manual_override = False  # override bitti
+                return True
             else:
                 print("Failed to get confirmation from crane")
                 return False
@@ -125,13 +138,52 @@ class CraneControls:
                 print("Yeni göreve geçmeye hazırsınız.")
                 self.hook_state = "dropped"
                 return True
+            elif self.manual_override:
+                print("Manual override: Operator controlled the hook.")
+                print("Assuming YUK_AL_TAMAM")
+                self.hook_state = "raised"
+                self.manual_override = False  # override bitti
+                return True
             else:
                 print("Bir hata oluştu, lütfen tekrar deneyin.")
                 return False
         except serial.SerialException as e:
             print(f"Serial error during drop_load: {str(e)}")
             return False
+        
+    def manuel_yukari(self):
+        """Send command to manually move hook up"""
+        crane.stop()  # vinci hemen durdur
+        try:
+            self.ser.write("Manuel Y\n".encode())
+            print("Kanca manuel olarak yukarı kaldırılıyor...")
+            return True
+        except serial.SerialException as e:
+            print(f"Serial error during manuel_yukari: {str(e)}")
+            return False
 
+    def manuel_asagi(self):
+        """Send command to manually move hook down"""
+        crane.stop()  # vinci hemen durdur
+        try:
+            self.ser.write("Manuel A\n".encode())
+            print("Kanca manuel olarak aşağı indiriliyor...")
+            return True
+        except serial.SerialException as e:
+            print(f"Serial error during manuel_asagi: {str(e)}")
+            return False
+        
+    def yuk_al_tamam(self):
+        """Operatör onayı: yük alındı"""
+        self.override_confirmation = "YUK_AL_TAMAM"
+        print("✅ Operatör: Yük alındı onayı verildi.")
+
+
+    def yuk_birak_tamam(self):
+        """Operatör onayı: yük bırakıldı"""
+        self.override_confirmation = "YUK_BIRAK_TAMAM"
+        print("✅ Operatör: Yük bırakıldı onayı verildi.")
+        
     def close(self):
         """Safely close the serial connection"""
         if hasattr(self, 'ser') and self.ser.is_open:
@@ -169,33 +221,16 @@ class CraneControls:
                 return "ACK: Hook dropped"
             elif command == ZMQTopics.STATUS.name:
                 return f"ACK: Hook is {self.hook_state}"
+            elif command == "MANUAL_OVERRIDE":
+                self.enable_manual_override()
+                return "ACK: Manual override enabled"
+            elif command == "MANUEL Y":
+                success = self.manuel_yukari()
+                return "ACK: Hook moving up" if success else "NACK: Failed to move hook up"
+            elif command == "MANUEL A":
+                success = self.manuel_asagi()
+                return "ACK: Hook moving down" if success else "NACK: Failed to move hook down"
             else:
                 return "NACK: Unknown command"
         except Exception as e:
             return f"NACK: Error handling command: {str(e)}"
-
-
-if __name__ == "__main__":
-    # Try to auto-connect to Arduino
-    try:
-        crane = CraneControls()
-        print("Connected to crane. Starting test sequence...")
-
-        try:
-            print("Testing pick load...")
-            crane.pick_load()
-
-            crane.stop()
-
-            print("Testing drop load...")
-            crane.drop_load()
-
-        except KeyboardInterrupt:
-            print("\nTest interrupted by user")
-        except Exception as e:
-            print(f"Error during test: {str(e)}")
-        finally:
-            crane.close()
-
-    except (ValueError, ConnectionError) as e:
-        print(f"Failed to initialize crane: {str(e)}")

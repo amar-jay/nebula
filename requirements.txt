@@ -12,7 +12,7 @@ numpy
 psutil
 pygame==2.6.1
 pymavlink==2.4.48
-pypesq==1.2.4
+#pypesq==1.2.4
 PySide6==6.9.0
 PySide6_Addons==6.9.0
 PySide6_Essentials==6.9.0

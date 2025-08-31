@@ -503,9 +503,10 @@ class DroneControlApp(QMainWindow):
         # pick load
         self.pick_load_btn = QPushButton("Pick Load")
         self.pick_load_btn.clicked.connect(self.drone_client.pick_load)
-        # raise hook
-        self.raise_hook_btn = QPushButton("Raise Hook")
-        self.raise_hook_btn.clicked.connect(self.drone_client.raise_hook)
+        # resume mission
+        self.resume_mission_btn = QPushButton("Resume Mission")
+        self.resume_mission_btn.clicked.connect(self.drone_client.resume_mission)
+        self.resume_mission_btn.setEnabled(False)
         # drop hook
         self.drop_hook_btn = QPushButton("Drop Hook")
         self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
@@ -518,7 +519,7 @@ class DroneControlApp(QMainWindow):
 
         controller_row.addWidget(self.drop_load_btn)
         controller_row.addWidget(self.pick_load_btn)
-        controller_row.addWidget(self.raise_hook_btn)
+        controller_row.addWidget(self.resume_mission_btn)
         controller_row.addWidget(self.drop_hook_btn)
         controller_row.addWidget(self.kamikaze_btn)
         controller_layout.addLayout(controller_row)
@@ -1072,12 +1073,11 @@ class DroneControlApp(QMainWindow):
     def _on_stabilize_clicked(self):
         """Handle return to home button click."""
         if self.drone_client.stabilize(self.takeoff_alt_input.value()):
-            self._show_error("Can not center on landing pad")
             self.console.append_message("Stabilizing on helipad", "success")
         else:
             msg = MessageBox(
                 title="Error",
-                content="Helipad GPS coordinates are not available.",
+                content="Helipad GPS coordinates are not available. Or cannot stabilize drone in AUTO mode. Only in GUIDED mode.",
                 parent=self,
             )
             msg.exec()
@@ -1374,6 +1374,11 @@ class DroneControlApp(QMainWindow):
             self.battery_progress.setValue(status.get("battery", 100))
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
+
+        if status.get("sandwich_mode", False):
+            self.resume_mission_btn.setEnabled(True)
+        else:
+            self.resume_mission_btn.setEnabled(False)
 
         # Helipad GPS and kamikaze GPS
         helipad_gps = status.get("helipad_gps", None)

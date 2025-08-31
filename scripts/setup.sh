@@ -8,8 +8,8 @@ sudo apt-get update
 sudo apt upgrade -y
 
 # Install Gazebo 11 (Harmonic) and dependencies
-sudo apt-get install -y xauth x11-apps x11-common build-essential cmake git lsb-release wget
-sudo apt install -y libgz-sim8-dev rapidjson-dev libopencv-dev \
+sudo apt-get install --fix-broken -y xauth x11-apps x11-common build-essential cmake git lsb-release wget
+sudo apt install --fix-broken -y libgz-sim8-dev rapidjson-dev libopencv-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl
 
@@ -18,12 +18,12 @@ bash <(curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff
 
 # Clone and set up ArduPilot repository
 if [ -d "$HOME/ardupilot" ]; then
-    echo "ArduPilot directory already exists. Skipping clone."
-    cd $HOME/ardupilot
+  echo "ArduPilot directory already exists. Skipping clone."
+  cd $HOME/ardupilot
 else
-    git clone https://github.com/ArduPilot/ardupilot $HOME/ardupilot
-    cd $HOME/ardupilot
-    git checkout "Copter-4.5"
+  git clone https://github.com/ArduPilot/ardupilot $HOME/ardupilot
+  cd $HOME/ardupilot
+  git checkout "Copter-4.5"
 fi
 git submodule update --init --recursive
 
@@ -41,7 +41,6 @@ make -j4
 cd $MYHOME # go to currrent repo
 make set_env_vars
 
-pip install --user -r requirements.txt
+#pip install --user -r requirements.txt
 
 echo "Setup complete! Gazebo and ArduPilot-Gazebo integration are ready."
-

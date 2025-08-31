@@ -47,7 +47,7 @@ raw_camera_stream: enable_streaming
 my_camera_stream:
 	@ffmpeg -f v4l2 -framerate 30 -video_size 1280x720 -i /dev/video0 \
 				-vcodec libx264 -preset ultrafast -tune zerolatency \
-				-f rtsp rtsp://127.0.0.1:8554/raw >/dev/null 2>&1
+				-f rtsp rtsp://127.0.0.1:8554/raw >/dev/null
 
 
 # ! video/x-raw,framerate=60/1
@@ -98,10 +98,17 @@ server_zmq:
 	@python -m src.mq.zmq_server
 
 local_server_zmq:
-	@python -m src.mq.local_detection
+	@python -m src.mq.local_server
 
 local_sim_server_zmq:
-	@python -m src.mq.local_detection --is-simulation
+	@python -m src.mq.local_server --is-simulation
+
+remote_server_zmq:
+	@python -m src.mq.remote_server
+
+remote_sim_server_zmq:
+	@python -m src.mq.remote_server --is-simulation
+
 
 sim_server:
 	@bash -c '\

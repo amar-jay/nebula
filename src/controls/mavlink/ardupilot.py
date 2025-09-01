@@ -640,38 +640,24 @@ class ArdupilotConnection:
         """
 
         def func():
-            msg = self.master.recv_match(
-                type=["MISSION_CURRENT", "MISSION_COUNT", "MISSION_ITEM_REACHED"],
-                blocking=False,
-            )
             if self.status["mode"] == "AUTO" and self.status["sandwich_mode"]:
                 self.status["sandwich_mode"] = False
-            if not msg:
-                return False
-            self.get_status()
-
-            if msg.get_type() == "MISSION_CURRENT":
-                reached, idx = self.waypoint_reached()
-                if reached and self.status["mode"] == "AUTO":
-                    self.status["sandwich_mode"] = True
-                    self.set_mode("GUIDED")
-                    return False
-
-            elif msg.get_type() == "MISSION_ITEM_REACHED":
+            if self.num_wp == 0:
+                  self.log("No waypoints in mission", "error")
+                  return False
+            reached, idx = self.waypoint_reached()
+            if idx == self.num_wp - 1:
+                self.log("Mission completed!", "success")
                 if status_callback:
-                    status_callback(msg.seq, False)
-                # Check if we've reached the final waypoint
-                if self.num_wp == 0:
-                    self.log("No waypoints in mission", "error")
-                    return True 
+                    status_callback(idx, True)
+                return True
 
-                if msg.seq == self.num_wp - 1:
-                    self.log("Mission completed!", "success")
-                    if status_callback:
-                        status_callback(msg.seq, True)
-                    return True
-            elif msg.get_type() == "MISSION_COUNT":
-                print("mission count...")
+            if reached and self.status["mode"] == "AUTO":
+                self.status["sandwich_mode"] = True
+                self.set_mode("GUIDED")
+                return False
+            if status_callback:
+                status_callback(idx, False)
             return False
 
         if timeout is not None:

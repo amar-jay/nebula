@@ -148,7 +148,7 @@ lint:
 	@black .
 
 telem:
-	mavproxy.py --master=/dev/ttyUSB0 --baudrate=57600 --console --out=udp:127.0.0.1:14550
+	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:14550
 
 k_telem:
 	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:14560

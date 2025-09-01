@@ -503,13 +503,19 @@ class DroneControlApp(QMainWindow):
         # pick load
         self.pick_load_btn = QPushButton("Pick Load")
         self.pick_load_btn.clicked.connect(self.drone_client.pick_load)
+        self.manual_drop_load_btn = QPushButton("Manual Aşagı")
+        self.manual_drop_load_btn.clicked.connect(self.drone_client.manuel_asagi)
+        self.manual_pick_load_btn = QPushButton("Manual Yukarı")
+        self.manual_pick_load_btn.clicked.connect(self.drone_client.manuel_yukari)
+        self.controller_stop_btn = _PrimaryPushButton("Stop")
+        self.controller_stop_btn.clicked.connect(self.drone_client.controller_stop)
         # resume mission
         self.resume_mission_btn = QPushButton("Resume Mission")
         self.resume_mission_btn.clicked.connect(self.drone_client.resume_mission)
         self.resume_mission_btn.setEnabled(False)
         # drop hook
-        self.drop_hook_btn = QPushButton("Drop Hook")
-        self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
+        # self.drop_hook_btn = QPushButton("Drop Hook")
+        # self.drop_hook_btn.clicked.connect(self.drone_client.drop_hook)
         # kamikaze - red
         self.kamikaze_btn = PrimaryPushButton("Kamikaze")
         style_sheet = self.kamikaze_btn.styleSheet()
@@ -520,7 +526,9 @@ class DroneControlApp(QMainWindow):
         controller_row.addWidget(self.drop_load_btn)
         controller_row.addWidget(self.pick_load_btn)
         controller_row.addWidget(self.resume_mission_btn)
-        controller_row.addWidget(self.drop_hook_btn)
+        controller_row.addWidget(self.controller_stop_btn)
+        controller_row.addWidget(self.manual_drop_load_btn)
+        controller_row.addWidget(self.manual_pick_load_btn)
         controller_row.addWidget(self.kamikaze_btn)
         controller_layout.addLayout(controller_row)
 

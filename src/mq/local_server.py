@@ -76,6 +76,7 @@ class LocalZMQServer:
         self.frame_skip_counter = 0
         self.fps = 0
 
+
         # Initialize object tracker
         self._setup_tracker()
 
@@ -97,7 +98,7 @@ class LocalZMQServer:
             model_path = (
                 "src/controls/detection/sim.pt"
                 if self.is_simulation
-                else "src/controls/detection/main.pt"
+                else "src/controls/detection/best.pt"
             )
 
             self.drone_client = ardupilot.ArdupilotConnection(
@@ -121,7 +122,14 @@ class LocalZMQServer:
         try:
             # Initialize video capture
             if self.video_source.startswith("rtsp"):
-                self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  # pylint: disable=E1101
+
+                pipeline = (
+                    f"rtspsrc location={self.video_source} latency=0 ! "
+                    "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
+                )
+                print(pipeline)
+                self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+                # self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  # pylint: disable=E1101
                 # Set low-latency options if using FFMPEG
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pylint: disable=E1101 # try to keep only 1 frame in buffer to be safe
             else:
@@ -191,11 +199,31 @@ class LocalZMQServer:
         frame_count = 0
         fps_timer = time.time()
         prev_frame_hash = None
+        counter = 0
 
+        if not self.cap.isOpened():
+            logger.error("not opened")
+            return
+        print("well well well fetching data now")
+        while self._fetch_gps_data():
+          await asyncio.sleep(1)
+          continue
+
+          
+        print("well well well grabing now")
+        # ret = False
+        # frame = None
+        # while self.cap.grab():  # grab discards old frames
+        #     ret, frame = self.cap.retrieve()  # retrieve the most recent
+        #     if not ret:
+        #       break
+
+        print("well well well starting now")
+        now = time.time()
         while self.running:
             try:
                 # Capture frame
-                if not self.cap or not self.cap.isOpened():
+                if not self.cap:
                     logger.error("Video capture not available")
                     await asyncio.sleep(1)
                     continue
@@ -243,20 +271,26 @@ class LocalZMQServer:
                 )
 
                 # Process frame with skipping logic
-                processed_result = await self._process_frame_data(data)
-                if processed_result and self.video_writer:
-                    self.video_writer.write(processed_result.processed_frame)
-                    self.last_result = processed_result._replace(processed_frame=None)
+                if counter == 10:
+                    processed_result = await self._process_frame_data(data)
+                    if processed_result and self.video_writer:
+                        self.video_writer.write(processed_result.processed_frame)
+                        cv2.imshow("frame", processed_result.processed_frame)
+                        cv2.waitKey(1)
+                        self.last_result = processed_result._replace(processed_frame=None)
+                    counter = 0
+                counter+=1
 
                 # Performance monitoring
                 frame_count += 1
                 if time.time() - fps_timer > FPS_LOG_INTERVAL:
-                    self.fps = frame_count / FPS_LOG_INTERVAL * 10
+                    self.fps = frame_count / FPS_LOG_INTERVAL
                     logger.debug(f"Processing at {self.fps:.1f} FPS")
                     frame_count = 0
                     fps_timer = time.time()
 
                 await asyncio.sleep(CPU_SLEEP_INTERVAL)
+                print("Duration: ", time.time()-now)
 
             except Exception as e:
                 logger.error(f"Video processing error: {e}")
@@ -445,7 +479,7 @@ async def main():
 
     # Set object classes based on mode
     object_classes = (
-        ["helipad", "tank"] if args.is_simulation else ["real_helipad", "real_tank"]
+        ["helipad", "tank"] if args.is_simulation else ["helipad", "real_tank"]
     )
 
     # Initialize server

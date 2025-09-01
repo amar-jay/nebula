@@ -14,11 +14,14 @@ class ZMQTopics(Enum):
     RAISE_HOOK = "RAISE_HOOK"
     DROP_HOOK = "DROP_HOOK"
     STATUS = "STATUS"
+    STOP = "STOP"
     VIDEO = "VIDEO"
     PROCESSED_VIDEO = "PROCESSED_VIDEO"
     HELIPAD_GPS = "HELIPAD_GPS"
     TANK_GPS = "TANK_GPS"
     FPS = "FPS"
+    MANUEL_ASAGI = "MANUEL_ASAGI"
+    MANUEL_YUKARI = "MANUEL_YUKARI"
 
 
 class CraneControls:
@@ -55,6 +58,9 @@ class CraneControls:
         except serial.SerialException as e:
             raise ConnectionError(f"Failed to connect to {connection_string}: {str(e)}")
 
+        self.manual_override=False
+        self.override_confirmation = None
+
     def _wait_for_ready(self, expected_response):
         """Wait for expected response indefinitely
         Args:
@@ -87,7 +93,7 @@ class CraneControls:
             time.sleep(0.1)
 
 
-    def enable_manual_override(self):
+    def _enable_manual_override(self):
         print("Manual override activated!")
         self.manual_override = True
         self.stop()  # vinci hemen durdur
@@ -119,8 +125,7 @@ class CraneControls:
                 return True
             elif self.manual_override:
                 print("Manual override: Operator controlled the hook.")
-                print("Assuming YUK_AL_TAMAM")
-                self.hook_state = "raised"
+                self.hook_state = "dropped"
                 self.manual_override = False  # override bitti
                 return True
             else:
@@ -157,7 +162,8 @@ class CraneControls:
         
     def manuel_yukari(self):
         """Send command to manually move hook up"""
-        crane.stop()  # vinci hemen durdur
+        self.stop()  # vinci hemen durdur
+        self._enable_manual_override()
         try:
             self.ser.write("Manuel Y\n".encode())
             print("Kanca manuel olarak yukarı kaldırılıyor...")
@@ -168,7 +174,8 @@ class CraneControls:
 
     def manuel_asagi(self):
         """Send command to manually move hook down"""
-        crane.stop()  # vinci hemen durdur
+        self.stop()  # vinci hemen durdur
+        self._enable_manual_override()
         try:
             self.ser.write("Manuel A\n".encode())
             print("Kanca manuel olarak aşağı indiriliyor...")
@@ -213,25 +220,15 @@ class CraneControls:
             elif command == ZMQTopics.PICK_LOAD.name:
                 success = self.pick_load()
                 return "ACK: Load picked" if success else "NACK: Pick load failed"
-            elif command == ZMQTopics.RAISE_HOOK.name:
-                if self.hook_state == "raised":
-                    return "ACK: Hook already raised"
-                self.hook_state = "raised"
-                return "ACK: Hook raised"
-            elif command == ZMQTopics.DROP_HOOK.name:
-                if self.hook_state == "dropped":
-                    return "ACK: Hook already dropped"
-                self.hook_state = "dropped"
-                return "ACK: Hook dropped"
             elif command == ZMQTopics.STATUS.name:
                 return f"ACK: Hook is {self.hook_state}"
-            elif command == "MANUAL_OVERRIDE":
-                self.enable_manual_override()
-                return "ACK: Manual override enabled"
-            elif command == "MANUEL Y":
+            elif command == ZMQTopics.STOP.name:
+                self.stop()
+                return "ACK: Controller stopped"
+            elif command == ZMQTopics.MANUEL_YUKARI.name:
                 success = self.manuel_yukari()
                 return "ACK: Hook moving up" if success else "NACK: Failed to move hook up"
-            elif command == "MANUEL A":
+            elif command == ZMQTopics.MANUEL_ASAGI.name:
                 success = self.manuel_asagi()
                 return "ACK: Hook moving down" if success else "NACK: Failed to move hook down"
             else:
@@ -298,7 +295,6 @@ class ExampleController:
             return True
         print("Simulated: Failed to get confirmation.")
         return False
-
     def drop_load(self):
         print("Simulating drop load command.")
         response = self._wait_for_ready("YUK_BIRAK_TAMAM")

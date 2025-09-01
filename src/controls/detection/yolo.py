@@ -15,7 +15,7 @@ EARTH_RADIUS_M = 6378137.0
 
 
 # Suppress ultralytics logging
-logging.getLogger("ultralytics").setLevel(logging.WARNING)
+# logging.getLogger("ultralytics").setLevel(logging.WARNING)
 logger = logging.getLogger("yolo_tracker")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -500,8 +500,14 @@ class YoloObjectTracker:
         Returns:
             Tuple of (annotated_frame, gps_coordinates, pixel_coordinates)
         """
+        def resize(image):
+            # Step 2: Resize to target size
+            resized = cv2.resize(image, (640, 360))
+            return resized
+
+
         detections = self._detect(
-            frame, confidence_threshold=threshold, object_classes=object_classes
+            resize(frame), confidence_threshold=threshold, object_classes=object_classes
         )
 
         if not detections:
@@ -569,26 +575,33 @@ class YoloObjectTracker:
 
 def main():
     """Example usage of the improved tracker"""
+    from src.controls.mavlink import mission_types
 
-    input_video_path = "/home/amarjay/Desktop/long.MOV"
+    # input_video_path = "/home/amarjay/Desktop/long.MOV"
     output_video_path = "/home/amarjay/Desktop/long-processed.MOV"
-
-    cap = cv2.VideoCapture(input_video_path)
+    input_video_path = "rtsp://192.168.43.1:8554/fpv_stream"
+    pipeline = (
+        f"rtspsrc location={input_video_path} latency=0 ! "
+        "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
+    )
+    cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
     if not cap.isOpened():
         logger.error(f"Error opening video file: {input_video_path}")
         return
 
-    # Video properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    # # Video properties
+    # width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # fps = cap.get(cv2.CAP_PROP_FPS)
 
-    # Output video writer
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    # # Output video writer
+    # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    # out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
+    params = mission_types.get_camera_params()
     # Camera intrinsics (adjust for your camera)
-    K = np.array([[959.41, 0.0, 626.26], [0.0, 960.10, 357.03], [0.0, 0.0, 1.0]])
+    # K = np.array([[959.41, 0.0, 626.26], [0.0, 960.10, 357.03], [0.0, 0.0, 1.0]])
+    K = params["camera_intrinsics"]
 
     # Initialize tracker
     estimator = YoloObjectTracker(
@@ -615,7 +628,7 @@ def main():
             try:
                 annotated_frame, gps_dict, pixel_dict = estimator.process_frame(
                     frame,
-                    drone_gps=(0, 0, 410),  # Replace with actual GPS
+                    drone_gps=(0, 0, 1),  # Replace with actual GPS
                     drone_attitude=(0, 0, 0),  # Replace with actual attitude
                     # ground_level_masl=387,
                     K=K,
@@ -672,15 +685,19 @@ def main():
                             )
                             y_offset += 30
 
-                out.write(annotated_frame)
+                # out.write(annotated_frame)
+                cv2.imshow("Frame", annotated_frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
 
             except Exception as e:
                 logger.error(f"Error processing frame {frame_count}: {e}")
-                out.write(frame)
+                # out.write(frame)
 
     finally:
         cap.release()
-        out.release()
+        cv2.destroyAllWindows()
+        # out.release()
         logger.info(f"Output saved to {output_video_path}")
 
 

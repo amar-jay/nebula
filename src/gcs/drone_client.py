@@ -42,6 +42,7 @@ class DroneClient(QObject):
         self.current_waypoint_index = -1
         self.master_connection = None
         self.kamikaze_connection = None
+        self.tank_connection = None
         self.log = logger if logger is not None else print
         self._control_address = control_address
         self._remote_control_address = remote_control_address
@@ -91,6 +92,45 @@ class DroneClient(QObject):
         self.log(msg)
         return
 
+    def manuel_asagi(self):
+        """Pick load command."""
+        if self.master_connection is None:
+            return False
+
+        if self.zmq_client is None:
+            self.log("server is not connected", "error")
+            return False
+
+        msg = self.zmq_client.send_remote_command(ZMQTopics.MANUEL_ASAGI.name)
+        self.log(msg)
+        return
+
+    def manuel_yukari(self):
+        """Pick load controller command."""
+        if self.master_connection is None:
+            return False
+
+        if self.zmq_client is None:
+            self.log("server is not connected", "error")
+            return False
+
+        msg = self.zmq_client.send_remote_command(ZMQTopics.MANUEL_YUKARI.name)
+        self.log(msg)
+        return
+
+    def controller_stop(self):
+        """Manual override controller command."""
+        if self.master_connection is None:
+            return False
+
+        if self.zmq_client is None:
+            self.log("server is not connected", "error")
+            return False
+
+        msg = self.zmq_client.send_remote_command(ZMQTopics.STOP.name)
+        self.log(msg)
+        return
+
     def fetch_helipad_gps(self) -> bool:
         """Fetch the helipad GPS coordinates."""
         if self.master_connection is None:
@@ -119,24 +159,23 @@ class DroneClient(QObject):
     def get_kamikaze_gps(self):
         return self.kamikaze_connection.get_relative_gps_location()
 
+    def get_tank_gps(self):
+        return self.tank_connection.get_relative_gps_location()
+
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
         if self.master_connection is None:
             return False
-        if self.zmq_client is None:
+        if self.tank_connection is None:
             return False
-
-        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS.name)
-        tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
-        tank_gps = tank_gps.split(",") if tank_gps else None
-        if tank_gps and len(tank_gps) == 2:
-            try:
-                lat = float(tank_gps[0])
-                lon = float(tank_gps[1])
-                self._tank_gps = (lat, lon)
-                return True
-            except ValueError:
-                self.log("Invalid tank GPS format", "error")
+        try:
+          tank_gps = self.get_tank_gps()
+          if tank_gps is not None:
+              self._tank_gps = (tank_gps[0], tank_gps[1])
+              return True
+        except:
+          self.log("Invalid tank GPS format", "error")
+          print(traceback.format_exc())
         return False
 
     def resume_mission(self):
@@ -193,6 +232,10 @@ class DroneClient(QObject):
                     True,
                     f"[MAVLink] Connected to {connection_string} for Drone",
                 )
+                # self.tank_connection = ardupilot.ArdupilotConnection(
+                #   connection_string="/dev/ttyUSB2",
+                #   logger=self.log,
+                # )
 
             return True
         except:
@@ -402,8 +445,8 @@ class DroneClient(QObject):
         if self.master_connection is None:
             return
         status = self.master_connection.get_status()
-        self.fetch_helipad_gps()
         self.fetch_tank_gps()
+        self.fetch_helipad_gps()
 
         if hasattr(self, "mission_completed"):
             # if self.master_connection.monitor_mission_progress(

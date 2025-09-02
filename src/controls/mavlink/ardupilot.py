@@ -305,7 +305,7 @@ class ArdupilotConnection:
         # Clear mission
         self.log("Clearing all missions. Hack...", "info")
         # Set to GUIDED mode explicitly (you can also use MAV_MODE_AUTO if that suits your logic)
-        # self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
+        self.master.set_mode("GUIDED")  # Or use command_long if you don't have helper
         self.master.mav.mission_clear_all_send(
             self.master.target_system, self.master.target_component
         )

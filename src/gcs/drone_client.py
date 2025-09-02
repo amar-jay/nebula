@@ -151,9 +151,12 @@ class DroneClient(QObject):
                 self._helipad_gps = (lat, lon)
                 return True
             except ValueError:
+                self._helipad_gps = None
                 self.log("Invalid helipad GPS format")
                 print("Invalid helipad GPS format")
                 return False
+        else:
+            self._helipad_gps = None
         return False
 
     def get_kamikaze_gps(self):

@@ -15,7 +15,7 @@ EARTH_RADIUS_M = 6378137.0
 
 
 # Suppress ultralytics logging
-# logging.getLogger("ultralytics").setLevel(logging.WARNING)
+logging.getLogger("ultralytics").setLevel(logging.WARNING)
 logger = logging.getLogger("yolo_tracker")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -155,7 +155,7 @@ class YoloObjectTracker:
                 [0, 0, 1],
             ]
         )
-        return R_z @ R_y @ R_x
+        return R_x @ R_y @ R_z
 
     def _offset_gps(
         self, lat: float, lon: float, north: float, east: float
@@ -188,8 +188,6 @@ class YoloObjectTracker:
         if K is None:
             K = self.K
 
-        drone_lat, drone_lon, drone_alt_masl = drone_gps
-        roll, pitch, _yaw = drone_attitude
         # pylint: disable=W0105
         """
             NOTE on Yaw Handling:
@@ -204,10 +202,12 @@ class YoloObjectTracker:
             This fixes the issue where the computed target GPS point is
             significantly offset even for nadir-facing cameras.
         """
-        roll, pitch, yaw = np.deg2rad([roll, pitch, -_yaw])
+        drone_lat, drone_lon, height_above_ground = drone_gps
+        roll, pitch, _yaw = drone_attitude
+        roll, pitch, yaw = np.deg2rad([roll, pitch, _yaw])
 
         # Height above ground
-        height_above_ground = drone_alt_masl  # - ground_level_masl
+        # height_above_ground = drone_alt_masl  # - ground_level_masl
         if height_above_ground <= 0:
             logger.warning("Drone is at or below ground level — cannot compute GPS")
             return None
@@ -240,10 +240,13 @@ class YoloObjectTracker:
         t = height_above_ground / -dir_world[2]
         offset_ned = t * dir_world
 
-        # Convert to GPS
+        # Convert NED offsets to GPS
         target_lat, target_lon = self._offset_gps(
             drone_lat, drone_lon, offset_ned[0], offset_ned[1]
         )
+        print(f"{target_lat=}, {target_lon=}")
+        print(f"{drone_lat=}, {drone_lon=}, {height_above_ground=}")
+        print(f"{roll=}, {pitch=}, {yaw=}")
 
         return target_lat, target_lon
 
@@ -500,14 +503,8 @@ class YoloObjectTracker:
         Returns:
             Tuple of (annotated_frame, gps_coordinates, pixel_coordinates)
         """
-        def resize(image):
-            # Step 2: Resize to target size
-            resized = cv2.resize(image, (640, 360))
-            return resized
-
-
         detections = self._detect(
-            resize(frame), confidence_threshold=threshold, object_classes=object_classes
+            frame, confidence_threshold=threshold, object_classes=object_classes
         )
 
         if not detections:

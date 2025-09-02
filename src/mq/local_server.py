@@ -20,7 +20,7 @@ from src.mq.video_writer import get_video_writer
 
 # Configuration constants
 CPU_SLEEP_INTERVAL = 0.05
-# FRAME_PROCESS_INTERVAL = 3  # Process every 3rd frame for 10fps
+FRAME_PROCESS_INTERVAL = 1  # Process every 3rd frame for 10fps
 MAX_FRAME_WIDTH = 640
 DATA_TIMEOUT_THRESHOLD = 2  # seconds
 FPS_LOG_INTERVAL = 5  # seconds
@@ -75,6 +75,8 @@ class LocalZMQServer:
         self.last_result: Optional[mission_types.ProcessedResult] = None
         self.frame_skip_counter = 0
         self.fps = 0
+        # self.frame_queue = asyncio.Queue(maxsize=1)
+        self.frame = None
 
 
         # Initialize object tracker
@@ -89,6 +91,7 @@ class LocalZMQServer:
                     camera_link="tilt_link",
                     world="delivery_runway",
                 )
+                print("Camera intrinsics (simulation):", camera_intrinsics, camera_intrinsics["camera_intrinsics"])
             else:
                 camera_intrinsics = mission_types.get_camera_params()
 
@@ -119,6 +122,8 @@ class LocalZMQServer:
 
     def _initialize_video_components(self) -> bool:
         """Initialize video capture and writer"""
+        if self.cap:
+            return True
         try:
             # Initialize video capture
             if self.video_source.startswith("rtsp"):
@@ -128,15 +133,12 @@ class LocalZMQServer:
                     "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
                 )
                 print(pipeline)
-                self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-                # self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  # pylint: disable=E1101
+                self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)# pylint: disable=E1101
+                # self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  
                 # Set low-latency options if using FFMPEG
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pylint: disable=E1101 # try to keep only 1 frame in buffer to be safe
+                # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pylint: disable=E1101 # try to keep only 1 frame in buffer to be safe
             else:
                 self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
-
-
-            # 0  # rtsp://localhost:8554/raw
 
             if not self.cap.isOpened():
                 logger.error(
@@ -159,7 +161,7 @@ class LocalZMQServer:
                 source=self.video_output,
                 width=width,
                 height=height,
-                fps=self.fps,
+                fps=int(self.fps/FRAME_PROCESS_INTERVAL),
             )
 
             logger.info(
@@ -190,88 +192,92 @@ class LocalZMQServer:
             self.drone_client.get_status()
             await asyncio.sleep(1)
 
-    async def _video_processing_loop(self):
-        """Main video processing and publishing loop"""
+    async def _video_receiver_loop(self):
         if not self._initialize_video_components():
+            logger.error("Failed to initialize video components")
             return
 
-        logger.info("Video processing started")
+        if not self.cap:
+            logger.error("Video capture not available")
+            await asyncio.sleep(1)
+            return
+        logger.info("Video receiver loop started")
+
+        while self.running:
+            if not self.cap:
+                logger.error("Video capture not available")
+                await asyncio.sleep(1)
+                continue
+
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                logger.warning("Failed to capture frame")
+                await asyncio.sleep(0.1)
+                continue
+            self.frame = self._resize_frame(frame)
+            cv2.waitKey(1)
+            await asyncio.sleep(0.01)
+
+    async def _video_processing_loop(self):
+        """Main video processing and publishing loop"""
+        logger.warning("Starting video processing...")
+        if not self._initialize_video_components():
+            return
         frame_count = 0
         fps_timer = time.time()
         prev_frame_hash = None
         counter = 0
 
-        if not self.cap.isOpened():
-            logger.error("not opened")
-            return
-        print("well well well fetching data now")
-        while self._fetch_gps_data():
+        while not self._fetch_gps_data():
+          logger.warning("No GPS data available yet...")
           await asyncio.sleep(1)
           continue
 
-          
-        print("well well well grabing now")
-        # ret = False
-        # frame = None
-        # while self.cap.grab():  # grab discards old frames
-        #     ret, frame = self.cap.retrieve()  # retrieve the most recent
-        #     if not ret:
-        #       break
-
-        print("well well well starting now")
+        logger.info("Video Processing Loop started")
         now = time.time()
         while self.running:
             try:
-                # Capture frame
-                if not self.cap:
-                    logger.error("Video capture not available")
+                if self.frame is None:
+                    logger.warning("Failed to get frame")
                     await asyncio.sleep(1)
                     continue
 
-                ret, frame = self.cap.read()
-                if not ret or frame is None:
-                    logger.warning("Failed to capture frame")
-                    await asyncio.sleep(0.1)
-                    continue
-
-                # Flush any old frames that accumulated
-                # while self.cap.grab():  # grab discards old frames
-                #     ret, frame = self.cap.retrieve()  # retrieve the most recent
-
+                frame = self.frame
                 gps_data = self._fetch_gps_data()
                 if not gps_data:
-                    await asyncio.sleep(0.1)
+                    logger.warning("No GPS data available")
+                    await asyncio.sleep(1)
                     continue
 
                 # Skip duplicate frames
                 current_hash = hash(frame.tobytes())
                 if prev_frame_hash == current_hash:
                     logger.warning("Duplicate frame skipped")
-                    # await asyncio.sleep(0.1)
-                    # continue
+                    await asyncio.sleep(1)
+                    continue
                 prev_frame_hash = current_hash
 
                 now = time.time()
                 if (
-                    now - gps_data.timestamp > 2
-                ):  # if the frame capture is within 2 second delay
+                    now - gps_data.timestamp > 1
+                ):  # if the frame capture is within 1 second delay
                     logger.warning(
                         f"Frame and data are too far apart for processing... {int(now - gps_data.timestamp)}s"
                     )
 
+                logger.addFilter(lambda record: setattr(record, "drone_mode", gps_data.mode) or True)
                 # Process frame (returns None for skipped frames)
                 # Resize frame if too large
                 data = mission_types.FrameData(
+                    frame=self.frame.copy(),
+                    timestamp=time.time(),
                     drone_attitude=gps_data.drone_attitude,
                     drone_position=gps_data.drone_position,
-                    # ground_level=gps_data.ground_level, #TODO: get rid of this
                     mode=gps_data.mode,
-                    timestamp=time.time(),
-                    frame=self._resize_frame(frame.copy()),
                 )
 
                 # Process frame with skipping logic
-                if counter == 10:
+                if counter >= FRAME_PROCESS_INTERVAL:
                     processed_result = await self._process_frame_data(data)
                     if processed_result and self.video_writer:
                         self.video_writer.write(processed_result.processed_frame)
@@ -290,7 +296,7 @@ class LocalZMQServer:
                     fps_timer = time.time()
 
                 await asyncio.sleep(CPU_SLEEP_INTERVAL)
-                print("Duration: ", time.time()-now)
+                # print("Duration: ", time.time()-now)
 
             except Exception as e:
                 logger.error(f"Video processing error: {e}")
@@ -413,6 +419,7 @@ class LocalZMQServer:
             await asyncio.gather(
                 self._fetch_gps_data_loop(),
                 self._video_processing_loop(),
+                self._video_receiver_loop(),
                 self._control_loop(),
                 return_exceptions=True,
             )

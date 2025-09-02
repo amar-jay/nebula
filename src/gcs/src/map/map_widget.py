@@ -82,11 +82,10 @@ class WebEnginePage(QWebEnginePage):
             self.parent.update_pos_fn(
                 self.parent.markers_pos[0], self.parent.markers_pos[1]
             )
-            print(msg)
+            # print(msg)
 
         elif "Uncaught ReferenceError" in msg:
             self.show_internet_error(msg)
-
             # print("JavaScript Console Message(Error):", msg)
         else:
             print("JavaScript Console Message(Error):", msg, level, line, sourceID)

@@ -155,8 +155,6 @@ class DroneClient(QObject):
                 self.log("Invalid helipad GPS format")
                 print("Invalid helipad GPS format")
                 return False
-        else:
-            self._helipad_gps = None
         return False
 
     def get_kamikaze_gps(self):
@@ -181,6 +179,28 @@ class DroneClient(QObject):
           print(traceback.format_exc())
         return False
 
+    def fetch_tank_gpsv2(self) -> bool:
+        """Fetch the tank GPS coordinates."""
+        if self.master_connection is None:
+            return False
+        if self.zmq_client is None:
+            return False
+
+        tank_gps = self.zmq_client.send_command(ZMQTopics.TANK_GPS.name)
+        tank_gps = tank_gps.split(">")[-1] if tank_gps and ">" in tank_gps else None
+        tank_gps = tank_gps.split(",") if tank_gps else None
+
+        if tank_gps and len(tank_gps) == 2:
+            # print(f"Tank GPS: {tank_gps}")
+            try:
+                lat = float(tank_gps[0])
+                lon = float(tank_gps[1])
+                self.tank_gps = (lat, lon)
+                return True
+            except ValueError:
+                self.log("Invalid tank GPS format")
+                print("Invalid tank GPS format")
+        return False
     def resume_mission(self):
         """Resume mission command."""
         if self.master_connection is None:
@@ -235,11 +255,16 @@ class DroneClient(QObject):
                     True,
                     f"[MAVLink] Connected to {connection_string} for Drone",
                 )
-                # self.tank_connection = ardupilot.ArdupilotConnection(
-                #   connection_string="/dev/ttyUSB2",
-                #   logger=self.log,
-                # )
 
+                # try:
+                #     self.tank_connection = ardupilot.ArdupilotConnection(
+                #       connection_string="/dev/ttyUSB2",
+                #       logger=self.log,
+                #     )
+                # except:
+                #   self.log("Failed to initialize tank connection", "error")
+                #   self.tank_connection = None
+                #   return True
             return True
         except:
             print(traceback.format_exc())
@@ -448,8 +473,8 @@ class DroneClient(QObject):
         if self.master_connection is None:
             return
         status = self.master_connection.get_status()
-        self.fetch_tank_gps()
         self.fetch_helipad_gps()
+        self.fetch_tank_gpsv2()
 
         if hasattr(self, "mission_completed"):
             # if self.master_connection.monitor_mission_progress(

@@ -28,8 +28,10 @@ demo_app:
 gz:
 	gz sim -v4 -r ${RUNWAY}.sdf
 
-ardupilot_gz:
-	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL_NAME} --model JSON --map --console
+sitl:
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --custom-location=40.9588862,29.1357976,15,0 --console --instance=0 --out=udp:127.0.0.1:14550
+# --instance=1 
+# ${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL_NAME} --model JSON --map --console
 
 create:
 	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1
@@ -98,10 +100,10 @@ server_zmq:
 	@python -m src.mq.zmq_server
 
 local_server_zmq:
-	@python -m src.mq.local_server
+	@python -m src.mq.local_server --config-path config/default.yaml
 
 local_sim_server_zmq:
-	@python -m src.mq.local_server --is-simulation
+	@python -m src.mq.local_server --config-path config/simulation.yaml
 
 remote_server_zmq:
 	@python -m src.mq.remote_server
@@ -148,7 +150,7 @@ lint:
 	@black .
 
 telem:
-	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:14550
+	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:16550
 
 k_telem:
-	mavproxy.py --master=/dev/ttyUSB1 --baudrate=57600 --console --out=udp:127.0.0.1:14560
+	mavproxy.py --master=/dev/ttyUSB0 --baudrate=57600 --console --out=udp:127.0.0.1:14560

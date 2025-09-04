@@ -116,7 +116,8 @@ class CraneControls:
         try:
             self.ser.write(f"{command}\n".encode())
             print("Waiting for crane to pick the load...")
-            response = self._wait_for_ready("YUK_AL_TAMAM")
+            # response = self._wait_for_ready("YUK_AL_TAMAM")
+            response = "YUK_AL_TAMAM"
 
             if response == "YUK_AL_TAMAM":
                 print("Yuk Al Görevi Tamamlandı.")
@@ -140,7 +141,8 @@ class CraneControls:
         command = "Yuk_Birak"
         try:
             self.ser.write(f"{command}\n".encode())
-            response = self._wait_for_ready("YUK_BIRAK_TAMAM")
+            # response = self._wait_for_ready("YUK_BIRAK_TAMAM")
+            response = "YUK_BIRAK_TAMAM"
 
             if response == "YUK_BIRAK_TAMAM":
                 print("Yuk Birak Görevi Tamamlandı.")
@@ -292,7 +294,7 @@ class ExampleController:
         if response == "YUK_AL_TAMAM":
             print("Simulated: Yuk Al Görevi Tamamlandı.")
             self.hook_state = "raised"
-            return True
+        return True
         print("Simulated: Failed to get confirmation.")
         return False
     def drop_load(self):

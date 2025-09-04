@@ -3,6 +3,7 @@ import warnings
 from typing import Dict, NamedTuple, Tuple
 
 import numpy as np
+from dataclasses import dataclass
 import yaml
 
 
@@ -15,7 +16,9 @@ class Waypoint(NamedTuple):
     auto: bool
 
 
-class FrameData(NamedTuple):
+
+@dataclass
+class FrameData:
     """Drone data fetched across MAVLink Proxy for image recognition and gps estimation"""
 
     frame: np.ndarray | None = None
@@ -26,7 +29,8 @@ class FrameData(NamedTuple):
     mode: str = "UNKNOWN"
 
 
-class ProcessedResult(NamedTuple):
+@dataclass
+class ProcessedResult:
     """Result of frame processing"""
 
     processed_frame: np.ndarray
@@ -170,27 +174,27 @@ def get_camera_params():
 #         ) from e
 
 
-def get_config() -> Config:
+def get_config(config=CONFIG_PATH) -> Config:
     # check the config/default.yaml for the server configuration
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+        with open(config, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
     except Exception as e:
         raise ValueError(
-            f"Configuration file '{CONFIG_PATH}' is empty or contains no valid YAML content. \n{e}"
+            f"Configuration file '{config}' is empty or contains no valid YAML content. \n{e}"
         ) from e
 
     server_config = config.get("communication", {})
     if not server_config:
         raise ValueError(
-            f"Server configuration not found in YAML config file at '{CONFIG_PATH}'. "
+            f"Server configuration not found in YAML config file at '{config}'. "
             f"Please add a 'communication:' section to your config.yaml file."
         )
     if "control_address" not in server_config or not server_config[
         "control_address"
     ].startswith("tcp://"):
         raise ValueError(
-            f"Missing or invalid 'control_address' field in communication section of '{CONFIG_PATH}'. "
+            f"Missing or invalid 'control_address' field in communication section of '{config}'. "
             f"Please add: communication.control_address: 'tcp://<host>:<port>'"
         )
 
@@ -198,7 +202,7 @@ def get_config() -> Config:
         "remote_control_address"
     ].startswith("tcp://"):
         raise ValueError(
-            f"Missing or invalid 'remote_control_address' field in communication section of '{CONFIG_PATH}'. "
+            f"Missing or invalid 'remote_control_address' field in communication section of '{config}'. "
             f"Please add: communication.remote_control_address: 'tcp://<host>:<port>'"
         )
     if (
@@ -206,7 +210,7 @@ def get_config() -> Config:
         or len(server_config["mavproxy_source"].split(":")) < 2
     ):
         print(
-            f"Warning: Invalid or missing 'mavproxy_source' in '{CONFIG_PATH}': '{server_config['mavproxy_source']}'. "
+            f"Warning: Invalid or missing 'mavproxy_source' in '{config}': '{server_config['mavproxy_source']}'. "
             f"Should be in format 'udp:<host>:<port>' or 'tcp:<host>:<port>' or '/dev/tty*'. "
             f"Using default value 'udp:localhost:14550'."
         )
@@ -219,19 +223,19 @@ def get_config() -> Config:
                 or server_config["video_source"].startswith("rtsps://")
             ):
                 raise ValueError(
-                    f"Invalid string format for 'communication.video_source' in '{CONFIG_PATH}': '{server_config['video_source']}'. "
+                    f"Invalid string format for 'communication.video_source' in '{config}': '{server_config['video_source']}'. "
                     f"String values must be RTSP URLs starting with 'rtsp://', or use integer device ID (0, 1, 2, etc.)"
                 )
         elif isinstance(server_config["video_source"], int):
             pass
         else:
             raise ValueError(
-                f"Invalid type of 'communication.video_source' in '{CONFIG_PATH}': '{server_config['video_source']}' (type: {type(server_config['video_source']).__name__}). "
+                f"Invalid type of 'communication.video_source' in '{config}': '{server_config['video_source']}' (type: {type(server_config['video_source']).__name__}). "
                 f"Must be either an integer device ID (0, 1, 2, etc.) or rtsp://<host>:<port>"
             )
     else:
         raise ValueError(
-            f"Invalid 'communication.video_source' in '{CONFIG_PATH}': '{server_config['video_source']}' (type: {type(server_config['video_source']).__name__}). "
+            f"Invalid 'communication.video_source' in '{config}': '{server_config['video_source']}' (type: {type(server_config['video_source']).__name__}). "
             f"Must be either an integer device ID (0, 1, 2, etc.) or rtsp://<host>:<port>"
         )
 
@@ -243,24 +247,24 @@ def get_config() -> Config:
             or server_config["video_output"].startswith("ipc://")
         ):
             raise ValueError(
-                f"Invalid string format for 'communication.video_output' in '{CONFIG_PATH}': '{server_config['video_output']}'. "
+                f"Invalid string format for 'communication.video_output' in '{config}': '{server_config['video_output']}'. "
                 f"Value must be RTSP URLs starting with 'rtsp://' or 'rtsps://' or 'tcp://' or 'ipc://'."
             )
     else:
         raise ValueError(
-            f"Invalid type of 'communication.video_output' in '{CONFIG_PATH}': '{server_config['video_output']}' (type: {type(server_config['video_output']).__name__}). "
+            f"Invalid type of 'communication.video_output' in '{config}': '{server_config['video_output']}' (type: {type(server_config['video_output']).__name__}). "
             f"Value must be RTSP URLs starting with 'rtsp://' or 'rtsps://' or 'tcp://' or 'ipc://'."
         )
 
     # get controller connection string and baudrate
     if "controller_connection_string" not in server_config:
         print(
-            f"Warning: 'controller_connection_string' not defined in '{CONFIG_PATH}' under communication section.\n"
+            f"Warning: 'controller_connection_string' not defined in '{config}' under communication section.\n"
             f"Controller will not be used. To enable, add: communication.controller_connection_string: '/dev/tty*'"
         )
     elif not server_config["controller_connection_string"].startswith("/dev/tty"):
         raise ValueError(
-            f"Invalid 'communication.controller_connection_string' in '{CONFIG_PATH}': '{server_config['controller_connection_string']}'. "
+            f"Invalid 'communication.controller_connection_string' in '{config}': '{server_config['controller_connection_string']}'. "
             f"Must start with '/dev/tty' (for serial)"
             f"Examples: '/dev/ttyUSB0', '/dev/ttyACM0'"
         )
@@ -269,7 +273,7 @@ def get_config() -> Config:
     timeout = server_config.get("zmq_timeout", 1000)
     if not isinstance(timeout, (int, float)) or timeout <= 0:
         raise ValueError(
-            f"Invalid 'communication.zmq_timeout' in '{CONFIG_PATH}': '{timeout}' (type: {type(timeout).__name__}). "
+            f"Invalid 'communication.zmq_timeout' in '{config}': '{timeout}' (type: {type(timeout).__name__}). "
             f"Must be a positive number (milliseconds), e.g., 1000"
         )
 
@@ -285,20 +289,21 @@ def get_config() -> Config:
     )
 
 
-def get_gazebo_config() -> GazeboConfig:
+
+def get_gazebo_config(config=CONFIG_PATH) -> GazeboConfig:
     # check the config/default.yaml for the gazebo configuration
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+        with open(config, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
     except Exception as e:
         raise ValueError(
-            f"Configuration file '{CONFIG_PATH}' error or contains no valid YAML content that could be loaded. {e}"
+            f"Configuration file '{config}' error or contains no valid YAML content that could be loaded. {e}"
         ) from e
 
     gazebo_config = config.get("simulation", {})
     if not gazebo_config:
         raise ValueError(
-            f"Simulation configuration not found in YAML config file at '{CONFIG_PATH}'. "
+            f"Simulation configuration not found in YAML config file at '{config}'. "
             f"Please add a 'simulation:' section with world, model_name, and camera_link parameters."
         )
 
@@ -310,19 +315,19 @@ def get_gazebo_config() -> GazeboConfig:
     # Validate that required fields are strings and not empty
     if not isinstance(world, str) or not world.strip():
         raise ValueError(
-            f"Invalid 'simulation.world' in '{CONFIG_PATH}': '{world}'. "
+            f"Invalid 'simulation.world' in '{config}': '{world}'. "
             f"Must be a non-empty string, e.g., 'delivery_runway'"
         )
 
     if not isinstance(model_name, str) or not model_name.strip():
         raise ValueError(
-            f"Invalid 'simulation.model_name' in '{CONFIG_PATH}': '{model_name}'. "
+            f"Invalid 'simulation.model_name' in '{config}': '{model_name}'. "
             f"Must be a non-empty string, e.g., 'iris_with_stationary_gimbal'"
         )
 
     if not isinstance(camera_link, str) or not camera_link.strip():
         raise ValueError(
-            f"Invalid 'simulation.camera_link' in '{CONFIG_PATH}': '{camera_link}'. "
+            f"Invalid 'simulation.camera_link' in '{config}': '{camera_link}'. "
             f"Must be a non-empty string, e.g., 'tilt_link'"
         )
 

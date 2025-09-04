@@ -269,6 +269,8 @@ class ArdupilotConnection:
     def upload_mission(self, waypoints: list[Waypoint]):
         num_wp = len(waypoints)
         self.num_wp = num_wp
+        waypoints = waypoints[1:]
+        print(waypoints)
         self.log(f"Uploading {num_wp} waypoints...", "info")
 
         # send mission count
@@ -281,7 +283,7 @@ class ArdupilotConnection:
             self.master.mav.mission_item_send(
                 target_system=self.master.target_system,  # System ID
                 target_component=self.master.target_component,  # Component ID
-                seq=i,  # Sequence number for item within mission (indexed from 0).
+                seq=i+1,  # Sequence number for item within mission (indexed from 0).
                 frame=dialect.MAV_FRAME_GLOBAL_RELATIVE_ALT,  # The coordinate system of the waypoint.
                 command=dialect.MAV_CMD_NAV_WAYPOINT,
                 current=(1 if i == 0 else 0),
@@ -329,31 +331,6 @@ class ArdupilotConnection:
         )
         self.ack_sync("COMMAND_ACK")
 
-    def get_frame_data(self) -> FrameData:
-        """
-        Get the current frame data from the drone.
-        """
-        if not self.master:
-            raise ConnectionError("Mavlink connection not established")
-        if not self.status:
-            raise ConnectionError("MAVLink connection status error")
-        if (
-            self.status["position"] is None
-            or not self.status["position"].get("lat", None)
-            or not self.status.get("orientation", {}).get("yaw", None)
-        ):
-            raise ConnectionError("MAVLink connection GPS telemetry error")
-
-        pos: dict[str, float] = self.status.get("position", {})
-        att: dict[str, float] = self.status.get("orientation", {})
-        return FrameData(
-            frame=None,
-            mode=self.status["mode"],
-            drone_position=(pos["lat"], pos["lon"], pos["alt"]),
-            # ground_level=pos["amsl"] - pos["alt"],
-            drone_attitude=(att["roll"], att["pitch"], att["yaw"]),
-            timestamp=self.status["timestamp"],
-        )
 
     def get_relative_gps_location(self, blocking=True, timeout=1.0):
         """
@@ -482,8 +459,8 @@ class ArdupilotConnection:
                 self.status["position"] = {
                     "lat": msg.lat / 1e7,
                     "lon": msg.lon / 1e7,
-                    "alt": msg.relative_alt / 1e3,
-                    "amsl": msg.alt / 1e3,
+                    "alt": msg.relative_alt / 1000.0,
+                    "amsl": msg.alt / 1000.0,
                 }
             elif msg.get_type() == "ATTITUDE":
                 self.status["orientation"] = {
@@ -550,7 +527,7 @@ class ArdupilotConnection:
         lon: float,
         alt: float,
         timeout=20,
-        speed=-1,  # speed in m/s, default is 1 m/s
+        speed=1,  # speed in m/s, default is 1 m/s
     ):
         """
         Send command to move to the specified latitude, longitude, and current altitude
@@ -598,7 +575,7 @@ class ArdupilotConnection:
         self.set_mode("GUIDED")
         self.set_speed(15)
         self.takeoff(20)
-        self.goto_waypointv2(lat, lon, 1)
+        self.goto_waypointv2(lat, lon, 1, speed=15)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         _loc = self.get_relative_gps_location()
@@ -643,7 +620,7 @@ class ArdupilotConnection:
             if self.status["mode"] == "AUTO" and self.status["sandwich_mode"]:
                 self.status["sandwich_mode"] = False
             if self.num_wp == 0:
-                  self.log("No waypoints in mission", "error")
+                  # self.log("No waypoints in mission", "error")
                   return False
             reached, idx = self.waypoint_reached()
             if idx == self.num_wp - 1:

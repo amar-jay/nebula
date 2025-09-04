@@ -7,7 +7,9 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 import cv2
 import numpy as np
 import supervision as sv
-from trackers import SORTTracker
+# from trackers import SORTTracker
+from trackers import DeepSORTTracker, ReIDModel
+
 from ultralytics import YOLO
 
 # Constants
@@ -46,7 +48,9 @@ class YoloObjectTracker:
         logger.info(f"Model classes: {', '.join(self.names)}")
 
         self.annotator = sv.LabelAnnotator(text_position=sv.Position.CENTER)
-        self.tracker = SORTTracker()
+        reid_model = ReIDModel.from_timm("resnetv2_50.a1h_in1k")
+        self.tracker = DeepSORTTracker(reid_model=reid_model)
+        # self.tracker = SORTTracker()
 
         self.K = K
 
@@ -84,7 +88,8 @@ class YoloObjectTracker:
             return {}
 
         detections = sv.Detections.from_ultralytics(results[0])
-        tracked_detections = self.tracker.update(detections)
+        tracked_detections = self.tracker.update(detections=detections, frame=image)
+        # tracked_detections = self.tracker.update(detections=detections)
 
         outputs = {}
         boxes = results[0].boxes

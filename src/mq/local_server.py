@@ -17,6 +17,7 @@ from src.controls.detection import yolo
 from src.controls.mavlink import ardupilot, gz, mission_types
 from src.mq.crane import ZMQTopics
 from src.mq.video_writer import get_video_writer
+from src.controls.logger import init_logging
 
 # Configuration constants
 CPU_SLEEP_INTERVAL = 0.05
@@ -26,22 +27,7 @@ DATA_TIMEOUT_THRESHOLD = 2  # seconds
 FPS_LOG_INTERVAL = 5  # seconds
 
 # Setup logging
-log_file = os.path.join(os.path.expanduser("~"), "local_zmq_server.log")
-logger = logging.getLogger("local-zmq-server")
-logger.setLevel(logging.DEBUG)
-# logger.setLevel(logging.INFO)
-
-if not logger.hasHandlers():
-    formatter = logging.Formatter("%(asctime)s - %(message)s")
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
+logger = init_logging(level=logging.INFO, log_file=os.path.join(os.path.expanduser("~"), "local-zmq-server.log"))
 
 class LocalZMQServer:
     """Local ZMQ server for video processing and control commands"""
@@ -70,6 +56,7 @@ class LocalZMQServer:
         # Video components
         self.cap = None
         self.video_writer = None
+        self.frame_data: Optional[mission_types.FrameData] = None
 
         # State management
         self.last_result: Optional[mission_types.ProcessedResult] = None
@@ -77,10 +64,15 @@ class LocalZMQServer:
         self.fps = 0
         # self.frame_queue = asyncio.Queue(maxsize=1)
         self.frame = None
+        self.video_height = None
+        self.video_width = None
 
 
         # Initialize object tracker
         self._setup_tracker()
+        self._initialize_video_components()
+        # logger.error("Failed to initialize video components")
+        # return
 
     def _setup_tracker(self):
         """Initialize YOLO object tracker with camera parameters"""
@@ -91,7 +83,6 @@ class LocalZMQServer:
                     camera_link="tilt_link",
                     world="delivery_runway",
                 )
-                print("Camera intrinsics (simulation):", camera_intrinsics, camera_intrinsics["camera_intrinsics"])
             else:
                 camera_intrinsics = mission_types.get_camera_params()
 
@@ -109,12 +100,13 @@ class LocalZMQServer:
                 logger=logger,
                 wait_heartbeat=True,
             )
+            print(model_path, "<- model_path")
 
             self.tracker = yolo.YoloObjectTracker(
                 K=camera_intrinsics["camera_intrinsics"],
                 model_path=model_path,
             )
-            logger.info("Object tracker initialized successfully")
+            logger.success("Object tracker initialized successfully")
 
         except Exception as e:
             logger.error(f"Failed to initialize tracker: {e}")
@@ -126,14 +118,13 @@ class LocalZMQServer:
             return True
         try:
             # Initialize video capture
-            if self.video_source.startswith("rtsp"):
-
+            if not self.is_simulation and isinstance(self.video_source, str) and self.video_source.startswith("rtsp"):
                 pipeline = (
                     f"rtspsrc location={self.video_source} latency=0 ! "
                     "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
                 )
-                print(pipeline)
                 self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)# pylint: disable=E1101
+                # self.cap = gz.GazeboVideoCapture()
                 # self.cap = cv2.VideoCapture(self.video_source, cv2.CAP_FFMPEG)  
                 # Set low-latency options if using FFMPEG
                 # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pylint: disable=E1101 # try to keep only 1 frame in buffer to be safe
@@ -147,11 +138,11 @@ class LocalZMQServer:
                 return False
 
             # Get video properties
-            width = MAX_FRAME_WIDTH  # int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(
+            self.video_width = MAX_FRAME_WIDTH  # int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.video_height = int(
                 int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  # pylint: disable=E1101
                 / int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))  # pylint: disable=E1101
-                * 640
+                * MAX_FRAME_WIDTH
             )
             # pylint: disable=E1101
             self.fps = int(self.cap.get(cv2.CAP_PROP_FPS)) or 10
@@ -159,13 +150,13 @@ class LocalZMQServer:
             # Initialize video writer
             self.video_writer = get_video_writer(
                 source=self.video_output,
-                width=width,
-                height=height,
+                width=self.video_width,
+                height=self.video_height,
                 fps=int(self.fps/FRAME_PROCESS_INTERVAL),
             )
 
-            logger.info(
-                f"Video initialized: {self.video_output} ({width}x{height} @ {self.fps}fps)"
+            logger.success(
+                f"Video initialized: {self.video_output} ({self.video_width}x{self.video_height} @ {self.fps}fps)"
             )
             return True
 
@@ -173,24 +164,36 @@ class LocalZMQServer:
             logger.error(f"Video initialization error: {e}")
             return False
 
-    def _fetch_gps_data(self) -> Optional[mission_types.FrameData]:
-        """Fetch GPS data from the drone"""
-        if not self.drone_client:
-            logger.error("Drone client not initialized")
-            return None
-
-        try:
-            return self.drone_client.get_frame_data()
-        except Exception as e:
-            logger.warning(f"Failed to fetch GPS data: {e}")
-            # print(traceback.format_exc())
-            return None
-
     async def _fetch_gps_data_loop(self):
         """Continuously fetch GPS data from the drone"""
-        while self.running:
-            self.drone_client.get_status()
+
+        while not self.drone_client:
+            logger.error("Drone client not initialized")
             await asyncio.sleep(1)
+            continue
+        logger.success("GPS data fetch loop started")
+        while self.running:
+            status = self.drone_client.get_status()
+            if (
+                status["position"] is None
+                or not status["position"].get("lat", None)
+                or not status.get("orientation", {}).get("yaw", None)
+            ):
+                logger.error("MAVLink connection GPS telemetry error")
+                await asyncio.sleep(1)
+                continue
+
+            pos: dict[str, float] = status.get("position", {})
+            att: dict[str, float] = status.get("orientation", {})
+            self.frame_data = mission_types.FrameData(
+                frame=None,
+                mode=status["mode"],
+                drone_position=(pos["lat"], pos["lon"], pos["alt"]),
+                # ground_level=pos["amsl"] - pos["alt"],
+                drone_attitude=(att["roll"], att["pitch"], att["yaw"]),
+                timestamp=status["timestamp"],
+            )
+            await asyncio.sleep(0.1)
 
     async def _video_receiver_loop(self):
         if not self._initialize_video_components():
@@ -201,7 +204,7 @@ class LocalZMQServer:
             logger.error("Video capture not available")
             await asyncio.sleep(1)
             return
-        logger.info("Video receiver loop started")
+        logger.success("Video receiver loop started")
 
         while self.running:
             if not self.cap:
@@ -228,12 +231,12 @@ class LocalZMQServer:
         prev_frame_hash = None
         counter = 0
 
-        while not self._fetch_gps_data():
+        while not self.frame_data:
           logger.warning("No GPS data available yet...")
           await asyncio.sleep(1)
           continue
 
-        logger.info("Video Processing Loop started")
+        logger.success("Video Processing Loop started")
         now = time.time()
         while self.running:
             try:
@@ -241,13 +244,15 @@ class LocalZMQServer:
                     logger.warning("Failed to get frame")
                     await asyncio.sleep(1)
                     continue
+                logger.debug(f"1. Got a frame at {str((time.time()-now)*1000)} ms")
 
                 frame = self.frame
-                gps_data = self._fetch_gps_data()
+                gps_data = self.frame_data
                 if not gps_data:
                     logger.warning("No GPS data available")
                     await asyncio.sleep(1)
                     continue
+                logger.debug(f"2. Got GPS data at {str((time.time()-now)*1000)} ms")
 
                 # Skip duplicate frames
                 current_hash = hash(frame.tobytes())
@@ -259,31 +264,26 @@ class LocalZMQServer:
 
                 now = time.time()
                 if (
-                    now - gps_data.timestamp > 1
+                    now - gps_data.timestamp > 2
                 ):  # if the frame capture is within 1 second delay
                     logger.warning(
                         f"Frame and data are too far apart for processing... {int(now - gps_data.timestamp)}s"
                     )
 
-                logger.addFilter(lambda record: setattr(record, "drone_mode", gps_data.mode) or True)
-                # Process frame (returns None for skipped frames)
-                # Resize frame if too large
-                data = mission_types.FrameData(
-                    frame=self.frame.copy(),
-                    timestamp=time.time(),
-                    drone_attitude=gps_data.drone_attitude,
-                    drone_position=gps_data.drone_position,
-                    mode=gps_data.mode,
-                )
+                gps_data.frame = frame.copy()
+                gps_data.timestamp = time.time()
 
                 # Process frame with skipping logic
                 if counter >= FRAME_PROCESS_INTERVAL:
-                    processed_result = await self._process_frame_data(data)
+                    processed_result = await self._process_frame_data(gps_data)
+                    logger.debug(f"3. Processed frame at {str((time.time()-now)*1000)} ms")
                     if processed_result and self.video_writer:
                         self.video_writer.write(processed_result.processed_frame)
-                        cv2.imshow("frame", processed_result.processed_frame)
+                        logger.debug(f"4. Wrote frame at {str((time.time()-now)*1000)} ms")
                         cv2.waitKey(1)
-                        self.last_result = processed_result._replace(processed_frame=None)
+                        # self.last_result = processed_result._replace(processed_frame=None)
+                        if self.last_result:
+                            self.last_result.processed_frame = None
                     counter = 0
                 counter+=1
 
@@ -300,20 +300,14 @@ class LocalZMQServer:
 
             except Exception as e:
                 logger.error(f"Video processing error: {e}")
-                print(traceback.format_exc())
+                logger.debug(traceback.format_exc())
                 await asyncio.sleep(0.1)
 
         logger.info("Video processing stopped")
 
     def _resize_frame(self, frame):
         """Resize frame to optimize processing"""
-        height, width = frame.shape[:2]
-        if width > MAX_FRAME_WIDTH:
-            scale = MAX_FRAME_WIDTH / width
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            # pylint: disable=E1101
-            frame = cv2.resize(frame, (new_width, new_height))
+        frame = cv2.resize(frame, (self.video_width, self.video_height))
         return frame
 
     async def _process_frame_data(
@@ -353,7 +347,7 @@ class LocalZMQServer:
 
     async def _control_loop(self):
         """Handle incoming control commands"""
-        logger.info("Control receiver started")
+        logger.success("Control receiver started")
 
         while self.running:
             try:
@@ -461,20 +455,24 @@ class LocalZMQServer:
 
 async def main():
     parser = argparse.ArgumentParser(description="Local ZMQ Video Server")
-    gz_config = mission_types.get_gazebo_config()
+
     parser.add_argument(
-        "--is-simulation",
-        action="store_false" if not gz_config.is_simulation else "store_true",
-        help="Run in simulation mode",
+        "--config-path",
+        choices=["config/default.yaml", "config/simulation.yaml"],
+        default="config/default.yaml",
+        help="Path to the configuration file"
     )
     args = parser.parse_args()
 
+    config = mission_types.get_config(args.config_path)
+    gz_config = mission_types.get_gazebo_config(args.config_path)
+
+
     # Load configuration
-    config = mission_types.get_config()
     logger.info(f"Configuration loaded:\n{config}")
 
     # Enable simulation video streaming if needed
-    if args.is_simulation:
+    if gz_config.is_simulation:
         logger.info("Enabling simulation video streaming")
         if not gz.enable_streaming(
             world=gz_config.world,
@@ -486,7 +484,7 @@ async def main():
 
     # Set object classes based on mode
     object_classes = (
-        ["helipad", "tank"] if args.is_simulation else ["helipad", "real_tank"]
+        ["helipad", "tank"] if gz_config.is_simulation else ["helipad", "real_tank"]
     )
 
     # Initialize server
@@ -495,7 +493,7 @@ async def main():
         video_output=config.video_output,  # "rtsp://localhost:8554/processed",
         mavproxy_source=config.mavproxy_source,
         control_address=config.control_address,
-        is_simulation=args.is_simulation,
+        is_simulation=gz_config.is_simulation,
         object_classes=object_classes,
     )
 

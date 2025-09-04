@@ -1,0 +1,12 @@
+2025-09-04 12:18:18 [DEBUG] This is a debug message
+2025-09-04 12:18:18 [INFO] This is an info message
+2025-09-04 12:18:18 [SUCCESS] Operation completed successfully!
+2025-09-04 12:18:18 [WARNING] This is a warning
+2025-09-04 12:18:18 [ERROR] This is an error
+2025-09-04 12:18:18 [CRITICAL] This is critical
+2025-09-04 12:18:38 [DEBUG] This is a debug message
+2025-09-04 12:18:38 [INFO] This is an info message
+2025-09-04 12:18:38 [SUCCESS] Operation completed successfully!
+2025-09-04 12:18:38 [WARNING] This is a warning
+2025-09-04 12:18:38 [ERROR] This is an error
+2025-09-04 12:18:38 [CRITICAL] This is critical

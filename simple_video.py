@@ -29,10 +29,12 @@ if not cap.isOpened():
     print(f"Error: Could not open video {video_path}")
     exit()
 
+
 def resize(image):
     # Step 2: Resize to target size
     resized = cv2.resize(image, (640, 360))
     return resized
+
 
 counter = 0
 while True:

@@ -1,9 +1,9 @@
 import os
 import warnings
+from dataclasses import dataclass
 from typing import Dict, NamedTuple, Tuple
 
 import numpy as np
-from dataclasses import dataclass
 import yaml
 
 
@@ -14,7 +14,6 @@ class Waypoint(NamedTuple):
     hold: int
     # relative_to: Tuple[float, float, float] | None
     auto: bool
-
 
 
 @dataclass
@@ -45,6 +44,7 @@ class Config(NamedTuple):
     control_address: str  # local_control address
     timeout: float
     video_source: int
+    dataset_path: str
     video_output: str
     controller_connection_string: str
     controller_baudrate: int
@@ -60,6 +60,10 @@ class Config(NamedTuple):
             ("controller_baudrate", self.controller_baudrate),
             ("timeout", self.timeout),
         ]
+        if len(self.dataset_path) > 0:
+            attrs.append(
+                ("dataset_path", self.dataset_path),
+            )
 
         # Compute max widths for columns
         col1_width = max(len(name) for name, _ in attrs)
@@ -286,8 +290,8 @@ def get_config(config=CONFIG_PATH) -> Config:
         video_output=server_config["video_output"],
         controller_connection_string=server_config.get("controller_connection_string"),
         controller_baudrate=server_config.get("controller_baudrate", 9600),
+        dataset_path=config.get("dataset_path", ""),
     )
-
 
 
 def get_gazebo_config(config=CONFIG_PATH) -> GazeboConfig:

@@ -3,7 +3,6 @@ import traceback
 
 # pylint: disable=E0611
 from PySide6.QtCore import QObject, QTimer, Signal
-from qfluentwidgets import MessageBox
 
 from src.controls.mavlink import ardupilot, mission_types
 from src.mq.crane import ZMQTopics
@@ -54,7 +53,7 @@ class DroneClient(QObject):
         self.status_timer.timeout.connect(self._update_status)
         self.status_timer.setInterval(500)  # Update every half second
 
-    def stabilize(self, alt):
+    def stabilize(self):
         if self._status.get("mode", "UNKNOWN") == "AUTO":
             self.log("Cannot stabilize in AUTO mode", "error")
             return False
@@ -142,6 +141,7 @@ class DroneClient(QObject):
         helipad_gps = (
             helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
         )
+        print("Helipad GPS Raw:", helipad_gps)
         helipad_gps = helipad_gps.split(",") if helipad_gps else None
         if helipad_gps and len(helipad_gps) == 2:
             # print(f"Helipad GPS: {helipad_gps}")
@@ -170,13 +170,13 @@ class DroneClient(QObject):
         if self.tank_connection is None:
             return False
         try:
-          tank_gps = self.get_tank_gps()
-          if tank_gps is not None:
-              self._tank_gps = (tank_gps[0], tank_gps[1])
-              return True
+            tank_gps = self.get_tank_gps()
+            if tank_gps is not None:
+                self._tank_gps = (tank_gps[0], tank_gps[1])
+                return True
         except:
-          self.log("Invalid tank GPS format", "error")
-          print(traceback.format_exc())
+            self.log("Invalid tank GPS format", "error")
+            print(traceback.format_exc())
         return False
 
     def fetch_tank_gpsv2(self) -> bool:
@@ -201,6 +201,7 @@ class DroneClient(QObject):
                 self.log("Invalid tank GPS format")
                 print("Invalid tank GPS format")
         return False
+
     def resume_mission(self):
         """Resume mission command."""
         if self.master_connection is None:
@@ -243,12 +244,17 @@ class DroneClient(QObject):
                 self.master_connection.fetch_home()
 
                 # Start status updates
-                self.zmq_client = ZMQClient(
-                    control_address=self._control_address,
-                    remote_control_address=self._remote_control_address,
-                    _logger=self.log,
-                )
-                self.zmq_client.connect()
+                try:
+                    self.zmq_client = ZMQClient(
+                        control_address=self._control_address,
+                        remote_control_address=self._remote_control_address,
+                        _logger=self.log,
+                    )
+                    self.zmq_client.connect()
+                except Exception as e:
+                    self.log(f"Failed to connect to ZMQ server: {e}", "error")
+                    self.zmq_client = None
+                    return True
                 self.status_timer.start()
                 self.log("Connected to main drone successfully", "success")
                 self.connection_status.emit(
@@ -256,15 +262,15 @@ class DroneClient(QObject):
                     f"[MAVLink] Connected to {connection_string} for Drone",
                 )
 
-                # try:
-                #     self.tank_connection = ardupilot.ArdupilotConnection(
-                #       connection_string="/dev/ttyUSB2",
-                #       logger=self.log,
-                #     )
-                # except:
-                #   self.log("Failed to initialize tank connection", "error")
-                #   self.tank_connection = None
-                #   return True
+                try:
+                    self.tank_connection = ardupilot.ArdupilotConnection(
+                        connection_string="/dev/ttyUSB2",
+                        logger=self.log,
+                    )
+                except:
+                    self.log("Failed to initialize tank connection", "error")
+                    self.tank_connection = None
+                    return True
             return True
         except:
             print(traceback.format_exc())
@@ -279,12 +285,17 @@ class DroneClient(QObject):
         if is_kamikaze and self.kamikaze_connection is not None:
             self.kamikaze_connection.close()
             self.kamikaze_connection = None
-        elif self.master_connection is not None:
+        if self.master_connection is not None:
             self.master_connection.close()
             self.master_connection = None
-
             self.connected = False
-
+            if self.kamikaze_connection is not None:
+                self.kamikaze_connection.close()
+                self.kamikaze_connection = None
+                self.k_connected = False
+            if self.tank_connection is not None:
+                self.tank_connection.close()
+                self.tank_connection = None
             if self.zmq_client:
                 self.zmq_client.stop()
             self.zmq_client = None
@@ -472,9 +483,9 @@ class DroneClient(QObject):
         """Update and emit drone status information."""
         if self.master_connection is None:
             return
-        status = self.master_connection.get_status()
         self.fetch_helipad_gps()
-        self.fetch_tank_gpsv2()
+        self.fetch_tank_gps()
+        status = self.master_connection.get_status()
 
         if hasattr(self, "mission_completed"):
             # if self.master_connection.monitor_mission_progress(
@@ -483,25 +494,26 @@ class DroneClient(QObject):
             #     self.mission_progress.emit(100, "Mission completed")
             #     delattr(self, "mission_completed")
 
-            def drop_hook():
-                m = MessageBox(
-                    "Drop Hook", "Drop hook?", MessageBox.Yes | MessageBox.No
-                )
-                reply = m.exec()
-                if reply == MessageBox.Yes:
-                    print("Dropping hook...")
-                    return True
-                return False
+            # def drop_hook():
+            #     m = MessageBox(
+            #         "Drop Hook", "Drop hook?", MessageBox.Yes | MessageBox.No
+            #     )
+            #     reply = m.exec()
+            #     if reply == MessageBox.Yes:
+            #         print("Dropping hook...")
+            #         return True
+            #     return False
 
-            def raise_hook():
-                m = MessageBox(
-                    "Raise Hook", "Raise hook?", MessageBox.Yes | MessageBox.No
-                )
-                reply = m.exec()
-                if reply == MessageBox.Yes:
-                    print("Raising hook...")
-                    return True
-                return False
+            # def raise_hook():
+            #     m = MessageBox(
+            #         "Raise Hook", "Raise hook?", MessageBox.Yes | MessageBox.No
+            #     )
+            #     reply = m.exec()
+            #     if reply == MessageBox.Yes:
+            #         print("Raising hook...")
+            #         return True
+            #     return False
+
             if self.master_connection.monitor_mission_progress(
                 status_callback=self._update_status_hook
             ):

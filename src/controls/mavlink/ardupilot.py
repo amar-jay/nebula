@@ -43,12 +43,17 @@ class ArdupilotConnection:
             "armed": False,
             "flying": False,
             "position": None,
+            "position_int": None,
             "orientation": None,
+            "orientation_rad": None,
             "mission_active": False,
             "current_waypoint": -1,
             "total_waypoints": 0,
             "sandwich_mode": False,
-            "battery": 100,
+            "battery": {
+                "remaining": 100,
+                "voltage": 0,
+            },
         }
 
     def fetch_home(self):
@@ -123,7 +128,7 @@ class ArdupilotConnection:
             else:
                 continue
 
-    def repeat_relay(self, delay=10):
+    def repeat_relay(self, count=2, instance=2, delay=5):
         """
         DO REPEAT RELAY: NOTE: unstable, unknown,
         """
@@ -135,14 +140,36 @@ class ArdupilotConnection:
             self.master.target_system,
             self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_REPEAT_RELAY,
-            1,  # relay instance number
-            1,  # param2: cycle count
-            delay,  # param3: delay in seconds
-            0,
+            instance,  # relay instance number
+            1,  
+            count,  # param2: cycle count
+            delay, # param3: delay in seconds
             0,
             0,
             0,
             0,  # Arm (1 to arm, 0 to disarm)
+        )
+
+    def set_relay(self, state=1, instance=2):
+        """
+        DO SET RELAY
+        """
+        # Wait for a heartbeat from the vehicle
+        self.log(f"Setting relay of {state=} {instance=}...", "info")
+
+        # Arm the vehicle
+        self.master.mav.command_long_send(
+            self.master.target_system,
+            self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_RELAY,
+            instance,  # relay instance number
+            state,  # param2: (1=on, 0=off, others possible depending on system hardware)
+            0, 
+            0,
+            0,
+            0,
+            0,
+            0,  
         )
 
     def arm(self):
@@ -283,7 +310,7 @@ class ArdupilotConnection:
             self.master.mav.mission_item_send(
                 target_system=self.master.target_system,  # System ID
                 target_component=self.master.target_component,  # Component ID
-                seq=i+1,  # Sequence number for item within mission (indexed from 0).
+                seq=i + 1,  # Sequence number for item within mission (indexed from 0).
                 frame=dialect.MAV_FRAME_GLOBAL_RELATIVE_ALT,  # The coordinate system of the waypoint.
                 command=dialect.MAV_CMD_NAV_WAYPOINT,
                 current=(1 if i == 0 else 0),
@@ -330,7 +357,6 @@ class ArdupilotConnection:
             0,  # Param7: unused
         )
         self.ack_sync("COMMAND_ACK")
-
 
     def get_relative_gps_location(self, blocking=True, timeout=1.0):
         """
@@ -435,6 +461,7 @@ class ArdupilotConnection:
                     "MISSION_CURRENT",
                     "BATTERY_STATUS",
                     "VFR_HUD",
+                    "SCALED_PRESSURE",
                 ],
                 blocking=False,
             )
@@ -462,13 +489,25 @@ class ArdupilotConnection:
                     "alt": msg.relative_alt / 1000.0,
                     "amsl": msg.alt / 1000.0,
                 }
+                self.status["position_int"] = {
+                    "lat": msg.lat,
+                    "lon": msg.lon,
+                    "alt": msg.relative_alt,
+                    "amsl": msg.alt,
+                }
+                # self.status["timestamp"] = time.time()
             elif msg.get_type() == "ATTITUDE":
                 self.status["orientation"] = {
                     "roll": math.degrees(msg.roll),
                     "pitch": math.degrees(msg.pitch),
                     "yaw": math.degrees(msg.yaw),
                 }
-
+                self.status["orientation_rad"] = {
+                    "roll": msg.roll,
+                    "pitch": msg.pitch,
+                    "yaw": msg.yaw,
+                }
+                # self.status["timestamp"] = time.time()
             elif msg.get_type() == "VFR_HUD":
                 self.status["speed"] = msg.groundspeed  # In m/s
 
@@ -480,9 +519,15 @@ class ArdupilotConnection:
                     self.status["total_waypoints"] = msg.total
 
             elif msg.get_type() == "BATTERY_STATUS":
-                self.status["battery"] = msg.battery_remaining
+                self.status["battery"] = {
+                    "remaining": msg.battery_remaining,
+                    "voltage": msg.voltages[0] / 1000.0,  # in volts
+                }
+                if msg.temperature:
+                    self.status["temperature"] = msg.temperature / 100.0
+            elif msg.get_type() == "SCALED_PRESSURE":
+                self.status["temperature"] = msg.temperature / 100.0
             self.status["mode"] = self.master.flightmode
-
         self.status["timestamp"] = time.time()
         return self.status
 
@@ -571,11 +616,11 @@ class ArdupilotConnection:
         )
 
     # Send kamikaze GPS coordinate
-    def goto_kamikaze(self, lat, lon):
+    def goto_kamikaze(self, lat, lon, alt=1):
         self.set_mode("GUIDED")
         self.set_speed(15)
         self.takeoff(20)
-        self.goto_waypointv2(lat, lon, 1, speed=15)
+        self.goto_waypointv2(lat, lon, alt, speed=15)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         _loc = self.get_relative_gps_location()
@@ -620,8 +665,8 @@ class ArdupilotConnection:
             if self.status["mode"] == "AUTO" and self.status["sandwich_mode"]:
                 self.status["sandwich_mode"] = False
             if self.num_wp == 0:
-                  # self.log("No waypoints in mission", "error")
-                  return False
+                # self.log("No waypoints in mission", "error")
+                return False
             reached, idx = self.waypoint_reached()
             if idx == self.num_wp - 1:
                 self.log("Mission completed!", "success")
@@ -651,6 +696,7 @@ class ArdupilotConnection:
         return self.master.mav.mission_set_current_send(
             self.master.target_system, self.master.target_component, wp
         )
+
     def resume_mission(self):
         self.set_mission_waypoint(self._last_reached_seq)
         self.set_mode("AUTO")
@@ -850,7 +896,9 @@ if __name__ == "__main__":
                     prev_seq = seq
 
         connection.start_mission()
-        while not connection.monitor_mission_progress(status_callback=_update_status_hook):
+        while not connection.monitor_mission_progress(
+            status_callback=_update_status_hook
+        ):
             time.sleep(1)
     except Exception as e:
         connection.log(f"Error during mission upload: {e}", "error")

@@ -48,3 +48,5 @@ ml:
   confidence_threshold: 0.6
   production_model_path: src/controls/detection/main.pt
   simulation_model_path: src/controls/detection/sim.pt
+
+dataset_path: "matek_sim_dataset.csv"

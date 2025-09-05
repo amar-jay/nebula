@@ -1,8 +1,9 @@
+import logging
 import time
 from enum import Enum
+
 import serial
 import serial.tools.list_ports
-import logging
 
 
 class ZMQTopics(Enum):
@@ -39,7 +40,10 @@ class CraneControls:
                     connection_string = port.device
                     break
             if connection_string is None:
-                raise ValueError("No Arduino device found! Available ports: " + str([p.device for p in ports]))
+                raise ValueError(
+                    "No Arduino device found! Available ports: "
+                    + str([p.device for p in ports])
+                )
 
         try:
             self.ser = serial.Serial(connection_string, baudrate)
@@ -61,7 +65,6 @@ class CraneControls:
         self.ser.flushInput()  # Clear any pending input
 
         while True:
-
             if self.manual_override and self.override_confirmation == expected_response:
                 print(f"Manual override confirmed: {expected_response}")
                 self.override_confirmation = None
@@ -82,12 +85,10 @@ class CraneControls:
 
             time.sleep(0.1)
 
-
     def enable_manual_override(self):
         print("Manual override activated!")
         self.manual_override = True
         self.stop()  # vinci hemen durdur
-
 
     def stop(self):
         """Send stop command and wait for acknowledgment"""
@@ -99,7 +100,7 @@ class CraneControls:
         except serial.SerialException as e:
             print(f"Serial error during stop: {str(e)}")
             return False
-        
+
     def pick_load(self):
         """Send pick load command and wait for acknowledgment"""
         command = "Yuk_Al"
@@ -150,7 +151,7 @@ class CraneControls:
         except serial.SerialException as e:
             print(f"Serial error during drop_load: {str(e)}")
             return False
-        
+
     def manuel_yukari(self):
         """Send command to manually move hook up"""
         self.stop()  # vinci hemen durdur
@@ -172,21 +173,20 @@ class CraneControls:
         except serial.SerialException as e:
             print(f"Serial error during manuel_asagi: {str(e)}")
             return False
-        
+
     def yuk_al_tamam(self):
         """Operatör onayı: yük alındı"""
         self.override_confirmation = "YUK_AL_TAMAM"
         print("✅ Operatör: Yük alındı onayı verildi.")
 
-
     def yuk_birak_tamam(self):
         """Operatör onayı: yük bırakıldı"""
         self.override_confirmation = "YUK_BIRAK_TAMAM"
         print("✅ Operatör: Yük bırakıldı onayı verildi.")
-        
+
     def close(self):
         """Safely close the serial connection"""
-        if hasattr(self, 'ser') and self.ser.is_open:
+        if hasattr(self, "ser") and self.ser.is_open:
             try:
                 self.ser.close()
                 print("Serial connection closed.")
@@ -226,10 +226,16 @@ class CraneControls:
                 return "ACK: Manual override enabled"
             elif command == "MANUEL Y":
                 success = self.manuel_yukari()
-                return "ACK: Hook moving up" if success else "NACK: Failed to move hook up"
+                return (
+                    "ACK: Hook moving up" if success else "NACK: Failed to move hook up"
+                )
             elif command == "MANUEL A":
                 success = self.manuel_asagi()
-                return "ACK: Hook moving down" if success else "NACK: Failed to move hook down"
+                return (
+                    "ACK: Hook moving down"
+                    if success
+                    else "NACK: Failed to move hook down"
+                )
             else:
                 return "NACK: Unknown command"
         except Exception as e:

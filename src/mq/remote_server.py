@@ -1,14 +1,24 @@
 import argparse
 import logging
+import os
 import time
 
 import zmq
 
+from src.controls.logger import init_logging
 from src.controls.mavlink import mission_types
 from src.mq.crane import CraneControls, ExampleController
+from src.mq.mavproxy_tcp import MAVLinkProxy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("remote_zmq_server")
+# Setup logging
+
+
+logger = init_logging(
+    level=logging.DEBUG,
+    log_file=os.path.join(os.path.expanduser("~"), "local-zmq-server.log"),
+)
 
 
 class RemoteZMQServer:
@@ -18,6 +28,7 @@ class RemoteZMQServer:
         self,
         is_simulation: bool,
         remote_control_address: str,
+        mavproxy_source: str,
         controller_address: str,
         baudrate: int,
     ):
@@ -27,21 +38,31 @@ class RemoteZMQServer:
         self.running = False
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)  # Reply socket
+        self.LISTEN_ADDR = "0.0.0.0"
+        self.LISTEN_PORT = 16550
+        self.TARGET_ADDR, self.TARGET_PORT = mavproxy_source.split(":")[1:]
+        self.LISTEN_PORT = int(self.LISTEN_PORT)
 
         # Initialize crane controls
         if is_simulation:
             self.crane = ExampleController()
         else:
-            self.crane = CraneControls()
-            # connection_string=self.controller_address, baudrate=self.baudrate)
+            self.crane = CraneControls(
+                connection_string=controller_address, baudrate=baudrate
+            )
 
         logger.info(
             f"ZMQ Crane Server initialized on port {self.remote_control_address}"
         )
+        self.proxy = MAVLinkProxy(connection_string=mavproxy_source, logger=logger)
+        logger.info(
+            f"Listening on {self.LISTEN_ADDR}:{self.LISTEN_PORT}, forwarding to {self.TARGET_ADDR}:{self.TARGET_PORT}"
+        )
 
-    def start_server(self):
+    def start(self):
         """Start the ZMQ server"""
         try:
+            self.proxy.start()
             self.socket.bind(self.remote_control_address)
             logger.info(f"Server listening on port {self.remote_control_address}")
             self.running = True
@@ -76,7 +97,7 @@ class RemoteZMQServer:
         finally:
             self.cleanup()
 
-    def stop_server(self):
+    def stop(self):
         """Stop the server gracefully"""
         logger.info("Stopping server...")
         self.running = False
@@ -87,54 +108,47 @@ class RemoteZMQServer:
         self.crane.close()
         self.socket.close()
         self.context.term()
+        self.proxy.close()
         logger.info("Server stopped")
 
 
 def main():
     """Main function to start the server"""
 
-    config = mission_types.get_config()
-    ccs = config.controller_connection_string
-
-    if not ccs:
-        ccs = "tcp://localhost:5556"
-
     parser = argparse.ArgumentParser(description="Remote ZMQ Crane Control Server")
     parser.add_argument(
-        "--remote-control-address",
+        "--config-path",
         type=str,
-        default=config.remote_control_address,
-        help="Remote control address",
+        default=mission_types.CONFIG_PATH,
+        help=f"Path to the configuration file (default: {mission_types.CONFIG_PATH})",
     )
     parser.add_argument(
-        "--controller-address", type=str, default=ccs, help="Controller address"
+        "--is-simulation",
+        action="store_true",
+        help="Run in simulation mode (default: False)",
     )
-    parser.add_argument(
-        "--baudrate",
-        type=int,
-        default=config.controller_baudrate,
-        help="Serial baudrate",
-    )
-    parser.add_argument(
-      "--is-simulation",
-      action="store_true",
-      help="Run in simulation mode"
-    )
-
     args = parser.parse_args()
+    if args.is_simulation:
+        import os
+
+        args.config_path = os.path.join(
+            os.path.dirname(args.config_path), "simulation.yaml"
+        )
+    config = mission_types.get_config(args.config_path)
 
     server = RemoteZMQServer(
         is_simulation=args.is_simulation,
-        remote_control_address=args.remote_control_address,
-        controller_address=args.controller_address,
-        baudrate=args.baudrate,
+        remote_control_address=config.remote_control_address,
+        controller_address=config.controller_connection_string,
+        baudrate=config.controller_baudrate,
+        mavproxy_source=config.mavproxy_source,
     )
 
     try:
-        server.start_server()
+        server.start()
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
-        server.stop_server()
+        server.stop()
 
 
 if __name__ == "__main__":

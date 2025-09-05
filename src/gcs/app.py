@@ -1,5 +1,6 @@
 # pylint: disable=E0611
 import json
+import os
 import re
 import sys
 import time
@@ -64,7 +65,7 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink.mission_types import Waypoint, get_config
+from src.controls.mavlink.mission_types import CONFIG_PATH, Waypoint, get_config
 from src.gcs.drone_client import DroneClient
 from src.gcs.src.camera.camera_widget import CameraWidget
 from src.gcs.src.horizon.attitude_widget import AttitudeIndicator
@@ -226,6 +227,7 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient):
             def after_takeoff():
                 tank_gps = drone_client.tank_gps
                 drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
+                drone_client.kamikaze_connection.repeat_relay(count=2, delay=10)
                 if m.exec():
                     m2 = MessageBox(
                         "Kamikaze",
@@ -233,8 +235,18 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient):
                         parent,
                     )
                     m2.exec()
-                    drone_client.kamikaze_connection.repeat_relay(10)
-                    drone_client.kamikaze_connection.set_mode("LAND")
+
+                    # check if it has reached waypoint then land
+                    def check_and_land():
+                        if drone_client.kamikaze_connection.check_reposition_reached(
+                            tank_gps[0], tank_gps[1], 1
+                        ):
+                            timer.stop()
+                            drone_client.kamikaze_connection.set_mode("LAND")
+
+                    timer = QTimer(parent)
+                    timer.timeout.connect(check_and_land)
+                    timer.start(500)  # check every 500 ms
 
             # Wait 5 seconds before goto_kamikaze
             QTimer.singleShot(5000, after_takeoff)
@@ -244,7 +256,7 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient):
         QTimer.singleShot(2000, after_arm)
         return True
     else:
-        print("Kamikaze mode cancelled")
+        drone_client.log("Kamikaze mode cancelled")
         return False
 
 
@@ -294,7 +306,9 @@ class DroneControlApp(QMainWindow):
 
         # Initialize drone client
 
-        self.config = get_config()
+        self.config = get_config(
+            os.path.join(os.path.dirname(CONFIG_PATH), "simulation.yaml")
+        )  # TODO: change it back to config.yaml
         self.drone_client = DroneClient(
             remote_control_address=self.config.remote_control_address,
             control_address=self.config.control_address,
@@ -1080,7 +1094,7 @@ class DroneControlApp(QMainWindow):
 
     def _on_stabilize_clicked(self):
         """Handle return to home button click."""
-        if self.drone_client.stabilize(self.takeoff_alt_input.value()):
+        if self.drone_client.stabilize():
             self.console.append_message("Stabilizing on helipad", "success")
         else:
             msg = MessageBox(
@@ -1377,9 +1391,14 @@ class DroneControlApp(QMainWindow):
             self.compass_widget.set_heading(yaw)
             self.compass_widget_mini.set_heading(yaw)
 
-        self.battery_gauge.set_value(status.get("battery", 100))
+        self.battery_gauge.set_value(
+            value=status["battery"]["remaining"], voltage=status["battery"]["voltage"]
+        )
         if not status.get("mission_active", False):
-            self.battery_progress.setValue(status.get("battery", 100))
+            self.battery_progress.setValue(status["battery"]["remaining"])
+            self.battery_progress.setFormat(
+                f"{status['battery']['remaining']}% / {status['battery']['voltage']}V"
+            )
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
 

@@ -1,15 +1,15 @@
 # pylint: disable=E1101
 import csv
 import logging
+import math
 from contextlib import contextmanager
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import supervision as sv
-# from trackers import SORTTracker
 from trackers import DeepSORTTracker, ReIDModel
-
 from ultralytics import YOLO
 
 # Constants
@@ -24,7 +24,18 @@ logging.basicConfig(
 )
 
 
-class Detection(NamedTuple):
+@dataclass
+class Dataset:
+    """Dataset type for Rotation Optimization"""
+
+    pixel: Tuple[int, int]
+    gps_true: Tuple[float, float]
+    drone_gps: Tuple[float, float, float]
+    drone_att: Tuple[float, float, float]
+
+
+@dataclass
+class Detection:
     """Detection result with all relevant information"""
 
     center_pixel: Tuple[int, int]
@@ -50,7 +61,6 @@ class YoloObjectTracker:
         self.annotator = sv.LabelAnnotator(text_position=sv.Position.CENTER)
         reid_model = ReIDModel.from_timm("resnetv2_50.a1h_in1k")
         self.tracker = DeepSORTTracker(reid_model=reid_model)
-        # self.tracker = SORTTracker()
 
         self.K = K
 
@@ -64,7 +74,7 @@ class YoloObjectTracker:
                     f"{', '.join(self.names)}"
                 )
 
-    def _detect(
+    def detect(
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
@@ -89,7 +99,6 @@ class YoloObjectTracker:
 
         detections = sv.Detections.from_ultralytics(results[0])
         tracked_detections = self.tracker.update(detections=detections, frame=image)
-        # tracked_detections = self.tracker.update(detections=detections)
 
         outputs = {}
         boxes = results[0].boxes
@@ -139,28 +148,28 @@ class YoloObjectTracker:
         self, roll: float, pitch: float, yaw: float
     ) -> np.ndarray:
         """Create rotation matrix from Euler angles"""
-        R_x = np.array(
+        rx = np.array(
             [
                 [1, 0, 0],
-                [0, np.cos(roll), -np.sin(roll)],
-                [0, np.sin(roll), np.cos(roll)],
+                [0, math.cos(roll), -math.sin(roll)],
+                [0, math.sin(roll), math.cos(roll)],
             ]
         )
-        R_y = np.array(
+        ry = np.array(
             [
-                [np.cos(pitch), 0, np.sin(pitch)],
+                [math.cos(pitch), 0, math.sin(pitch)],
                 [0, 1, 0],
-                [-np.sin(pitch), 0, np.cos(pitch)],
+                [-math.sin(pitch), 0, math.cos(pitch)],
             ]
         )
-        R_z = np.array(
+        rz = np.array(
             [
-                [np.cos(yaw), -np.sin(yaw), 0],
-                [np.sin(yaw), np.cos(yaw), 0],
+                [math.cos(yaw), -math.sin(yaw), 0],
+                [math.sin(yaw), math.cos(yaw), 0],
                 [0, 0, 1],
             ]
         )
-        return R_x @ R_y @ R_z
+        return rz @ ry @ rx
 
     def _offset_gps(
         self, lat: float, lon: float, north: float, east: float
@@ -170,7 +179,7 @@ class YoloObjectTracker:
         dLon = east / (EARTH_RADIUS_M * np.cos(np.deg2rad(lat)))
         return lat + np.rad2deg(dLat), lon + np.rad2deg(dLon)
 
-    def _pixel_to_gps(
+    def pixel_to_gps(
         self,
         pixel_coords: Tuple[int, int],
         drone_gps: Tuple[float, float, float],
@@ -183,8 +192,7 @@ class YoloObjectTracker:
         Args:
             pixel_coords: (u, v) pixel coordinates
             drone_gps: (lat, lon, alt_masl) drone GPS position
-            drone_attitude: (roll, pitch, yaw) in degrees
-            ground_level_masl: Ground elevation in meters above sea level
+            drone_attitude: (roll, pitch, yaw) in radians
             K: Camera intrinsic matrix (uses default if None)
 
         Returns:
@@ -198,23 +206,17 @@ class YoloObjectTracker:
             NOTE on Yaw Handling:
             !!!!!!!!!!!!!!!!DO NOT TOUCH!!!!!!!!!!!!!!
 
-            In MAVLink/NED convention, the drone's yaw angle may be reported
-            with a sign opposite to the mathematical convention used in the
-            camera rotation calculation. As a result, when converting pixel
-            coordinates to GPS coordinates, the yaw must be negated to align
-            the camera's orientation with the NED frame.
-
-            This fixes the issue where the computed target GPS point is
-            significantly offset even for nadir-facing cameras.
+            In MAVLink uses the NED convention
         """
         drone_lat, drone_lon, height_above_ground = drone_gps
-        roll, pitch, _yaw = drone_attitude
-        roll, pitch, yaw = np.deg2rad([roll, pitch, _yaw])
+        roll, pitch, yaw = drone_attitude
 
         # Height above ground
-        # height_above_ground = drone_alt_masl  # - ground_level_masl
+        # height_above_ground = drone_alt_masl - ground_level_masl
         if height_above_ground <= 0:
-            logger.warning("Drone is at or below ground level — cannot compute GPS")
+            logger.warning(
+                f"Drone is at or below ground level — cannot compute GPS ({height_above_ground=})"
+            )
             return None
 
         # Convert pixel to camera ray
@@ -235,10 +237,8 @@ class YoloObjectTracker:
         dir_world = R @ cam_ray
 
         # Check if ray points downward
-        if dir_world[2] >= 0:
-            logger.warning(
-                f"Camera ray points upward/horizontal (z={dir_world[2]:.3f})"
-            )
+        if dir_world[2] <= 0:
+            logger.warning(f"Camera ray points upward/horizontal (z={dir_world})")
             # return None
 
         # Compute intersection with ground plane
@@ -249,26 +249,11 @@ class YoloObjectTracker:
         target_lat, target_lon = self._offset_gps(
             drone_lat, drone_lon, offset_ned[0], offset_ned[1]
         )
-        print(f"{target_lat=}, {target_lon=}")
-        print(f"{drone_lat=}, {drone_lon=}, {height_above_ground=}")
-        print(f"{roll=}, {pitch=}, {yaw=}")
+        # print(f"{target_lat=}, {target_lon=}")
+        # print(f"{drone_lat=}, {drone_lon=}, {height_above_ground=}")
+        # print(f"{roll=}, {pitch=}, {yaw=}")
 
         return target_lat, target_lon
-
-    def _calculate_gps_error(
-        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
-    ) -> float:
-        """Haversine distance calculation using numpy"""
-        phi1 = np.deg2rad(gt_lat)
-        phi2 = np.deg2rad(pred_lat)
-        dphi = np.deg2rad(pred_lat - gt_lat)
-        dlambda = np.deg2rad(pred_lon - gt_lon)
-
-        a = (
-            np.sin(dphi / 2) ** 2
-            + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2) ** 2
-        )
-        return float(2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
     def write_on_frame(
         self,
@@ -309,7 +294,7 @@ class YoloObjectTracker:
                 text_color = (255, 255, 255)
                 accent_color = (255, 160, 130)
 
-                cv2.circle(overlay, (px, py), 6, accent_color, -1)
+                # cv2.circle(overlay, (px, py), 6, accent_color, -1)
 
                 label = f"{obj.upper()}"
                 if lat is not None and lon is not None:
@@ -377,7 +362,7 @@ class YoloObjectTracker:
 
         if "helipad" in gps_coords:
             helipad_latlon = gps_coords["helipad"]
-            dist = self._calculate_gps_error(
+            dist = self._haversine_distance(
                 curr_lat, curr_lon, helipad_latlon[0], helipad_latlon[1]
             )
             gps_text_lines.append(f"D: {dist:.1f} m")
@@ -427,6 +412,7 @@ class YoloObjectTracker:
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.7
         font_thickness = 2
+        print(pixel_coords)
 
         # Draw object labels
         for obj in object_classes:
@@ -497,7 +483,6 @@ class YoloObjectTracker:
         frame: np.ndarray,
         drone_gps: Tuple[float, float, float],
         drone_attitude: Tuple[float, float, float],
-        # ground_level_masl: float,
         K: Optional[np.ndarray] = None,
         object_classes: Tuple[str, str] = ("helipad", "real_tank"),
         threshold: float = 0.5,
@@ -508,7 +493,7 @@ class YoloObjectTracker:
         Returns:
             Tuple of (annotated_frame, gps_coordinates, pixel_coordinates)
         """
-        detections = self._detect(
+        detections = self.detect(
             frame, confidence_threshold=threshold, object_classes=object_classes
         )
 
@@ -518,6 +503,7 @@ class YoloObjectTracker:
 
         # self.log(f"Detected {len(detections)} objects")
 
+        annotated_frame = frame.copy()
         gps_coords: dict[str, Tuple[float, float]] = {}
         pixel_coords: dict[str, Tuple[int, int]] = {}
 
@@ -527,8 +513,8 @@ class YoloObjectTracker:
             center = detection.center_pixel
 
             color = (100, 255, 0)  # Could be made configurable
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            # cv2.circle(frame, center, 8, (255, 0, 255), -1)
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+            cv2.circle(annotated_frame, center, 6, (255, 0, 255), -1)
 
             # Add label with tracking ID if available
             label = f"{object_class}: {detection.confidence:.2f}"
@@ -536,7 +522,7 @@ class YoloObjectTracker:
                 label += f" (ID: {detection.track_id})"
 
             cv2.putText(
-                frame,
+                annotated_frame,
                 label,
                 (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -546,7 +532,7 @@ class YoloObjectTracker:
             )
 
             # Compute GPS coordinates
-            gps_result = self._pixel_to_gps(
+            gps_result = self.pixel_to_gps(
                 pixel_coords=center,
                 drone_gps=drone_gps,
                 drone_attitude=drone_attitude,
@@ -557,22 +543,99 @@ class YoloObjectTracker:
                 gps_coords[object_class] = gps_result
                 pixel_coords[object_class] = center
 
-        return frame, gps_coords, pixel_coords
+        return annotated_frame, gps_coords, pixel_coords
 
-    @contextmanager
+    def _write(
+        self,
+        pixel: Tuple[int, int],
+        gps_true: Tuple[float, float],
+        attitude_true: Tuple[float, float, float],
+        gps_estimated: Optional[Tuple[float, float]] = None,
+        timestamp: Optional[float] = None,
+    ):
+        est_lat, est_lon = (None, None) if gps_estimated is None else gps_estimated
+        roll, pitch, yaw = (
+            (None, None, None) if attitude_true is None else attitude_true
+        )
+        true_lat, true_lon, true_alt = (
+            (None, None, None) if gps_true is None else gps_true
+        )
+        self.writer.writerow(
+            [
+                pixel,
+                true_lat,
+                true_lon,
+                true_alt,
+                roll,
+                pitch,
+                yaw,
+                est_lat,
+                est_lon,
+                timestamp,
+            ]
+        )
+
     def dataset_writer(self, dataset_path: str):
         """Context manager for writing dataset CSV files"""
         try:
-            with open(dataset_path, mode="a", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                if f.tell() == 0:  # Write header if file is empty
-                    writer.writerow(
-                        ["pixel", "gps_true", "drone_gps", "drone_attitude"]
+            if not hasattr(self, "f"):
+                self.f = open(dataset_path, mode="a", newline="", encoding="utf-8")
+                self.writer = csv.writer(self.f)
+                if self.f.tell() == 0:  # Write header if file is empty
+                    self.writer.writerow(
+                        [
+                            "pixel",
+                            "current_gps_lat",
+                            "current_gps_lon",
+                            "current_gps_alt",
+                            "true_attitude_roll",
+                            "true_attitude_pitch",
+                            "true_attitude_yaw",
+                            "estimated_gps_lat",
+                            "estimated_gps_lon",
+                            "timestamp",
+                        ]
                     )
-                yield writer
+            return self._write
         except Exception as e:
             logger.error(f"Error writing dataset: {e}")
             raise
+
+    def close(self):
+        """Cleanup resources"""
+        self.tracker.reset()
+        logger.info("Tracker resources cleaned up")
+        if hasattr(self.model, "close"):
+            self.model.close()
+        if hasattr(self, "f"):
+            self.f.close()
+            logger.info("Dataset file closed")
+        if hasattr(self.tracker, "reid_model") and hasattr(
+            self.tracker.reid_model, "close"
+        ):
+            self.tracker.reid_model.close()
+            logger.info("ReID model resources cleaned up")
+
+    def calculate_gps_error(
+        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
+    ) -> float:
+        """Calculate GPS error using Haversine distance"""
+        return float(self._haversine_distance(pred_lat, pred_lon, gt_lat, gt_lon))
+
+    def _haversine_distance(
+        self, pred_lat: float, pred_lon: float, gt_lat: float, gt_lon: float
+    ) -> float:
+        """Haversine distance calculation using numpy"""
+        phi1 = np.deg2rad(gt_lat)
+        phi2 = np.deg2rad(pred_lat)
+        dphi = np.deg2rad(pred_lat - gt_lat)
+        dlambda = np.deg2rad(pred_lon - gt_lon)
+
+        a = (
+            np.sin(dphi / 2) ** 2
+            + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2) ** 2
+        )
+        return 2 * EARTH_RADIUS_M * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
 
 def main():
@@ -701,6 +764,10 @@ def main():
         cv2.destroyAllWindows()
         # out.release()
         logger.info(f"Output saved to {output_video_path}")
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":

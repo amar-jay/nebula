@@ -84,7 +84,10 @@ class ModernGauge(QWidget):
         # Value text
         painter.setPen(QPen(self.text_color))
         painter.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        value_text = f"{self.value:.1f}"
+        text = f"{self.value:.1f}"
+        if hasattr(self, "text_value"):
+            text = str(self.text_value)
+        value_text = text
         text_rect = painter.fontMetrics().boundingRect(value_text)
         painter.drawText(
             center.x() - text_rect.width() // 2, center.y() + 5, value_text
@@ -124,6 +127,12 @@ class BatteryGauge(ModernGauge):
 
     def __init__(self, parent=None):
         super().__init__("BATTERY", "%", 0, 100, parent)
+
+    def set_value(self, value, voltage=0):
+        self.text_value = (
+            f"{voltage:.0f}V"  # pylint: disable=attribute-defined-outside-init
+        )
+        return super().set_value(value)
 
     def get_color_for_value(self, value):
         if value > 50:

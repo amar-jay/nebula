@@ -64,7 +64,7 @@ install_tmux: # completely unrelated to the project, but I think its useful to h
 	curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw | bash
 
 gz_sim:
-	@./scripts/run_sim.sh -w ${RUNWAY}.sdf
+	@./scripts/run_sim.sh -w ${RUNWAY}.sdf -s
 
 cpu_info:
 	@python ./scripts/cpu_info.py

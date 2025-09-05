@@ -29,7 +29,7 @@ FPS_LOG_INTERVAL = 5  # seconds
 
 # Setup logging
 logger = init_logging(
-    level=logging.DEBUG,
+    level=logging.INFO,
     log_file=os.path.join(os.path.expanduser("~"), "local-zmq-server.log"),
 )
 
@@ -42,7 +42,7 @@ class LocalZMQServer:
         video_output: str,
         video_source: int | str,
         mavproxy_source: str,
-        control_address: int = 5556,
+        control_address: str,
         is_simulation: bool = False,
         object_classes=("helipad", "tank"),
         dataset_path: Optional[str] = None,
@@ -310,7 +310,7 @@ class LocalZMQServer:
                             f"4. Wrote frame at {str((time.time() - now) * 1000)} ms"
                         )
                         cv2.waitKey(1)
-                        # self.last_result = processed_result._replace(processed_frame=None)
+                        self.last_result = processed_result
                         if self.last_result:
                             self.last_result.processed_frame = None
                     if (
@@ -400,22 +400,31 @@ class LocalZMQServer:
 
                     if "NACK" not in response:
                         logger.info(f"Command: {message} -> Response: {response}")
-
+            except zmq.Again:
+                await asyncio.sleep(0.1)
             except Exception as e:
-                logger.error(f"Control loop error: {e}")
+                logger.error(f"Control loop error: {e}{traceback.format_exc()}")
                 await asyncio.sleep(0.1)
 
         logger.info("Control receiver stopped")
 
     def _handle_command(self, command: str) -> str:
         """Process control commands and return responses"""
+        if self.last_result is None:
+            return "NACK: No processed data available yet"
+
         latest_gps = self.last_result.gps_coordinates
+        if not latest_gps:
+            return "NACK: No GPS data available"
 
         if command == ZMQTopics.HELIPAD_GPS.name:
             heli_key = self.object_classes[0]
             if "helipad" not in heli_key:
                 logger.error(f"Invalid helipad key: {heli_key}")
                 return "NACK: Errors with the keys. Please check the server code."
+            elif heli_key not in latest_gps:
+                logger.error(f"Helipad key '{heli_key}' not found in latest GPS data")
+                return "NACK: No helipad GPS data available"
             elif latest_gps:
                 logger.debug(f"Latest Helipad GPS data: {latest_gps[heli_key]}")
                 coords = latest_gps[heli_key]
@@ -427,7 +436,10 @@ class LocalZMQServer:
             if "tank" not in tank_key:
                 logger.error(f"Invalid tank key: {tank_key}")
                 return "NACK: Errors with the keys. Please check the server code."
-            if latest_gps and tank_key in latest_gps:
+            elif tank_key not in latest_gps:
+                logger.error(f"Tank key '{tank_key}' not found in latest GPS data")
+                return "NACK: No tank GPS data available"
+            elif latest_gps:
                 logger.debug(f"Latest Tank GPS data: {latest_gps[tank_key]}")
                 coords = latest_gps[tank_key]
                 return f"ACK>{coords[0]},{coords[1]}"

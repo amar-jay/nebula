@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 import zmq
 
@@ -29,7 +30,8 @@ class ZMQClient:
         try:
             self.socket = self.context.socket(zmq.REQ)
             self.socket.connect(self.control_address)
-            self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+            self.socket.setsockopt(zmq.RCVTIMEO, 10000)  # 5 second timeout
+
             self.remote_socket = self.context.socket(zmq.REQ)
             self.remote_socket.connect(self.remote_control_address)
             self.remote_socket.setsockopt(zmq.RCVTIMEO, 10000)  # 10 second timeout
@@ -75,10 +77,15 @@ class ZMQClient:
             # self.log(f"Command '{command}' -> Response: '{response}'", "info")
             return response
         except zmq.Again:
+            self.log("Timeout waiting for response, resetting local socket", "warning")
+            self.socket.close()
+            self.socket = self.context.socket(zmq.REQ)
+            self.socket.connect(self.control_address)
+            self.socket.setsockopt(zmq.RCVTIMEO, 10000)
             return "ERROR: Timeout waiting for response"
         except Exception as e:
             self.log(f"Error sending command - LOCAL: ({command})- {e}", "error")
-            return f"ERROR: {e}"
+            return f"ERROR: {traceback.format_exc()}"
 
     def disconnect(self):
         """Disconnect from server"""

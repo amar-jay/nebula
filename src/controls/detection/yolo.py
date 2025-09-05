@@ -217,7 +217,7 @@ class YoloObjectTracker:
             logger.warning(
                 f"Drone is at or below ground level — cannot compute GPS ({height_above_ground=})"
             )
-            return None
+            # return None
 
         # Convert pixel to camera ray
         u, v = pixel_coords

@@ -133,15 +133,16 @@ class DroneClient(QObject):
     def fetch_helipad_gps(self) -> bool:
         """Fetch the helipad GPS coordinates."""
         if self.master_connection is None:
+            print("Master connection not established")
             return False
         if self.zmq_client is None:
+            print("ZMQ client not connected")
             return False
 
         helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS.name)
         helipad_gps = (
             helipad_gps.split(">")[-1] if helipad_gps and ">" in helipad_gps else None
         )
-        print("Helipad GPS Raw:", helipad_gps)
         helipad_gps = helipad_gps.split(",") if helipad_gps else None
         if helipad_gps and len(helipad_gps) == 2:
             # print(f"Helipad GPS: {helipad_gps}")
@@ -473,6 +474,8 @@ class DroneClient(QObject):
             self._status["mission_state"] = "COMPLETED"
             # self._state["current_waypoint"] = 0
             self._status["mission_active"] = False
+            self.master_connection.set_mode("GUIDED")
+            self.cancel_mission()
             # self._status["total_waypoints"] = 0
         # msg = f"State: {state}"
         # self.mission_progress.emit(
@@ -486,6 +489,7 @@ class DroneClient(QObject):
         self.fetch_helipad_gps()
         self.fetch_tank_gps()
         status = self.master_connection.get_status()
+        print("Updating status...")
 
         if hasattr(self, "mission_completed"):
             # if self.master_connection.monitor_mission_progress(
@@ -513,6 +517,7 @@ class DroneClient(QObject):
             #         print("Raising hook...")
             #         return True
             #     return False
+            print("Status update - monitoring mission progress")
 
             if self.master_connection.monitor_mission_progress(
                 status_callback=self._update_status_hook

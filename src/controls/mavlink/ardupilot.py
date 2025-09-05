@@ -294,15 +294,15 @@ class ArdupilotConnection:
         self.ack_sync("COMMAND_ACK")
 
     def upload_mission(self, waypoints: list[Waypoint]):
-        num_wp = len(waypoints)
-        self.num_wp = num_wp
-        waypoints = waypoints[1:]
+        self.num_wp = len(waypoints)
+        self.log(f"Uploading {self.num_wp} waypoints...")
         print(waypoints)
-        self.log(f"Uploading {num_wp} waypoints...", "info")
+        print(waypoints[0].lat, waypoints[0].lon, waypoints[0].alt, waypoints[0].hold)
+        self.waypoints = waypoints
 
         # send mission count
         self.master.mav.mission_count_send(
-            self.master.target_system, self.master.target_component, num_wp
+            self.master.target_system, self.master.target_component, self.num_wp
         )
         self.ack_sync("MISSION_REQUEST")
         for i, waypoint in enumerate(waypoints):
@@ -310,12 +310,12 @@ class ArdupilotConnection:
             self.master.mav.mission_item_send(
                 target_system=self.master.target_system,  # System ID
                 target_component=self.master.target_component,  # Component ID
-                seq=i + 1,  # Sequence number for item within mission (indexed from 0).
+                seq=i,  # Sequence number for item within mission (indexed from 0).
                 frame=dialect.MAV_FRAME_GLOBAL_RELATIVE_ALT,  # The coordinate system of the waypoint.
                 command=dialect.MAV_CMD_NAV_WAYPOINT,
                 current=(1 if i == 0 else 0),
                 autocontinue=0,
-                param1=waypoint.hold,  # 	Hold time. (ignored by fixed wing, time to stay at waypoint for rotary wing)
+                param1=int(waypoint.hold),  # 	Hold time. (ignored by fixed wing, time to stay at waypoint for rotary wing)
                 param2=0,  # Acceptance radius (if the sphere with this radius is hit, the waypoint counts as reached)
                 param3=0,  # 	Pass the waypoint to the next waypoint (0 = no, 1 = yes)
                 param4=0,  # Desired yaw angle at waypoint (rotary wing). NaN to use the current system yaw heading mode (e.g. yaw towards next waypoint, yaw to home, etc.).
@@ -323,12 +323,12 @@ class ArdupilotConnection:
                 y=waypoint.lon,  # Longitude in degrees * 1E7
                 z=waypoint.alt,  # Altitude in meters (AMSL) DOESN'T TAKE alt/1000 nor compensated altitude
             )
-            if i != num_wp - 1:
+            if i != self.num_wp - 1:
                 self.ack_sync("MISSION_REQUEST")
-                self.log(f"Waypoint {i} uploaded", "info")
+                self.log(f"Waypoint {i} uploaded: {waypoint._asdict()}")
 
         self.ack_sync("MISSION_ACK")
-        self.log("Mission upload complete.", "info")
+        self.log("Mission upload complete.")
 
     def clear_mission(self):
         # Clear mission
@@ -340,6 +340,7 @@ class ArdupilotConnection:
         )
         ack = self.master.recv_match(type="MISSION_ACK", blocking=True, timeout=3)
         self.num_wp = 0
+        delattr(self, "waypoints")
         return ack
 
     def start_mission(self):
@@ -495,6 +496,8 @@ class ArdupilotConnection:
                     "alt": msg.relative_alt,
                     "amsl": msg.alt,
                 }
+                if msg.relative_alt < 0 and self.status["home"]:
+                    self.status["position_int"]["alt"] = self.status["position_int"]["amsl"] - (self.status["home"]["alt"]*1e3)
                 # self.status["timestamp"] = time.time()
             elif msg.get_type() == "ATTITUDE":
                 self.status["orientation"] = {
@@ -667,6 +670,7 @@ class ArdupilotConnection:
             if self.num_wp == 0:
                 # self.log("No waypoints in mission", "error")
                 return False
+            print("Waypoint reached check...")
             reached, idx = self.waypoint_reached()
             if idx == self.num_wp - 1:
                 self.log("Mission completed!", "success")

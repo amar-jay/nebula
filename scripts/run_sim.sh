@@ -58,7 +58,7 @@ tmux new-window -t $SESSION -n ardupilot_sim "$MINI_ARDU_CMD"
 if [ "$IS_SIMULATION" = true ]; then
 	tmux new-window -t $SESSION -n mediamtx "./mediamtx"
 	tmux new-window -t $SESSION -n remote_server "make remote_sim_server_zmq"
-	tmux new-window -t $SESSION -n local_server "make local_sim_server_zmq"
+	# tmux new-window -t $SESSION -n local_server "make local_sim_server_zmq"
 fi
 
 

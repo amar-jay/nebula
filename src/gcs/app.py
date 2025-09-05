@@ -1438,7 +1438,7 @@ class DroneControlApp(QMainWindow):
                     self.battery_progress.setValue(progress)
                 else:
                     self.battery_label.setText("Battery:")
-                    self.battery_progress.setValue(status.get("battery", 100))
+                    self.battery_progress.setValue(status.get("battery", {"remaining":100})["remaining"])
 
     def _disable_control_buttons(self):
         """Disable all control buttons."""

@@ -307,7 +307,7 @@ class DroneControlApp(QMainWindow):
         # Initialize drone client
 
         self.config = get_config(
-            os.path.join(os.path.dirname(CONFIG_PATH), "simulation.yaml")
+            # os.path.join(os.path.dirname(CONFIG_PATH), "simulation.yaml")
         )  # TODO: change it back to config.yaml
         self.drone_client = DroneClient(
             remote_control_address=self.config.remote_control_address,
@@ -664,6 +664,8 @@ class DroneControlApp(QMainWindow):
         self.battery_label = QLabel("Battery:")
         self.battery_progress = QProgressBar()
         self.battery_progress.setRange(0, 100)
+        self.mission_progress = QProgressBar()
+        self.mission_progress.setRange(0, 100)
 
         # Add status widgets to grid
         status_layout.addWidget(QLabel("Connection:"), 0, 0)
@@ -683,8 +685,8 @@ class DroneControlApp(QMainWindow):
 
         status_layout.addWidget(QLabel("Helipad GPS:"), 2, 0)
         status_layout.addWidget(self.helipad_gps_label, 2, 1)
-        status_layout.addWidget(QLabel("Tank GPS:"), 2, 2)
-        status_layout.addWidget(self.tank_gps_label, 2, 3)
+        status_layout.addWidget(QLabel("Mission:"), 2, 2)
+        status_layout.addWidget(self.mission_progress, 2, 3, 1, 2)
 
         _label = QLabel("Mode:")
         _label.setStyleSheet("color: #0078d4;")
@@ -1394,11 +1396,6 @@ class DroneControlApp(QMainWindow):
         self.battery_gauge.set_value(
             value=status["battery"]["remaining"], voltage=status["battery"]["voltage"]
         )
-        if not status.get("mission_active", False):
-            self.battery_progress.setValue(status["battery"]["remaining"])
-            self.battery_progress.setFormat(
-                f"{status['battery']['remaining']}% / {status['battery']['voltage']}V"
-            )
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
 
@@ -1423,6 +1420,14 @@ class DroneControlApp(QMainWindow):
         if kamikaze_gps:
             self.dock_content.set_kamikaze_marker(kamikaze_gps[0], kamikaze_gps[1])
 
+        # if status.get("failsafe", False): TODO: indicate failsafe status
+        #     pass
+
+        if hasattr(status, "battery") and status["battery"] is not None:
+            self.battery_progress.setValue(status.get("battery", {"remaining":100})["remaining"])
+            self.battery_progress.setFormat(
+                f"{status['battery']['remaining']}% / {status['battery']['voltage']}V"
+            )
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
@@ -1434,11 +1439,13 @@ class DroneControlApp(QMainWindow):
                     f"WP: {current_wp}/{total_wp} ({state_wp})"
                 )
                 if current_wp != total_wp:
-                    self.battery_label.setText("Mission:")
-                    self.battery_progress.setValue(progress)
+                    self.mission_progress.setValue(progress)
+                    self.mission_progress.setFormat(
+                        f"{current_wp} / {total_wp} ({state_wp})"
+                    )
                 else:
-                    self.battery_label.setText("Battery:")
-                    self.battery_progress.setValue(status.get("battery", {"remaining":100})["remaining"])
+                    self.mission_progress.setValue(0)
+                    self.mission_progress.setFormat("No mission active")
 
     def _disable_control_buttons(self):
         """Disable all control buttons."""

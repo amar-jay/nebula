@@ -200,6 +200,7 @@ class YoloObjectTracker:
         """
         if K is None:
             K = self.K
+        print(K)
 
         # pylint: disable=W0105
         """
@@ -211,16 +212,17 @@ class YoloObjectTracker:
         drone_lat, drone_lon, height_above_ground = drone_gps
         roll, pitch, yaw = drone_attitude
 
-        # Height above ground
-        # height_above_ground = drone_alt_masl - ground_level_masl
         if height_above_ground <= 0:
             logger.warning(
                 f"Drone is at or below ground level — cannot compute GPS ({height_above_ground=})"
             )
-            # return None
+            return None
 
         # Convert pixel to camera ray
         u, v = pixel_coords
+        if u is None or v is None:
+            logger.error("Invalid pixel coordinates")
+            return None
         pixel_homog = np.array([u, v, 1.0])
 
         try:
@@ -249,9 +251,6 @@ class YoloObjectTracker:
         target_lat, target_lon = self._offset_gps(
             drone_lat, drone_lon, offset_ned[0], offset_ned[1]
         )
-        # print(f"{target_lat=}, {target_lon=}")
-        # print(f"{drone_lat=}, {drone_lon=}, {height_above_ground=}")
-        # print(f"{roll=}, {pitch=}, {yaw=}")
 
         return target_lat, target_lon
 

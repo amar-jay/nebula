@@ -105,12 +105,16 @@ local_server_zmq:
 local_sim_server_zmq:
 	@python -m src.mq.local_server --config-path config/simulation.yaml
 
-remote_server_zmq:
+remote_server:
 	@python -m src.mq.remote_server
 
-remote_sim_server_zmq:
+remote_sim_server:
 	@python -m src.mq.remote_server --is-simulation
 
+remote:
+	@./scripts/remote.sh
+local:
+	@./scripts/local.sh
 
 sim_server:
 	@bash -c '\

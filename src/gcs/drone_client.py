@@ -153,8 +153,11 @@ class DroneClient(QObject):
                 return True
             except ValueError:
                 self._helipad_gps = None
-                self.log("Invalid helipad GPS format")
-                print("Invalid helipad GPS format")
+                self.log("Invalid helipad GPS format", "error")
+                return False
+            except Exception as e:
+                self._helipad_gps = None
+                self.log(f"Error fetching helipad GPS: {e}", "error")
                 return False
         return False
 

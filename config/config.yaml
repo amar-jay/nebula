@@ -31,7 +31,7 @@ communication:
   mavproxy_destination: 0.0.0.0:16550
   control_address: tcp://localhost:5556
   remote_control_address: tcp://192.168.144.12:5557 # tcp://192.168.144.12:5557
-  mavproxy_source: "udp:127.0.0.1:14550"
+  mavproxy_source: "udp:192.168.144.12:14550"
   timeout: 1000
   video_source: rtsp://192.168.43.1:8554/fpv_stream # 0 #
   video_output: ipc:///tmp/matek_video.sock # rtsp://localhost:8554/processed # tcp://0.0.0.0:5555 # ipc:///tmp/matek_video.sock
@@ -49,3 +49,4 @@ ml:
   production_model_path: src/controls/detection/main.pt
   simulation_model_path: src/controls/detection/sim.pt
 dataset_path: "matek_sim_dataset.csv"
+

@@ -672,16 +672,16 @@ class ArdupilotConnection:
                 return False
             print("Waypoint reached check...")
             reached, idx = self.waypoint_reached()
-            if idx == self.num_wp - 1:
-                self.log("Mission completed!", "success")
-                if status_callback:
-                    status_callback(idx, True)
-                return True
 
             if reached and self.status["mode"] == "AUTO":
                 self.status["sandwich_mode"] = True
                 self.set_mode("GUIDED")
                 return False
+            if idx == self.num_wp:
+                self.log("Mission completed!", "success")
+                if status_callback:
+                    status_callback(idx, True)
+                return True
             if status_callback:
                 status_callback(idx, False)
             return False

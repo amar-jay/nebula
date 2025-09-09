@@ -267,10 +267,12 @@ class DroneClient(QObject):
                 )
 
                 try:
-                    self.tank_connection = ardupilot.ArdupilotConnection(
-                        connection_string="/dev/ttyUSB2",
-                        logger=self.log,
-                    )
+                    self.tank_connection = None
+                    # self.tank_connection = ardupilot.ArdupilotConnection(
+                    #     connection_string="udp:127.0.0.1:14570",
+                    #     # connection_string="/dev/ttyUSB2",
+                    #     logger=self.log,
+                    # )
                 except:
                     self.log("Failed to initialize tank connection", "error")
                     self.tank_connection = None
@@ -286,29 +288,34 @@ class DroneClient(QObject):
     def close(self, is_kamikaze=False):
         """Disconnect from the drone."""
 
-        if is_kamikaze and self.kamikaze_connection is not None:
-            self.kamikaze_connection.close()
-            self.kamikaze_connection = None
-        if self.master_connection is not None:
-            self.master_connection.close()
-            self.master_connection = None
-            self.connected = False
-            if self.kamikaze_connection is not None:
+        try:
+            if is_kamikaze and self.kamikaze_connection is not None:
                 self.kamikaze_connection.close()
                 self.kamikaze_connection = None
-                self.k_connected = False
-            if self.tank_connection is not None:
-                self.tank_connection.close()
-                self.tank_connection = None
-            if self.zmq_client:
-                self.zmq_client.stop()
-            self.zmq_client = None
-            self.status_timer.stop()
+            if self.master_connection is not None:
+                self.master_connection.close()
+                self.master_connection = None
+                self.connected = False
+                if self.kamikaze_connection is not None:
+                    self.kamikaze_connection.close()
+                    self.kamikaze_connection = None
+                    self.k_connected = False
+                if self.tank_connection is not None:
+                    self.tank_connection.close()
+                    self.tank_connection = None
+                if self.zmq_client is not None:
+                    self.zmq_client.stop()
+                self.zmq_client = None
+                self.status_timer.stop()
 
-            self.connection_status.emit(
-                False,
-                "[MAVLink] Disconnecting from drone",
-            )
+                self.connection_status.emit(
+                    False,
+                    "[MAVLink] Disconnecting from drone",
+                )
+        except Exception as e:
+            self.log(f"Error disconnecting from drone: {e}", "error")
+            print(e, traceback.format_exc())
+            return False
 
     def arm(self, is_kamikaze=False):
         """Arm the drone."""
@@ -318,8 +325,10 @@ class DroneClient(QObject):
 
             self.log("Arming drone...")
             if is_kamikaze:
+                self.kamikaze_connection.set_mode("GUIDED")
                 self.kamikaze_connection.arm()
             else:
+                self.master_connection.set_mode("GUIDED")
                 self.master_connection.arm()
 
             self.log("Drone armed successfully.")
@@ -340,6 +349,7 @@ class DroneClient(QObject):
             self.log("Disarming a unarmed or not flying drone")
             return False
         self.log("Disarming drone...")
+        self.master_connection.set_mode("GUIDED")
         self.master_connection.disarm()
         return True
 
@@ -492,7 +502,7 @@ class DroneClient(QObject):
         self.fetch_helipad_gps()
         self.fetch_tank_gps()
         status = self.master_connection.get_status()
-        print("Updating status...")
+        # print("Updating status...")
 
         if hasattr(self, "mission_completed"):
             # if self.master_connection.monitor_mission_progress(
@@ -520,7 +530,7 @@ class DroneClient(QObject):
             #         print("Raising hook...")
             #         return True
             #     return False
-            print("Status update - monitoring mission progress")
+            # print("Status update - monitoring mission progress")
 
             if self.master_connection.monitor_mission_progress(
                 status_callback=self._update_status_hook

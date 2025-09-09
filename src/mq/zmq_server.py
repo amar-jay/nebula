@@ -18,7 +18,7 @@ import zmq.asyncio
 
 from src.controls.detection import yolo
 from src.controls.mavlink import ardupilot, gz, mission_types
-from src.mq.crane import ZMQTopics
+from src.mq.crane import ZMQTopics, CraneControls, ExampleController
 
 IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed

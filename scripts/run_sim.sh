@@ -16,10 +16,10 @@ IS_SIMULATION=false
 
 while getopts ":vw:s" opt; do
   case $opt in
-    v) VERBOSE=1 ;;
-    w) WORLD_FILE="$OPTARG" ;;
-    s) IS_SIMULATION=true ;;
-    *) usage ;;
+  v) VERBOSE=1 ;;
+  w) WORLD_FILE="$OPTARG" ;;
+  s) IS_SIMULATION=true ;;
+  *) usage ;;
   esac
 done
 
@@ -48,19 +48,24 @@ trap cleanup EXIT
 tmux kill-session -t $SESSION 2>/dev/null || true
 
 # Start session with gazebo in the first window
-tmux new-session -d -s $SESSION "$GAZEBO_CMD"
+tmux new-session -d -s $SESSION -n "$SESSION" #"$GAZEBO_CMD"
 
-tmux new-window -t $SESSION -n ardupilot_main "$ARDU_CMD"
+tmux new-window -t $SESSION:2 -n ardupilot_main #"$ARDU_CMD"
 
-tmux new-window -t $SESSION -n ardupilot_sim "$MINI_ARDU_CMD"
+tmux new-window -t $SESSION:3 -n ardupilot_sim #"$MINI_ARDU_CMD"
+
+tmux send-keys -t $SESSION:1 "$GAZEBO_CMD" C-m
+
+tmux send-keys -t $SESSION:2 "$ARDU_CMD" # <-- no Enter here
+
+tmux send-keys -t $SESSION:3 "$MINI_ARDU_CMD" # <-- no Enter here
 
 # Add mediamtx window if simulation is enabled
 if [ "$IS_SIMULATION" = true ]; then
-	tmux new-window -t $SESSION -n mediamtx "./mediamtx"
-	tmux new-window -t $SESSION -n remote_server "make remote_sim_server_zmq"
-	# tmux new-window -t $SESSION -n local_server "make local_sim_server_zmq"
+  tmux new-window -t $SESSION -n mediamtx "./mediamtx"
+  tmux new-window -t $SESSION -n remote_server "make remote_sim_server_zmq"
+  # tmux new-window -t $SESSION -n local_server "make local_sim_server_zmq"
 fi
-
 
 # tmux new-window -t $SESSION -n local_server ""
 

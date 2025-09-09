@@ -30,7 +30,7 @@ class ZMQClient:
         try:
             self.socket = self.context.socket(zmq.REQ)
             self.socket.connect(self.control_address)
-            self.socket.setsockopt(zmq.RCVTIMEO, 10000)  # 5 second timeout
+            self.socket.setsockopt(zmq.RCVTIMEO, 1000)  # 5 second timeout
 
             self.remote_socket = self.context.socket(zmq.REQ)
             self.remote_socket.connect(self.remote_control_address)
@@ -43,6 +43,8 @@ class ZMQClient:
         except Exception as e:
             self.log(f"Failed to connect to ZMQ control server: {e}", "error")
             self.connected = False
+            self.socket = None
+            self.remote_socket = None
             return False
 
     def send_remote_command(self, command: str) -> str:
@@ -79,9 +81,7 @@ class ZMQClient:
         except zmq.Again:
             self.log("Timeout waiting for response, resetting local socket", "warning")
             self.socket.close()
-            self.socket = self.context.socket(zmq.REQ)
-            self.socket.connect(self.control_address)
-            self.socket.setsockopt(zmq.RCVTIMEO, 10000)
+            self.socket = None
             return "ERROR: Timeout waiting for response"
         except Exception as e:
             self.log(f"Error sending command - LOCAL: ({command})- {e}", "error")
@@ -89,13 +89,17 @@ class ZMQClient:
 
     def disconnect(self):
         """Disconnect from server"""
-        self.connected = False
-        if self.socket:
-            self.socket.close()
-        if self.remote_socket:
-            self.remote_socket.close()
-        self.context.term()
-        self.log("Disconnected from ZMQ control server", "info")
+        try:
+          self.connected = False
+          if self.socket is not None:
+              self.socket.close()
+          if self.remote_socket:
+              self.remote_socket.close() # force close remote socket too
+          self.context.term()
+          self.log("Disconnected from ZMQ control server", "info")
+        except Exception as e:
+          self.log(f"Error disconnecting from ZMQ server: {e}", "error")
+          print(e, traceback.format_exc())
 
     def is_connected(self) -> bool:
         """Check if connected to server"""

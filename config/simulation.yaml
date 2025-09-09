@@ -33,7 +33,7 @@ communication:
   remote_control_address: tcp://localhost:5557
   mavproxy_source: "udp:127.0.0.1:14550"
   timeout: 1000
-  video_source: rtsp://localhost:8554/raw
+  video_source: 0 # rtsp://localhost:8554/raw
   video_output: ipc:///tmp/matek_video.sock # rtsp://localhost:8554/processed # tcp://0.0.0.0:5555 # ipc:///tmp/matek_video.sock
   controller_connection_string: /dev/ttyUSB0
   controller_baudrate: 9600
@@ -50,3 +50,4 @@ ml:
   simulation_model_path: src/controls/detection/sim.pt
 
 dataset_path: "matek_sim_dataset.csv"
+

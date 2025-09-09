@@ -374,9 +374,9 @@ class DroneControlApp(QMainWindow):
         self.connect_menu.addAction(
             Action(
                 icon=FIF.CONNECT,
-                text="Serial (/dev/ttyAMA0)",
+                text="Serial (/dev/ttyACM0)",
                 triggered=lambda _: self._on_usb_connect_clicked(
-                    connection_string="/dev/ttyAMA0"
+                    connection_string="/dev/ttyACM0"
                 ),
             )
         )
@@ -1399,10 +1399,10 @@ class DroneControlApp(QMainWindow):
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
 
-        if status.get("sandwich_mode", False):
-            self.resume_mission_btn.setEnabled(True)
-        else:
-            self.resume_mission_btn.setEnabled(False)
+        # if status.get("sandwich_mode", False):
+        #     self.resume_mission_btn.setEnabled(True)
+        # else:
+        #     self.resume_mission_btn.setEnabled(False)
 
         # Helipad GPS and kamikaze GPS
         helipad_gps = status.get("helipad_gps", None)
@@ -1432,20 +1432,24 @@ class DroneControlApp(QMainWindow):
             current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
             state_wp = status.get("mission_state", "N/A")
-            if current_wp > 0 and total_wp > 0:
-                progress = int(current_wp * 100 / total_wp)
-                self.mission_progress_bar.setValue(progress)
-                self.mission_status_label.setText(
-                    f"WP: {current_wp}/{total_wp} ({state_wp})"
+            if status.get("mode", "Unknown") == "GUIDED":
+                self.resume_mission_btn.setEnabled(True)
+            else:
+                self.resume_mission_btn.setEnabled(False)
+
+            progress = int(current_wp * 100 / total_wp)
+            self.mission_progress_bar.setValue(progress)
+            self.mission_status_label.setText(
+                f"WP: {current_wp}/{total_wp} ({state_wp})"
+            )
+            if current_wp != total_wp:
+                self.mission_progress.setValue(progress)
+                self.mission_progress.setFormat(
+                    f"{current_wp} / {total_wp} ({state_wp})"
                 )
-                if current_wp != total_wp:
-                    self.mission_progress.setValue(progress)
-                    self.mission_progress.setFormat(
-                        f"{current_wp} / {total_wp} ({state_wp})"
-                    )
-                else:
-                    self.mission_progress.setValue(0)
-                    self.mission_progress.setFormat("No mission active")
+            else:
+                self.mission_progress.setValue(0)
+                self.mission_progress.setFormat("Mission Complete")
 
     def _disable_control_buttons(self):
         """Disable all control buttons."""

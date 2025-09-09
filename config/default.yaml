@@ -31,9 +31,9 @@ communication:
   control_address: tcp://localhost:5556
   # mavproxy_destination: 0.0.0.0:16550
   remote_control_address: tcp://192.168.144.12:5557
-  mavproxy_source: "udp:127.0.0.1:14550"
+  mavproxy_source: "tcp:192.168.144.12:16550"
   timeout: 1000
-  video_source: 0 #rtsp://192.168.43.1:8554/fpv_stream # 0 #rtsp://localhost:8554/raw #
+  video_source: rtsp://192.168.43.1:8554/fpv_stream # 0 #rtsp://localhost:8554/raw #
   video_output: ipc:///tmp/matek_video.sock # rtsp://localhost:8554/processed # tcp://0.0.0.0:5555 # ipc:///tmp/matek_video.sock
   controller_connection_string: /dev/ttyUSB0
   controller_baudrate: 9600

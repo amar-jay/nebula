@@ -200,7 +200,6 @@ class YoloObjectTracker:
         """
         if K is None:
             K = self.K
-        print(K)
 
         # pylint: disable=W0105
         """

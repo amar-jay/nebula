@@ -266,8 +266,26 @@ class YoloObjectTracker:
         fps=30.0,
     ):
         """Write overlay information on the frame"""
-        _, frame_w = frame.shape[:2]
+        frame_h, frame_w = frame.shape[:2]
         overlay = frame.copy()
+
+        # Calculate adaptive sizes based on frame dimensions
+        base_scale = min(frame_h, frame_w) / 600.0
+        font_scale = 0.6 * base_scale
+        font_thickness = max(1, int(1 * base_scale))
+        label_font_scale = 0.5 * base_scale
+        label_thickness = max(1, int(1 * base_scale))
+        fps_font_scale = 0.7 * base_scale
+        fps_thickness = max(1, int(2 * base_scale))
+        padding = int(12 * base_scale)
+        start_x = int(12 * base_scale)
+        start_y = frame_h - int(12 * base_scale)
+        label_offset_x = int(10 * base_scale)
+        label_offset_y = int(10 * base_scale)
+        rect_extra = int(6 * base_scale)
+        mode_rect_padding = int(8 * base_scale)
+        gps_rect_padding_x = int(6 * base_scale)
+        gps_rect_padding_y = int(6 * base_scale)
 
         # Elegant blue-toned mode colors
         mode_colors = {
@@ -280,8 +298,6 @@ class YoloObjectTracker:
         mode_color = mode_colors.get(mode.upper(), default_color)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.6
-        font_thickness = 1
 
         # Draw object labels
         for obj in object_classes:
@@ -292,24 +308,24 @@ class YoloObjectTracker:
                 text_color = (255, 255, 255)
                 accent_color = (255, 160, 130)
 
-                # cv2.circle(overlay, (px, py), 6, accent_color, -1)
+                # cv2.circle(overlay, (px, py), int(6 * base_scale), accent_color, -1)
 
                 label = f"{obj.upper()}"
                 if lat is not None and lon is not None:
                     label += f" | ({lat:.6f}, {lon:.6f})"
 
-                (label_w, label_h), _ = cv2.getTextSize(label, font, 0.5, 1)
-                rect_tl = (px + 10, py - label_h - 10)
-                rect_br = (px + 16 + label_w, py)
+                (label_w, label_h), _ = cv2.getTextSize(label, font, label_font_scale, label_thickness)
+                rect_tl = (px + label_offset_x, py - label_h - label_offset_y)
+                rect_br = (px + label_offset_x + rect_extra + label_w, py)
                 cv2.rectangle(overlay, rect_tl, rect_br, accent_color, -1)
                 cv2.putText(
                     overlay,
                     label,
-                    (px + 13, py - 5),
+                    (px + label_offset_x + 3, py - 5),
                     font,
-                    0.5,
+                    label_font_scale,
                     text_color,
-                    1,
+                    label_thickness,
                     cv2.LINE_AA,
                 )
 
@@ -318,15 +334,14 @@ class YoloObjectTracker:
         (text_w, text_h), _ = cv2.getTextSize(
             mode_text, font, font_scale, font_thickness
         )
-        padding = 12
         x = frame_w - text_w - padding
         y = text_h + padding
 
         mode_overlay = overlay.copy()
         cv2.rectangle(
             mode_overlay,
-            (x - 8, y - text_h - 6),
-            (x + text_w + 8, y + 6),
+            (x - mode_rect_padding, y - text_h - mode_rect_padding//2),
+            (x + text_w + mode_rect_padding, y + mode_rect_padding//2),
             (30, 30, 50),
             -1,
         )
@@ -346,11 +361,11 @@ class YoloObjectTracker:
         cv2.putText(
             overlay,
             fps_text,
-            (10, y),  # Position (x, y)
+            (start_x, y),  # Position (x, y)
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
+            fps_font_scale,
             (100, 100, 0),
-            2,
+            fps_thickness,
         )
 
         # Draw current GPS and distance to helipad (bottom-left)
@@ -365,11 +380,10 @@ class YoloObjectTracker:
             )
             gps_text_lines.append(f"D: {dist:.1f} m")
 
-        start_x, start_y = 12, frame.shape[0] - 12
         for i, line in enumerate(reversed(gps_text_lines)):
             (tw, th), _ = cv2.getTextSize(line, font, font_scale, font_thickness)
-            rect_tl = (start_x - 6, start_y - th - 6 - i * int(1.5 * th))
-            rect_br = (start_x + tw + 6, start_y + 4 - i * int(1.5 * th))
+            rect_tl = (start_x - gps_rect_padding_x, start_y - th - gps_rect_padding_y - i * int(1.5 * th))
+            rect_br = (start_x + tw + gps_rect_padding_x, start_y + gps_rect_padding_y//2 - i * int(1.5 * th))
 
             cv2.rectangle(overlay, rect_tl, rect_br, (50, 30, 30), -1)
             cv2.putText(
@@ -643,11 +657,12 @@ def main():
     # input_video_path = "/home/amarjay/Desktop/long.MOV"
     output_video_path = "/home/amarjay/Desktop/long-processed.MOV"
     input_video_path = "rtsp://192.168.43.1:8554/fpv_stream"
-    pipeline = (
-        f"rtspsrc location={input_video_path} latency=0 ! "
-        "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
-    )
-    cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+    # pipeline = (
+    #     f"rtspsrc location={input_video_path} latency=0 ! "
+    #     "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! appsink"
+    # )
+    # cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+    cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         logger.error(f"Error opening video file: {input_video_path}")
         return
@@ -669,7 +684,7 @@ def main():
     # Initialize tracker
     estimator = YoloObjectTracker(
         K=K,
-        model_path="/home/amarjay/Desktop/code/matek/src/controls/detection/best_v2.pt",
+        model_path="/home/amarjay/Desktop/code/matek/src/controls/detection/main.pt",
     )
 
     # Configuration
@@ -711,42 +726,15 @@ def main():
                         2,
                     )
                 else:
-                    # Create semi-transparent overlay
-                    overlay = annotated_frame.copy()
-                    cv2.rectangle(
-                        overlay, (0, 0), (500, 30 + 40 * len(gps_dict)), (0, 0, 0), -1
-                    )
-                    cv2.addWeighted(
-                        overlay, 0.7, annotated_frame, 0.3, 0, annotated_frame
-                    )
-
-                    y_offset = 30
-                    for object_class, (lat, lon) in gps_dict.items():
-                        center = pixel_dict.get(object_class)
-                        color = object_colors.get(object_class, (200, 200, 0))
-
-                        cv2.putText(
-                            annotated_frame,
-                            f"{object_class.upper()}: {lat:.6f}, {lon:.6f}",
-                            (10, y_offset),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            color,
-                            2,
-                        )
-                        y_offset += 25
-
-                        if center:
-                            cv2.putText(
-                                annotated_frame,
-                                f"Pixel: ({center[0]}, {center[1]})",
-                                (10, y_offset),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.6,
-                                color,
-                                2,
-                            )
-                            y_offset += 30
+                  annotated_frame = estimator.write_on_frame(
+                      annotated_frame,
+                      curr_gps=(0, 0, 1),  # Replace with actual GPS
+                      gps_coords=gps_dict,
+                      pixel_coords=pixel_dict,
+                      mode="GUIDED",
+                      object_classes=object_classes,
+                      fps=cap.get(cv2.CAP_PROP_FPS),
+                  )
 
                 # out.write(annotated_frame)
                 cv2.imshow("Frame", annotated_frame)

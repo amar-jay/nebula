@@ -95,11 +95,11 @@ class MissionWaypointTable(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setColumnCount(4)
-        self.setHorizontalHeaderLabels(["Latitude", "Longitude", "Auto", "Actions"])
+        self.setHorizontalHeaderLabels(["Latitude", "Longitude", "Payload", "Actions"])
         header = self.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)  # Latitude
         header.setSectionResizeMode(1, QHeaderView.Stretch)  # Longitude
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Auto
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Payload
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Actions
         self.setEditTriggers(QTableWidget.DoubleClicked)
         self.verticalHeader().setVisible(True)

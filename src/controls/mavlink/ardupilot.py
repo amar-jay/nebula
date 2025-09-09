@@ -496,7 +496,11 @@ class ArdupilotConnection:
                     "alt": msg.relative_alt,
                     "amsl": msg.alt,
                 }
-                if msg.relative_alt < 0 and self.status["home"]:
+                if self.status["home"]["alt"]<2:
+                  self.status["position_int"]["alt"] -= self.status["home"]["alt"]
+
+                if self.status["position_int"]["alt"] <0 and self.status["home"]:
+                    print("How the hell is relative altitude negative man. How the hell is that even remotely possible")
                     self.status["position_int"]["alt"] = self.status["position_int"]["amsl"] - (self.status["home"]["alt"]*1e3)
                 # self.status["timestamp"] = time.time()
             elif msg.get_type() == "ATTITUDE":
@@ -594,7 +598,7 @@ class ArdupilotConnection:
             0,  # Autocontinue
             0,  # Hold time at waypoint (param1)
             speed if speed > 0 else 1,  # Acceptance radius (param2)
-            0,  # Pass through waypoint (param3)
+            1,  # Pass through waypoint (param3)
             0,  # Desired yaw angle (param4)
             int(lat * 1e7),
             int(lon * 1e7),

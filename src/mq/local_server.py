@@ -137,8 +137,8 @@ class LocalZMQServer:
                 self.cap = cv2.VideoCapture(
                     pipeline, cv2.CAP_GSTREAMER
                 )  # pylint: disable=E1101
-            # elif self.is_simulation:
-            #   return gz.GazeboVideoCapture()
+            elif self.is_simulation:
+              return gz.GazeboVideoCapture()
             else:
                 self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
 

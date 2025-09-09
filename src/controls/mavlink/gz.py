@@ -24,10 +24,19 @@ class GazeboVideoCapture:
 
         if fps is None:
             pipeline = (
-                f'udpsrc port={camera_port} caps="application/x-rtp, media=(string)video, '
-                'clock-rate=(int)90000, encoding-name=(string)H264" ! '
-                "rtph264depay ! avdec_h264 ! videoconvert ! appsink"
-            )
+                f"udpsrc port={camera_port} ! "
+                "application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 ! "
+                "rtph264depay ! "
+                "h264parse ! "
+                "avdec_h264 ! "
+                "videoconvert ! "
+                "appsink drop=1"
+            ) 
+            # pipeline = (
+            #     f'udpsrc port={camera_port} caps="application/x-rtp, media=(string)video, '
+            #     'clock-rate=(int)90000, encoding-name=(string)H264" ! '
+            #     "rtph264depay ! avdec_h264 ! videoconvert ! appsink"
+            # )
         else:
             pipeline = (
                 f"udpsrc port={camera_port} ! "

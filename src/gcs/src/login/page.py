@@ -227,7 +227,7 @@ class ConfigDialog(QDialog):
         self.setLayout(layout)
 
     def load_config(self):
-        config_path = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
+        config_path = os.path.join(os.path.dirname(__file__), "config", "config_.yaml")
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         try:
             if os.path.exists(config_path):

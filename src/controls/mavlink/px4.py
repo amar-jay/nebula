@@ -486,7 +486,7 @@ class Px4Connection:
         self.set_mode("GUIDED")
         self.set_speed(15)
         self.takeoff(20)
-        self.goto_waypointv2(lat, lon, 1)
+        self.goto_waypointv2(lat, lon, 1.25)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         location = self.get_relative_gps_location()

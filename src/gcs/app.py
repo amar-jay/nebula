@@ -200,9 +200,9 @@ class KamikazeConfirmationBox(MessageBoxBase):
         self.widget.setMinimumWidth(400)
 
 
-def showKamikazeConfirmation(parent, drone_client: DroneClient):
+def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordinates=(0, 0)):
     """Show kamikaze mode confirmation dialog"""
-    if drone_client.tank_gps is None or len(drone_client.tank_gps) != 2:
+    if drone_client._tank_gps is None:
         msg = MessageBox(
             title="Kamikaze",
             content="Please set the tank GPS before proceeding.",
@@ -211,49 +211,30 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient):
         msg.exec()
         return
     w = KamikazeConfirmationBox(
-        lat=drone_client.tank_gps[0], lon=drone_client.tank_gps[1], parent=parent
+        lat=drone_client._tank_gps[0], lon=drone_client._tank_gps[1], parent=parent
     )
     if w.exec():
-
-        def after_arm():
-            drone_client.kamikaze_connection.takeoff(10)
-            # Show message box after takeoff
-            m = MessageBox(
-                "Kamikaze",
-                "Kamikaze in Progress. Click OK if ready to LAND",
-                parent,
-            )
-
-            def after_takeoff():
-                tank_gps = drone_client.tank_gps
-                drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
-                drone_client.kamikaze_connection.repeat_relay(count=2, delay=10)
-                if m.exec():
-                    m2 = MessageBox(
-                        "Kamikaze",
-                        "Landing in Progress",
-                        parent,
-                    )
-                    m2.exec()
-
-                    # check if it has reached waypoint then land
-                    def check_and_land():
-                        if drone_client.kamikaze_connection.check_reposition_reached(
-                            tank_gps[0], tank_gps[1], 1
-                        ):
-                            timer.stop()
-                            drone_client.kamikaze_connection.set_mode("LAND")
-
-                    timer = QTimer(parent)
-                    timer.timeout.connect(check_and_land)
-                    timer.start(500)  # check every 500 ms
-
-            # Wait 5 seconds before goto_kamikaze
-            QTimer.singleShot(5000, after_takeoff)
-
         drone_client.kamikaze_connection.arm()
-        # Wait 2 seconds before takeoff
-        QTimer.singleShot(2000, after_arm)
+        time.sleep(1)
+        drone_client.kamikaze_connection.takeoff(10)
+        m = MessageBox(
+            "Kamikaze",
+            "Kamikaze in Progress. Click OK if ready to LAND",
+            parent,
+        )
+        if m.exec():
+          drone_client.kamikaze()
+          drone_client.kamikaze_connection.repeat_relay(count=4, delay=5)
+          m2 = MessageBox(
+              "Kamikaze",
+              "Landing in Progress",
+              parent,
+          )
+          if m2.exec():
+            drone_client.kamikaze_connection.land()
+
+
+
         return True
     else:
         drone_client.log("Kamikaze mode cancelled")
@@ -562,7 +543,7 @@ class DroneControlApp(QMainWindow):
         self.disarm_btn.setEnabled(False)
 
         self.safety_btn = QCheckBox("Safety Switch")
-        self.safety_btn.setChecked(False)
+        self.safety_btn.setChecked(True)
         self.safety_btn.stateChanged.connect(self._on_safety_clicked)
         self.safety_btn.setEnabled(False)
 
@@ -732,7 +713,7 @@ class DroneControlApp(QMainWindow):
         self.waypoint_alt_input.setRange(0, 500)
         self.waypoint_alt_input.setDecimals(1)
         self.waypoint_alt_input.setSingleStep(1.0)
-        self.waypoint_alt_input.setValue(10.0)
+        self.waypoint_alt_input.setValue(5.0)
 
         self.waypoint_hold_input = QDoubleSpinBox()
         self.waypoint_hold_input.setRange(0, 60)
@@ -957,11 +938,9 @@ class DroneControlApp(QMainWindow):
             )
 
     def _on_kamikaze_clicked(self):
-        result = showKamikazeConfirmation(self, self.drone_client)
-        if result == QMessageBox.Yes:
-            self.console.append_message("Activating kamikaze mode...", "warning")
-            # Call kamikaze method on drone client
-            self.drone_client.kamikaze()
+        lat = self.goto_lat_input.value()
+        lon = self.goto_lon_input.value()
+        showKamikazeConfirmation(self, self.drone_client, fallback_coordinates=(lat, lon))
 
     def _is_valid_ip(self, ip):
         pattern = re.compile(
@@ -1573,15 +1552,15 @@ def main():
     """Run the drone control application."""
     app = QApplication(sys.argv)
 
-    # from src.gcs.src.login.page import LoginWindow
+    from src.gcs.src.login.page import LoginWindow
     # app.setStyle("Fusion")
     set_theme(app)
     # Apply the palette
 
     window = DroneControlApp()
-    window.show()
-    # w = LoginWindow(accept=window.show)
-    # w.show()
+    #window.show()
+    w = LoginWindow(accept=window.show)
+    w.show()
 
     sys.exit(app.exec())
 

@@ -122,6 +122,7 @@ class LocalZMQServer:
     def _initialize_video_components(self) -> bool:
         """Initialize video capture and writer"""
         if self.cap:
+            logger.debug("Video capture already exists")
             return True
         try:
             # Initialize video capture
@@ -137,10 +138,10 @@ class LocalZMQServer:
                 self.cap = cv2.VideoCapture(
                     pipeline, cv2.CAP_GSTREAMER
                 )  # pylint: disable=E1101
-            elif self.is_simulation:
-              return gz.GazeboVideoCapture()
+                logger.debug(f"Using GStreamer pipeline: {pipeline}")
             else:
                 self.cap = cv2.VideoCapture(self.video_source)  # pylint: disable=E1101
+                logger.debug(f"Using video source: {self.video_source}")
 
             if not self.cap.isOpened():
                 logger.error(
@@ -169,7 +170,7 @@ class LocalZMQServer:
             )
 
             logger.success(
-                f"Video initialized: {self.video_output} ({self.video_dims[0]}x{self.video_dims[1]} @ {self.fps}fps)"
+                f"Video initialized: {self.video_source=} {self.video_output=} ({self.video_dims[0]}x{self.video_dims[1]} @ {self.fps}fps)"
             )
             return True
 
@@ -186,6 +187,7 @@ class LocalZMQServer:
             continue
         logger.success("GPS data fetch loop started")
         while self.running:
+            print("fetching gps data ...")
             status = self.drone_client.get_status()
             if (
                 status["position_int"] is None
@@ -217,6 +219,7 @@ class LocalZMQServer:
                 drone_attitude=(roll, pitch, yaw),
                 timestamp=status["timestamp"],
             )
+            print("writing ....")
             await asyncio.sleep(0.05)
 
     async def _video_receiver_loop(self):
@@ -246,6 +249,9 @@ class LocalZMQServer:
             cv2.waitKey(1)  # pylint: disable=E1101
             await asyncio.sleep(0.01)
 
+    def get_frame_data(self):
+        return self.frame_data
+
     async def _video_processing_loop(self):
         """Main video processing and publishing loop"""
         logger.warning("Starting video processing...")
@@ -256,10 +262,10 @@ class LocalZMQServer:
         prev_frame_hash = None
         counter = 0
 
-        while not self.frame_data:
-            logger.warning("No GPS data available yet...")
-            await asyncio.sleep(1)
-            continue
+        # while self.get_frame_data() is None:
+        #     logger.warning("No GPS data available yet...")
+        #     await asyncio.sleep(1)
+        #     continue
 
         logger.success("Video Processing Loop started")
         now = time.time()
@@ -274,9 +280,15 @@ class LocalZMQServer:
                 frame = self.frame
                 gps_data = self.frame_data
                 if not gps_data:
+                    gps_data = mission_types.FrameData(
+                      drone_attitude=(0,0,0),
+                      drone_position=(0,0,0),
+                      timestamp=time.time(),
+                      frame=None
+                    )
                     logger.warning("No GPS data available")
-                    await asyncio.sleep(1)
-                    continue
+                    # await asyncio.sleep(1)
+                    # continue
                 logger.debug(f"2. Got GPS data at {str((time.time() - now) * 1000)} ms")
 
                 # Skip duplicate frames
@@ -544,6 +556,7 @@ async def main():
         ["helipad", "tank"] if gz_config.is_simulation else ["helipad", "real_tank"]
     )
 
+    print(config.mavproxy_source)
     # Initialize server
     server = LocalZMQServer(
         video_source=config.video_source,

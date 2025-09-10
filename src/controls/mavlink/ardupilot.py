@@ -453,6 +453,9 @@ class ArdupilotConnection:
     def get_status(self):
         # Try receiving a few messages quickly
         for _ in range(20):
+            if not self.master:
+              print("errror with the master connection")
+              continue
             msg = self.master.recv_match(
                 type=[
                     "HEARTBEAT",
@@ -496,7 +499,7 @@ class ArdupilotConnection:
                     "alt": msg.relative_alt,
                     "amsl": msg.alt,
                 }
-                if self.status["home"]["alt"]<2:
+                if "alt" in self.status["home"] and self.status["home"]["alt"]<2:
                   self.status["position_int"]["alt"] -= self.status["home"]["alt"]
 
                 if self.status["position_int"]["alt"] <0 and self.status["home"]:
@@ -627,7 +630,7 @@ class ArdupilotConnection:
         self.set_mode("GUIDED")
         self.set_speed(15)
         self.takeoff(20)
-        self.goto_waypointv2(lat, lon, alt, speed=15)
+        self.goto_waypointv2(lat, lon, alt, speed=-1)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         _loc = self.get_relative_gps_location()

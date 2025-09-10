@@ -165,13 +165,14 @@ class DroneClient(QObject):
         return self.kamikaze_connection.get_relative_gps_location()
 
     def get_tank_gps(self):
+      if self.tank_connection is None:
+        return None
+      else:
         return self.tank_connection.get_relative_gps_location()
 
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
         if self.master_connection is None:
-            return False
-        if self.tank_connection is None:
             return False
         try:
             tank_gps = self.get_tank_gps()
@@ -238,6 +239,17 @@ class DroneClient(QObject):
                 self.kamikaze_connection.set_mode("GUIDED")
                 self.kamikaze_connection.fetch_home()
                 # self.kamikaze_connection.wait_heartbeat()
+                try:
+                    self.tank_connection = ardupilot.ArdupilotConnection(
+                        connection_string="udp:127.0.0.1:14570",
+                        # connection_string="/dev/ttyUSB2",
+                        logger=self.log,
+                    )
+                    self.log("Connected to tank successfully", "success")
+                except:
+                    self.log("Failed to initialize tank connection", "error")
+                    self.tank_connection = None
+                    return True
             else:
                 self.master_connection = ardupilot.ArdupilotConnection(
                     connection_string=connection_string,
@@ -381,7 +393,6 @@ class DroneClient(QObject):
 
     def goto_coordinates(self, lat, lon, alt, relative=False):
         """Move to the specified coordinates."""
-        # armed = self.status.get("armed", False)
         if relative:
             if not self._status.get("home", None):
                 return False
@@ -467,7 +478,7 @@ class DroneClient(QObject):
             return True
         return False
 
-    def kamikaze(self):
+    def kamikaze(self, fallback_coordinates=(0, 0)):
         if not self.k_connected:
             self.log("Kamikaze connection not established")
             return False
@@ -502,49 +513,12 @@ class DroneClient(QObject):
         self.fetch_helipad_gps()
         self.fetch_tank_gps()
         status = self.master_connection.get_status()
-        # print("Updating status...")
 
         if hasattr(self, "mission_completed"):
-            # if self.master_connection.monitor_mission_progress(
-            #     callback=self._update_status_hook
-            # ):
-            #     self.mission_progress.emit(100, "Mission completed")
-            #     delattr(self, "mission_completed")
-
-            # def drop_hook():
-            #     m = MessageBox(
-            #         "Drop Hook", "Drop hook?", MessageBox.Yes | MessageBox.No
-            #     )
-            #     reply = m.exec()
-            #     if reply == MessageBox.Yes:
-            #         print("Dropping hook...")
-            #         return True
-            #     return False
-
-            # def raise_hook():
-            #     m = MessageBox(
-            #         "Raise Hook", "Raise hook?", MessageBox.Yes | MessageBox.No
-            #     )
-            #     reply = m.exec()
-            #     if reply == MessageBox.Yes:
-            #         print("Raising hook...")
-            #         return True
-            #     return False
-            # print("Status update - monitoring mission progress")
-
             if self.master_connection.monitor_mission_progress(
                 status_callback=self._update_status_hook
             ):
-                # self.mission_progress.emit(100, "Mission completed")
                 delattr(self, "mission_completed")
-            # if self.master_connection.monitor_mission_progressv2(
-            #     is_auto=lambda idx: self.mission_waypoints[idx].auto,
-            #     status_callback=self._update_status_hook,
-            #     helipad_gps=self._helipad_gps,
-            #     drop_hook=drop_hook,
-            #     raise_hook=raise_hook,
-            # ):
-            #     delattr(self, "mission_completed")
 
         status["in_mission"] = hasattr(self, "mission_completed")
         status["helipad_gps"] = self._helipad_gps

@@ -72,6 +72,8 @@ class LocalZMQServer:
         self.frame = None
         self.frame_timestamp = None
         self.video_dims = None
+        self.gps_last_update = 0  # Track last successful GPS update
+        self.connection_healthy = True  # Track connection health
 
         # Initialize object tracker
         self._setup_tracker()
@@ -111,8 +113,8 @@ class LocalZMQServer:
                 K=camera_intrinsics["camera_intrinsics"],
                 model_path=model_path,
             )
-            if self.dataset_path:
-                self.dataset = self.tracker.dataset_writer(self.dataset_path)
+            # if self.dataset_path:
+                # self.dataset = self.tracker.dataset_writer(self.dataset_path)
             logger.success("Object tracker initialized successfully")
 
         except Exception as e:
@@ -121,7 +123,8 @@ class LocalZMQServer:
 
     def _initialize_video_components(self) -> bool:
         """Initialize video capture and writer"""
-        if self.cap:
+
+        if self.cap is not None and self.cap.isOpened():
             logger.debug("Video capture already exists")
             return True
         try:
@@ -186,41 +189,78 @@ class LocalZMQServer:
             await asyncio.sleep(1)
             continue
         logger.success("GPS data fetch loop started")
+        consecutive_failures = 0
+        max_consecutive_failures = 10
+        
         while self.running:
-            print("fetching gps data ...")
-            status = self.drone_client.get_status()
-            if (
-                status["position_int"] is None
-                or not status["position_int"].get("lat", None)
-                or not status.get("orientation_rad", {}).get("yaw", None)
-            ):
-                logger.error("MAVLink connection GPS telemetry error")
-                await asyncio.sleep(1)
-                continue
+            try:
+                # Run get_status in a thread to prevent blocking the async loop
+                loop = asyncio.get_event_loop()
+                status = await loop.run_in_executor(
+                    None, lambda: self.drone_client.get_status()
+                )
+                
+                if not status:
+                    consecutive_failures += 1
+                    logger.warning(f"No status data received (failure {consecutive_failures}/{max_consecutive_failures})")
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.error("Too many consecutive GPS fetch failures, attempting to reconnect...")
+                        # Could implement reconnection logic here if needed
+                        consecutive_failures = 0
+                    await asyncio.sleep(1)
+                    continue
+                
+                if (
+                    status.get("position") is None
+                    or not status.get("position", {}).get("lat", None)
+                    or not status.get("orientation_rad", {}).get("yaw", None)
+                ):
+                    consecutive_failures += 1
+                    logger.warning(f"Incomplete GPS telemetry data (failure {consecutive_failures}/{max_consecutive_failures})")
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.error("MAVLink connection appears degraded")
+                        consecutive_failures = 0
+                    await asyncio.sleep(1)
+                    continue
 
-            pos: dict[str, float] = status["position_int"]
-            att: dict[str, float] = status["orientation_rad"]
-            if pos is None or att is None:
-                logger.error("Incomplete GPS or attitude data")
+                # Reset failure counter on successful data fetch
+                consecutive_failures = 0
+                
+                pos = status["position"]
+                att = status["orientation_rad"]
+                if pos is None or att is None:
+                    logger.warning("Incomplete GPS or attitude data")
+                    await asyncio.sleep(1)
+                    continue
+                    
+                lat = pos["lat"]
+                lon = pos["lon"]
+                relative_alt = pos["alt"]  # meters
+                logger.debug(f"GPS altitude: {relative_alt}")
+                roll = att["roll"]
+                pitch = att["pitch"]
+                yaw = att["yaw"]
+                if yaw < 0:
+                    yaw += 2 * np.pi
+                    
+                self.frame_data = mission_types.FrameData(
+                    frame=None,
+                    mode=status.get("mode", "UNKNOWN"),
+                    drone_position=(lat, lon, relative_alt),
+                    drone_attitude=(roll, pitch, yaw),
+                    timestamp=status.get("timestamp", time.time()),
+                )
+                self.gps_last_update = time.time()  # Update health tracking
+                logger.debug("GPS data updated successfully")
+                await asyncio.sleep(0.05)
+                
+            except Exception as e:
+                consecutive_failures += 1
+                logger.error(f"GPS fetch error (failure {consecutive_failures}/{max_consecutive_failures}): {e}")
+                if consecutive_failures >= max_consecutive_failures:
+                    logger.error("Critical GPS fetch failure, may need manual intervention")
+                    consecutive_failures = 0
                 await asyncio.sleep(1)
-                continue
-            lat = pos["lat"] / 1e7
-            lon = pos["lon"] / 1e7
-            relative_alt = pos["alt"] / 1000.0  # meters
-            roll = att["roll"]
-            pitch = att["pitch"]
-            yaw = att["yaw"]
-            if yaw < 0:
-                yaw += 2 * np.pi
-            self.frame_data = mission_types.FrameData(
-                frame=None,
-                mode=status["mode"],
-                drone_position=(lat, lon, relative_alt),
-                drone_attitude=(roll, pitch, yaw),
-                timestamp=status["timestamp"],
-            )
-            print("writing ....")
-            await asyncio.sleep(0.05)
 
     async def _video_receiver_loop(self):
         if not self._initialize_video_components():
@@ -252,6 +292,20 @@ class LocalZMQServer:
     def get_frame_data(self):
         return self.frame_data
 
+    def _check_connection_health(self):
+        """Check if MAVLink connection is healthy"""
+        current_time = time.time()
+        if current_time - self.gps_last_update > 10:  # No GPS for 10 seconds
+            if self.connection_healthy:
+                logger.warning("MAVLink connection appears unhealthy - no GPS updates")
+                self.connection_healthy = False
+            return False
+        else:
+            if not self.connection_healthy:
+                logger.success("MAVLink connection restored")
+                self.connection_healthy = True
+            return True
+
     async def _video_processing_loop(self):
         """Main video processing and publishing loop"""
         logger.warning("Starting video processing...")
@@ -271,6 +325,9 @@ class LocalZMQServer:
         now = time.time()
         while self.running:
             try:
+                # Check connection health periodically
+                self._check_connection_health()
+                
                 if self.frame is None:
                     logger.warning("Failed to get frame")
                     await asyncio.sleep(1)
@@ -280,16 +337,17 @@ class LocalZMQServer:
                 frame = self.frame
                 gps_data = self.frame_data
                 if not gps_data:
+                    # Create fallback GPS data to continue processing
                     gps_data = mission_types.FrameData(
-                      drone_attitude=(0,0,0),
-                      drone_position=(0,0,0),
-                      timestamp=time.time(),
-                      frame=None
+                        drone_attitude=(0, 0, 1),
+                        drone_position=(0.004, 0.003, 1),
+                        timestamp=time.time(),
+                        frame=None,
+                        mode="NO_GPS"
                     )
-                    logger.warning("No GPS data available")
-                    # await asyncio.sleep(1)
-                    # continue
-                logger.debug(f"2. Got GPS data at {str((time.time() - now) * 1000)} ms")
+                    logger.debug("Using fallback GPS data - no telemetry available")
+                else:
+                    logger.debug(f"2. Got GPS data at {str((time.time() - now) * 1000)} ms")
 
                 # Skip duplicate frames
                 current_hash = hash(frame.tobytes())
@@ -301,13 +359,17 @@ class LocalZMQServer:
 
                 now = time.time()
                 if (
-                    now - gps_data.timestamp > 2
-                    or now - self.frame_timestamp > 2
-                    or abs(self.frame_timestamp - gps_data.timestamp) > 2
-                ):  # if the frame capture is within 1 second delay
+                    gps_data.timestamp and 
+                    (now - gps_data.timestamp > 5 or 
+                     now - self.frame_timestamp > 5 or 
+                     abs(self.frame_timestamp - gps_data.timestamp) > 5)
+                ):  # Increased tolerance for data staleness
                     logger.warning(
-                        f"Frame and data are too far apart for processing... {int(now - gps_data.timestamp)}s"
+                        f"Frame and GPS data are stale: GPS age={int(now - gps_data.timestamp)}s, "
+                        f"Frame age={int(now - self.frame_timestamp)}s, "
+                        f"Diff={int(abs(self.frame_timestamp - gps_data.timestamp))}s"
                     )
+                    # Don't skip processing - continue with stale data but log it
 
                 gps_data.frame = frame.copy()
                 gps_data.timestamp = time.time()
@@ -556,7 +618,6 @@ async def main():
         ["helipad", "tank"] if gz_config.is_simulation else ["helipad", "real_tank"]
     )
 
-    print(config.mavproxy_source)
     # Initialize server
     server = LocalZMQServer(
         video_source=config.video_source,

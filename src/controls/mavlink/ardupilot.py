@@ -43,7 +43,6 @@ class ArdupilotConnection:
             "armed": False,
             "flying": False,
             "position": None,
-            "position_int": None,
             "orientation": None,
             "orientation_rad": None,
             "mission_active": False,
@@ -452,92 +451,96 @@ class ArdupilotConnection:
 
     def get_status(self):
         # Try receiving a few messages quickly
-        for _ in range(20):
-            if not self.master:
-              print("errror with the master connection")
-              continue
-            msg = self.master.recv_match(
-                type=[
-                    "HEARTBEAT",
-                    "HOME_POSITION",
-                    "GLOBAL_POSITION_INT",
-                    "ATTITUDE",
-                    "MISSION_CURRENT",
-                    "BATTERY_STATUS",
-                    "VFR_HUD",
-                    "SCALED_PRESSURE",
-                ],
-                blocking=False,
-            )
-
-            if not msg:
-                continue
-            if msg.get_type() == "HOME_POSITION":
-                self.status["home"] = {
-                    "lat": msg.latitude / 1e7,
-                    "lon": msg.longitude / 1e7,
-                    "alt": msg.altitude / 1e3,
-                }
-
-            if msg.get_type() == "HEARTBEAT":
-                self.status["connected"] = True
-                self.status["armed"] = bool(self.master.motors_armed())
-                self.status["flying"] = (
-                    msg.system_status == mavutil.mavlink.MAV_STATE_ACTIVE
+        try:
+            for _ in range(20):
+                if not self.master:
+                    self.log("❌ Master connection lost", "error")
+                    return self.status
+                    
+                msg = self.master.recv_match(
+                    type=[
+                        "HEARTBEAT",
+                        "HOME_POSITION",
+                        "GLOBAL_POSITION_INT",
+                        "ATTITUDE",
+                        "MISSION_CURRENT",
+                        "BATTERY_STATUS",
+                        "VFR_HUD",
+                        "SCALED_PRESSURE",
+                    ],
+                    blocking=False,
+                    timeout=0.1,  # Short timeout to prevent hanging
                 )
 
-            elif msg.get_type() == "GLOBAL_POSITION_INT":
-                self.status["position"] = {
-                    "lat": msg.lat / 1e7,
-                    "lon": msg.lon / 1e7,
-                    "alt": msg.relative_alt / 1000.0,
-                    "amsl": msg.alt / 1000.0,
-                }
-                self.status["position_int"] = {
-                    "lat": msg.lat,
-                    "lon": msg.lon,
-                    "alt": msg.relative_alt,
-                    "amsl": msg.alt,
-                }
-                if "alt" in self.status["home"] and self.status["home"]["alt"]<2:
-                  self.status["position_int"]["alt"] -= self.status["home"]["alt"]
+                if not msg:
+                    continue
+                    
+                # Process messages without debug prints
+                if msg.get_type() == "HOME_POSITION":
+                    self.status["home"] = {
+                        "lat": msg.latitude / 1e7,
+                        "lon": msg.longitude / 1e7,
+                        "alt": 0, #msg.altitude / 1000.0,
+                        "amsl": msg.altitude / 1000.0,
+                    }
 
-                if self.status["position_int"]["alt"] <0 and self.status["home"]:
-                    print("How the hell is relative altitude negative man. How the hell is that even remotely possible")
-                    self.status["position_int"]["alt"] = self.status["position_int"]["amsl"] - (self.status["home"]["alt"]*1e3)
-                # self.status["timestamp"] = time.time()
-            elif msg.get_type() == "ATTITUDE":
-                self.status["orientation"] = {
-                    "roll": math.degrees(msg.roll),
-                    "pitch": math.degrees(msg.pitch),
-                    "yaw": math.degrees(msg.yaw),
-                }
-                self.status["orientation_rad"] = {
-                    "roll": msg.roll,
-                    "pitch": msg.pitch,
-                    "yaw": msg.yaw,
-                }
-                # self.status["timestamp"] = time.time()
-            elif msg.get_type() == "VFR_HUD":
-                self.status["speed"] = msg.groundspeed  # In m/s
+                elif msg.get_type() == "HEARTBEAT":
+                    self.status["connected"] = True
+                    self.status["armed"] = bool(self.master.motors_armed())
+                    self.status["flying"] = (
+                        msg.system_status == mavutil.mavlink.MAV_STATE_ACTIVE
+                    )
 
-            elif msg.get_type() == "MISSION_CURRENT":
-                if hasattr(msg, "seq"):
-                    self.status["current_waypoint"] = msg.seq
-                    self.status["mission_active"] = msg.seq > 0  # or some other logic
-                if hasattr(msg, "total"):
-                    self.status["total_waypoints"] = msg.total
+                elif msg.get_type() == "GLOBAL_POSITION_INT":
+                    self.status["position"] = {
+                        "lat": msg.lat / 1e7,
+                        "lon": msg.lon / 1e7,
+                        "alt": msg.relative_alt / 1000.0,
+                        "amsl": msg.alt / 1000.0,
+                    }
+                    if self.status.get("home") and "amsl" in self.status["home"]:
+                        self.status["position"]["alt"] = self.status["position"]["amsl"] - self.status["home"]["amsl"] 
 
-            elif msg.get_type() == "BATTERY_STATUS":
-                self.status["battery"] = {
-                    "remaining": msg.battery_remaining,
-                    "voltage": msg.voltages[0] / 1000.0,  # in volts
-                }
-                if msg.temperature:
+                elif msg.get_type() == "ATTITUDE":
+                    self.status["orientation"] = {
+                        "roll": math.degrees(msg.roll),
+                        "pitch": math.degrees(msg.pitch),
+                        "yaw": math.degrees(msg.yaw),
+                    }
+                    self.status["orientation_rad"] = {
+                        "roll": msg.roll,
+                        "pitch": msg.pitch,
+                        "yaw": msg.yaw,
+                    }
+                    
+                elif msg.get_type() == "VFR_HUD":
+                    self.status["speed"] = msg.groundspeed  # In m/s
+
+                elif msg.get_type() == "MISSION_CURRENT":
+                    if hasattr(msg, "seq"):
+                        self.status["current_waypoint"] = msg.seq
+                        self.status["mission_active"] = msg.seq > 0  # or some other logic
+                    if hasattr(msg, "total"):
+                        self.status["total_waypoints"] = msg.total
+
+                elif msg.get_type() == "BATTERY_STATUS":
+                    self.status["battery"] = {
+                        "remaining": msg.battery_remaining,
+                        "voltage": msg.voltages[0] / 1000.0,  # in volts
+                    }
+                    if hasattr(msg, 'temperature') and msg.temperature:
+                        self.status["temperature"] = msg.temperature / 100.0
+                        
+                elif msg.get_type() == "SCALED_PRESSURE":
                     self.status["temperature"] = msg.temperature / 100.0
-            elif msg.get_type() == "SCALED_PRESSURE":
-                self.status["temperature"] = msg.temperature / 100.0
-            self.status["mode"] = self.master.flightmode
+                    
+                # Update mode on every iteration
+                self.status["mode"] = self.master.flightmode
+                
+        except Exception as e:
+            self.log(f"❌ Error in get_status: {e}", "error")
+            
+        # Always update timestamp
         self.status["timestamp"] = time.time()
         return self.status
 
@@ -627,10 +630,10 @@ class ArdupilotConnection:
 
     # Send kamikaze GPS coordinate
     def goto_kamikaze(self, lat, lon, alt=1):
-        self.set_mode("GUIDED")
-        self.set_speed(15)
-        self.takeoff(20)
-        self.goto_waypointv2(lat, lon, alt, speed=-1)
+        #self.set_mode("GUIDED")
+        #self.set_speed(15)
+        # self.takeoff(10)
+        self.goto_waypointv2(lat, lon, alt, speed=15)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         _loc = self.get_relative_gps_location()

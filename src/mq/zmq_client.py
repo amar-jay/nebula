@@ -30,11 +30,11 @@ class ZMQClient:
         try:
             self.socket = self.context.socket(zmq.REQ)
             self.socket.connect(self.control_address)
-            self.socket.setsockopt(zmq.RCVTIMEO, 1000)  # 5 second timeout
+            self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout (increased from 1s)
 
             self.remote_socket = self.context.socket(zmq.REQ)
             self.remote_socket.connect(self.remote_control_address)
-            self.remote_socket.setsockopt(zmq.RCVTIMEO, 10000)  # 10 second timeout
+            self.remote_socket.setsockopt(zmq.RCVTIMEO, 15000)  # 15 second timeout (increased from 10s)
             self.connected = True
             self.log(
                 f"Connected to ZMQ control server at {self.control_address}", "info"
@@ -58,11 +58,18 @@ class ZMQClient:
             # self.log(f"Command '{command}' -> Response: '{response}'", "info")
             return response
         except zmq.Again:
-            self.log("Timeout waiting for response, resetting remote socket", "warning")
+            # Reduce log spam by only logging every few timeouts
+            if not hasattr(self, '_remote_timeout_count'):
+                self._remote_timeout_count = 0
+            self._remote_timeout_count += 1
+            
+            if self._remote_timeout_count % 5 == 1:  # Log every 5th timeout
+                self.log("Timeout waiting for response, resetting remote socket", "warning")
+            
             self.remote_socket.close()
             self.remote_socket = self.context.socket(zmq.REQ)
             self.remote_socket.connect(self.remote_control_address)
-            self.remote_socket.setsockopt(zmq.RCVTIMEO, 10000)
+            self.remote_socket.setsockopt(zmq.RCVTIMEO, 15000)
             return "ERROR: Timeout waiting for response"
         except Exception as e:
             self.log(f"Error sending command - REMOTE: ({command})- {e}", "error")
@@ -79,7 +86,14 @@ class ZMQClient:
             # self.log(f"Command '{command}' -> Response: '{response}'", "info")
             return response
         except zmq.Again:
-            self.log("Timeout waiting for response, resetting local socket", "warning")
+            # Reduce log spam by only logging every few timeouts
+            if not hasattr(self, '_local_timeout_count'):
+                self._local_timeout_count = 0
+            self._local_timeout_count += 1
+            
+            if self._local_timeout_count % 5 == 1:  # Log every 5th timeout
+                self.log("Timeout waiting for response, resetting local socket", "warning")
+            
             self.socket.close()
             self.socket = None
             return "ERROR: Timeout waiting for response"
@@ -90,16 +104,38 @@ class ZMQClient:
     def disconnect(self):
         """Disconnect from server"""
         try:
-          self.connected = False
-          if self.socket is not None:
-              self.socket.close()
-          if self.remote_socket:
-              self.remote_socket.close() # force close remote socket too
-          self.context.term()
-          self.log("Disconnected from ZMQ control server", "info")
+            self.connected = False
+            
+            # Close sockets with proper cleanup
+            if self.socket is not None:
+                try:
+                    self.socket.setsockopt(zmq.LINGER, 0)  # Don't wait for pending messages
+                    self.socket.close()
+                except Exception as socket_error:
+                    self.log(f"Error closing local socket: {socket_error}", "warning")
+                finally:
+                    self.socket = None
+                    
+            if self.remote_socket is not None:
+                try:
+                    self.remote_socket.setsockopt(zmq.LINGER, 0)  # Don't wait for pending messages
+                    self.remote_socket.close()
+                except Exception as socket_error:
+                    self.log(f"Error closing remote socket: {socket_error}", "warning")
+                finally:
+                    self.remote_socket = None
+                
+            # Terminate context without blocking - only if it exists
+            if hasattr(self, 'context') and self.context:
+                try:
+                    self.context.term()
+                except Exception as context_error:
+                    self.log(f"Error terminating context: {context_error}", "warning")
+                    
+            self.log("Disconnected from ZMQ control server", "info")
         except Exception as e:
-          self.log(f"Error disconnecting from ZMQ server: {e}", "error")
-          print(e, traceback.format_exc())
+            self.log(f"Error disconnecting from ZMQ server: {e}", "error")
+            print(e, traceback.format_exc())
 
     def is_connected(self) -> bool:
         """Check if connected to server"""
@@ -120,8 +156,9 @@ class ZMQClient:
 
     def stop(self):
         """Stop ZMQ control connection"""
-        self.disconnect()
-        self.log("ZMQ Client stopped", "info")
+        if self.connected:
+            self.disconnect()
+            self.log("ZMQ Client stopped", "info")
 
 
 # Example usage

@@ -48,6 +48,11 @@ class DroneClient(QObject):
 
         self.zmq_client = None
 
+        self.zmq_client = ZMQClient(
+            control_address=self._control_address,
+            remote_control_address=self._remote_control_address,
+            _logger=self.log,
+        )
         # Setup status update timer
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self._update_status)
@@ -71,7 +76,7 @@ class DroneClient(QObject):
         if self.master_connection is None:
             return False
         if self.zmq_client is None:
-            self.log("server is not connected", "error")
+            self.log("zmq client is not connected", "error")
             return False
 
         msg = self.zmq_client.send_remote_command(ZMQTopics.DROP_LOAD.name)
@@ -84,7 +89,7 @@ class DroneClient(QObject):
             return False
 
         if self.zmq_client is None:
-            self.log("server is not connected", "error")
+            self.log("zmq client is not connected", "error")
             return False
 
         msg = self.zmq_client.send_remote_command(ZMQTopics.PICK_LOAD.name)
@@ -97,12 +102,12 @@ class DroneClient(QObject):
             return False
 
         if self.zmq_client is None:
-            self.log("server is not connected", "error")
+            self.log("zmq client is not connected", "error")
             return False
 
         msg = self.zmq_client.send_remote_command(ZMQTopics.MANUEL_ASAGI.name)
         self.log(msg)
-        return
+        return True
 
     def manuel_yukari(self):
         """Pick load controller command."""
@@ -110,7 +115,7 @@ class DroneClient(QObject):
             return False
 
         if self.zmq_client is None:
-            self.log("server is not connected", "error")
+            self.log("zmq client is not connected", "error")
             return False
 
         msg = self.zmq_client.send_remote_command(ZMQTopics.MANUEL_YUKARI.name)
@@ -123,7 +128,7 @@ class DroneClient(QObject):
             return False
 
         if self.zmq_client is None:
-            self.log("server is not connected", "error")
+            self.log("zmq client is not connected", "error")
             return False
 
         msg = self.zmq_client.send_remote_command(ZMQTopics.STOP.name)
@@ -133,10 +138,8 @@ class DroneClient(QObject):
     def fetch_helipad_gps(self) -> bool:
         """Fetch the helipad GPS coordinates."""
         if self.master_connection is None:
-            print("Master connection not established")
             return False
         if self.zmq_client is None:
-            print("ZMQ client not connected")
             return False
 
         helipad_gps = self.zmq_client.send_command(ZMQTopics.HELIPAD_GPS.name)
@@ -165,23 +168,25 @@ class DroneClient(QObject):
         return self.kamikaze_connection.get_relative_gps_location()
 
     def get_tank_gps(self):
-      if self.tank_connection is None:
-        return None
-      else:
+      if self._tank_gps is not None:
+        return self._tank_gps
+      elif self.tank_connection is not None:
         return self.tank_connection.get_relative_gps_location()
+      else:
+        print("Tank GPS not available")
+        return None
 
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
-        if self.master_connection is None:
+        if self.tank_connection is None:
             return False
         try:
-            tank_gps = self.get_tank_gps()
+            tank_gps = self.tank_connection.get_relative_gps_location()
             if tank_gps is not None:
                 self._tank_gps = (tank_gps[0], tank_gps[1])
                 return True
         except:
             self.log("Invalid tank GPS format", "error")
-            print(traceback.format_exc())
         return False
 
     def fetch_tank_gpsv2(self) -> bool:
@@ -239,17 +244,6 @@ class DroneClient(QObject):
                 self.kamikaze_connection.set_mode("GUIDED")
                 self.kamikaze_connection.fetch_home()
                 # self.kamikaze_connection.wait_heartbeat()
-                try:
-                    self.tank_connection = ardupilot.ArdupilotConnection(
-                        connection_string="udp:127.0.0.1:14570",
-                        # connection_string="/dev/ttyUSB2",
-                        logger=self.log,
-                    )
-                    self.log("Connected to tank successfully", "success")
-                except:
-                    self.log("Failed to initialize tank connection", "error")
-                    self.tank_connection = None
-                    return True
             else:
                 self.master_connection = ardupilot.ArdupilotConnection(
                     connection_string=connection_string,
@@ -259,13 +253,7 @@ class DroneClient(QObject):
                 self.master_connection.set_mode("GUIDED")
                 self.master_connection.fetch_home()
 
-                # Start status updates
                 try:
-                    self.zmq_client = ZMQClient(
-                        control_address=self._control_address,
-                        remote_control_address=self._remote_control_address,
-                        _logger=self.log,
-                    )
                     self.zmq_client.connect()
                 except Exception as e:
                     self.log(f"Failed to connect to ZMQ server: {e}", "error")
@@ -279,14 +267,13 @@ class DroneClient(QObject):
                 )
 
                 try:
-                    self.tank_connection = None
-                    # self.tank_connection = ardupilot.ArdupilotConnection(
-                    #     connection_string="udp:127.0.0.1:14570",
-                    #     # connection_string="/dev/ttyUSB2",
-                    #     logger=self.log,
-                    # )
-                except:
-                    self.log("Failed to initialize tank connection", "error")
+                    self.tank_connection = ardupilot.ArdupilotConnection(
+                        connection_string="udp:127.0.0.1:14570",
+                        logger=self.log,
+                    )
+                    self.log("Tank connection initialized", "info")
+                except Exception as e:
+                    self.log(f"Failed to initialize tank connection: {e}", "error")
                     self.tank_connection = None
                     return True
             return True
@@ -302,20 +289,25 @@ class DroneClient(QObject):
 
         try:
             if is_kamikaze and self.kamikaze_connection is not None:
+                print("Closing kamikaze connection")
                 self.kamikaze_connection.close()
                 self.kamikaze_connection = None
             if self.master_connection is not None:
+                print("Closing main drone connection")
                 self.master_connection.close()
                 self.master_connection = None
                 self.connected = False
                 if self.kamikaze_connection is not None:
+                    print("Closing kamikaze connection")
                     self.kamikaze_connection.close()
                     self.kamikaze_connection = None
                     self.k_connected = False
                 if self.tank_connection is not None:
+                    print("Closing tank connection")
                     self.tank_connection.close()
                     self.tank_connection = None
                 if self.zmq_client is not None:
+                    print("Closing ZMQ client connection")
                     self.zmq_client.stop()
                 self.zmq_client = None
                 self.status_timer.stop()
@@ -478,7 +470,7 @@ class DroneClient(QObject):
             return True
         return False
 
-    def kamikaze(self, fallback_coordinates=(0, 0)):
+    def kamikaze(self):
         if not self.k_connected:
             self.log("Kamikaze connection not established")
             return False
@@ -496,15 +488,10 @@ class DroneClient(QObject):
         self._status["mission_state"] = state
         if done:
             self._status["mission_state"] = "COMPLETED"
-            # self._state["current_waypoint"] = 0
             self._status["mission_active"] = False
             self.master_connection.set_mode("GUIDED")
             self.cancel_mission()
-            # self._status["total_waypoints"] = 0
-        # msg = f"State: {state}"
-        # self.mission_progress.emit(
-        #     int((current) * 100 / len(self.mission_waypoints)), msg
-        # )
+
 
     def _update_status(self):
         """Update and emit drone status information."""

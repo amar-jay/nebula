@@ -30,7 +30,7 @@ MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ga
 
 SESSION="gz_ardupilot"
 
-GAZEBO_CMD="gz sim -v4 -r \"$WORLD_FILE\""
+GAZEBO_CMD="gz sim -v4 -r $WORLD_FILE"
 
 [ "$VERBOSE" -eq 1 ] && echo "Verbose mode enabled."
 

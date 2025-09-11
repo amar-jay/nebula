@@ -85,14 +85,15 @@ class WebEnginePage(QWebEnginePage):
             # print(msg)
 
         elif "Uncaught ReferenceError" in msg:
-            self.show_internet_error(msg)
-            # print("JavaScript Console Message(Error):", msg)
+            # self.show_internet_error(msg)
+            print("JavaScript Console Message(Error):", msg)
         else:
-            print("JavaScript Console Message(Error):", msg, level, line, sourceID)
+            print("JavaScript Console Message(Error):", msg)
+            #print("JavaScript Console Message(Error):", msg, level, line, sourceID)
 
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):
-    def __init__(self, center_coord=(40.9589, 29.1352), starting_zoom=20):
+    def __init__(self, center_coord=(40.733510, 30.101035), starting_zoom=20):
         super().__init__()
         MAPBOX_TOKEN = "sk.eyJ1IjoiYW1hcmpheSIsImEiOiJjbWI1bzVkcnkwMGlqMmtzMnBrcmJvb2thIn0.Y0JIq8H_w522Dh4H_gWj0Q"
         # NOTE: WHILE HARDCODING ENVIRONMENT VARIABLES IS NOT RECOMMENDED, IT IS

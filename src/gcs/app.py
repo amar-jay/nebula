@@ -1,9 +1,9 @@
 # pylint: disable=E0611
 import json
-import os
 import re
 import sys
 import time
+from typing import Tuple
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (
@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QMainWindow,
-    QMessageBox,
     QProgressBar,
     QTabBar,
     QTableWidgetItem,
@@ -44,7 +43,7 @@ from qfluentwidgets import (
 from qfluentwidgets import CheckBox as QCheckBox
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import (
-    LineEdit as QLineEdit,  # MessageBox as QMessageBox,; DoubleSpinBox as QDoubleSpinBox,; HeaderCardWidget as QGroupBox,; ProgressBar as QProgressBar,
+    LineEdit as QLineEdit, 
 )
 from qfluentwidgets import (
     MessageBox,
@@ -65,8 +64,9 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink.mission_types import CONFIG_PATH, Waypoint, get_config
+from src.controls.mavlink.mission_types import Waypoint, get_config
 from src.gcs.drone_client import DroneClient
+from src.gcs.mission_worker import KamikazeWorkerManager
 from src.gcs.src.camera.camera_widget import CameraWidget
 from src.gcs.src.horizon.attitude_widget import AttitudeIndicator
 from src.gcs.src.horizon.compass_widget import CompassWidget
@@ -200,42 +200,91 @@ class KamikazeConfirmationBox(MessageBoxBase):
         self.widget.setMinimumWidth(400)
 
 
-def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordinates=(0, 0)):
+
+def showKamikazeConfirmation(parent, drone_client:DroneClient, fallback_coordinates):
     """Show kamikaze mode confirmation dialog"""
-    if drone_client._tank_gps is None:
+    tank_gps = drone_client.get_tank_gps()
+    if not tank_gps:
         msg = MessageBox(
             title="Kamikaze",
-            content="Please set the tank GPS before proceeding.",
+            content=f"Please set the tank GPS before proceeding. use marker on map:{fallback_coordinates}",
             parent=parent,
         )
-        msg.exec()
-        return
+        if not msg.exec():
+            return
+        tank_gps = fallback_coordinates
     w = KamikazeConfirmationBox(
-        lat=drone_client._tank_gps[0], lon=drone_client._tank_gps[1], parent=parent
+        lat=tank_gps[0], lon=tank_gps[1], parent=parent
     )
+
+    # if drone_client.helipad_gps is None:
+    #   return
+    # w.latitude = drone_client.helipad_gps[0]
+    # w.longitude = drone_client.helipad_gps[1]
     if w.exec():
-        drone_client.kamikaze_connection.arm()
-        time.sleep(1)
-        drone_client.kamikaze_connection.takeoff(10)
+      drone_client.kamikaze_connection.arm()
+      time.sleep(2)
+      drone_client.kamikaze_connection.takeoff(5)
+      # message box to tell to wait
+      m = MessageBox(
+        "Kamikaze",
+        "Kamikaze in Progress. Click OK if ready to LAND",
+        parent,
+      )
+
+      time.sleep(5)
+      drone_client.kamikaze_connection.goto_kamikaze(40.9588559, 29.1357784)
+      if m.exec():
         m = MessageBox(
-            "Kamikaze",
-            "Kamikaze in Progress. Click OK if ready to LAND",
-            parent,
+          "Kamikaze",
+          "Landing in Progress",
+          parent,
         )
-        if m.exec():
-          drone_client.kamikaze()
-          drone_client.kamikaze_connection.repeat_relay(count=4, delay=5)
-          m2 = MessageBox(
-              "Kamikaze",
-              "Landing in Progress",
-              parent,
-          )
-          if m2.exec():
-            drone_client.kamikaze_connection.land()
+        m.exec()
+        drone_client.kamikaze_connection.repeat_relay(10)
+        drone_client.kamikaze_connection.set_mode("LAND")
+
+      return True
+    else:
+        print("Kamikaze mode cancelled")
+        return False
 
 
 
-        return True
+def showKamikazeConfirmation_new(parent, drone_client: DroneClient, kamikaze_worker_manager: KamikazeWorkerManager, fallback_coordinates: Tuple[float, float]):
+    """Show kamikaze mode confirmation dialog"""
+    tank_gps = drone_client.get_tank_gps()
+    if not tank_gps:
+        msg = MessageBox(
+            title="Kamikaze",
+            content=f"Please set the tank GPS before proceeding. use marker on map:{fallback_coordinates}",
+            parent=parent,
+        )
+        if not msg.exec():
+            return
+        tank_gps = fallback_coordinates
+    w = KamikazeConfirmationBox(
+        lat=tank_gps[0], lon=tank_gps[1], parent=parent
+    )
+
+    if w.exec():
+        success = kamikaze_worker_manager.start_kamikaze(tank_gps, takeoff_altitude=10.0)
+        if success:
+            msg = MessageBox(
+                "Kamikaze",
+                "Kamikaze sequence started. Monitor progress in console.",
+                parent,
+            )
+            msg.exec()
+            return True
+        else:
+            msg = MessageBox(
+                "Kamikaze",
+                "Failed to start kamikaze sequence. Check console for details.",
+                parent,
+            )
+            msg.exec()
+            return False
     else:
         drone_client.log("Kamikaze mode cancelled")
         return False
@@ -295,9 +344,26 @@ class DroneControlApp(QMainWindow):
             control_address=self.config.control_address,
         )
 
+
         # Initialize UI components
         self._init_ui()
+
+        # Initialize kamikaze worker manager
+        self.kamikaze_worker_manager = KamikazeWorkerManager(
+            drone_client=self.drone_client,
+            logger=self.console.append_message
+        )
+
         self.drone_client.set_logger(self.console.append_message)
+
+        # Initialize kamikaze worker with logger
+        self.kamikaze_worker_manager.initialize_worker()
+        
+        # Connect kamikaze worker manager signals for progress updates
+        self.kamikaze_worker_manager.sequence_started.connect(self._on_kamikaze_started)
+        self.kamikaze_worker_manager.progress_update.connect(self._on_kamikaze_progress)
+        self.kamikaze_worker_manager.sequence_completed.connect(self._on_kamikaze_completed)
+        self.kamikaze_worker_manager.sequence_failed.connect(self._on_kamikaze_failed)
 
         self.drone_client.connection_status.connect(self._on_connection_status_changed)
         self.drone_client.drone_status_update.connect(self._on_drone_status_update)
@@ -506,7 +572,7 @@ class DroneControlApp(QMainWindow):
         self.controller_stop_btn.clicked.connect(self.drone_client.controller_stop)
         # resume mission
         self.resume_mission_btn = QPushButton("Resume Mission")
-        self.resume_mission_btn.clicked.connect(self.drone_client.resume_mission)
+        self.resume_mission_btn.clicked.connect(self._on_resume_mission_clicked)
         self.resume_mission_btn.setEnabled(False)
         # drop hook
         # self.drop_hook_btn = QPushButton("Drop Hook")
@@ -517,6 +583,14 @@ class DroneControlApp(QMainWindow):
         style_sheet += "\nPrimaryPushButton {background-color: #B22222; color: white; border: 1px solid red;}\nPrimaryPushButton::hover {background-color: #B22222; color: white; border: 1px solid red;}"
         self.kamikaze_btn.setStyleSheet(style_sheet)
         self.kamikaze_btn.clicked.connect(self._on_kamikaze_clicked)
+        self.kamikaze_btn.setEnabled(True)
+        
+        # Add kamikaze progress bar (initially hidden)
+        self.kamikaze_progress = QProgressBar()
+        self.kamikaze_progress.setRange(0, 100)
+        self.kamikaze_progress.setVisible(False)
+        self.kamikaze_progress.setFormat("Kamikaze: %p%")
+        
 
         controller_row.addWidget(self.drop_load_btn)
         controller_row.addWidget(self.pick_load_btn)
@@ -940,7 +1014,8 @@ class DroneControlApp(QMainWindow):
     def _on_kamikaze_clicked(self):
         lat = self.goto_lat_input.value()
         lon = self.goto_lon_input.value()
-        showKamikazeConfirmation(self, self.drone_client, fallback_coordinates=(lat, lon))
+        showKamikazeConfirmation_new(self, self.drone_client, self.kamikaze_worker_manager, fallback_coordinates=(lat, lon))
+        # showKamikazeConfirmation(self, self.drone_client, fallback_coordinates=(lat, lon))
 
     def _is_valid_ip(self, ip):
         pattern = re.compile(
@@ -1093,8 +1168,16 @@ class DroneControlApp(QMainWindow):
         else:
             self.console.append_message("Failed to return to home", "error")
 
+    def _on_resume_mission_clicked(self):
+        """Handle resume mission button click with sequential load operations."""
+        self.drone_client.resume_mission()
+
     def _on_open_map_clicked(self):
         self.showMaximized()
+
+
+    def _on_auto_mission(self):
+        pass
 
     def _on_goto_clicked(self):
         """Handle go to position button click."""
@@ -1375,6 +1458,11 @@ class DroneControlApp(QMainWindow):
         self.battery_gauge.set_value(
             value=status["battery"]["remaining"], voltage=status["battery"]["voltage"]
         )
+        self.battery_progress.setValue(status.get("battery", {"remaining":100})["remaining"])
+        self.battery_progress.setFormat(
+            f"{status['battery']['remaining']}% / {status['battery']['voltage']}V"
+        )
+
         self.speed_gauge.set_value(status.get("speed", 0))
         self.speed_gauge_mini.set_value(status.get("speed", 0))
 
@@ -1394,19 +1482,13 @@ class DroneControlApp(QMainWindow):
         tank_gps = status.get("tank_gps", None)
         if tank_gps:
             self.tank_gps_label.setText(f"({tank_gps[0]:.7f}, {tank_gps[1]:.7f})")
-            self.dock_content.set_target_marker(tank_gps[0], tank_gps[1])
+            # self.dock_content.set_target_marker(tank_gps[0], tank_gps[1])
         kamikaze_gps = status.get("kamikaze_gps", None)
         if kamikaze_gps:
             self.dock_content.set_kamikaze_marker(kamikaze_gps[0], kamikaze_gps[1])
 
         # if status.get("failsafe", False): TODO: indicate failsafe status
         #     pass
-
-        if hasattr(status, "battery") and status["battery"] is not None:
-            self.battery_progress.setValue(status.get("battery", {"remaining":100})["remaining"])
-            self.battery_progress.setFormat(
-                f"{status['battery']['remaining']}% / {status['battery']['voltage']}V"
-            )
         if status.get("mission_active", False):
             current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
@@ -1455,6 +1537,41 @@ class DroneControlApp(QMainWindow):
         msg.yesButton.setStyleSheet(style_sheet)
         msg.exec()
 
+    def _on_kamikaze_started(self):
+        """Handle kamikaze sequence started"""
+        self.kamikaze_btn.setEnabled(False)
+        self.kamikaze_btn.setText("Running...")
+        self.kamikaze_progress.setVisible(True)
+        # self.kamikaze_status_label.setVisible(True)
+        self.kamikaze_progress.setValue(0)
+        # self.kamikaze_status_label.setText("Starting kamikaze sequence...")
+
+    def _on_kamikaze_progress(self, progress: int, step_name: str):
+        """Handle kamikaze progress updates"""
+        self.kamikaze_progress.setValue(progress)
+        # self.kamikaze_status_label.setText(step_name)
+
+    def _on_kamikaze_completed(self, success: bool):
+        """Handle kamikaze sequence completion"""
+        self.kamikaze_btn.setEnabled(True)
+        self.kamikaze_btn.setText("Kamikaze")
+        self.kamikaze_progress.setVisible(False)
+        # self.kamikaze_status_label.setVisible(False)
+        
+        if success:
+            self.console.append_message("Kamikaze sequence completed successfully", "success")
+        else:
+            self.console.append_message("Kamikaze sequence completed with errors", "warning")
+
+    def _on_kamikaze_failed(self, error_message: str):
+        """Handle kamikaze sequence failure"""
+        self.kamikaze_btn.setEnabled(True)
+        self.kamikaze_btn.setText("Kamikaze")
+        self.kamikaze_progress.setVisible(False)
+        # self.kamikaze_status_label.setVisible(False)
+        self.console.append_message(f"Kamikaze sequence failed: {error_message}", "error")
+        self._show_error(f"Kamikaze failed: {error_message}")
+
     def eventFilter(self, obj, event):
         # Check for window state change events
         if obj == self:
@@ -1480,6 +1597,10 @@ class DroneControlApp(QMainWindow):
 
         self.dock.setVisible(False)
         time.sleep(0.1)  # Allow time for dock to hide
+        
+        # Clean up kamikaze worker
+        self.kamikaze_worker_manager.cleanup()
+        
         if self.drone_client.connected:
             self.drone_client.close()
         if self.drone_client.k_connected:
@@ -1558,9 +1679,9 @@ def main():
     # Apply the palette
 
     window = DroneControlApp()
-    #window.show()
-    w = LoginWindow(accept=window.show)
-    w.show()
+    window.show()
+    # w = LoginWindow(accept=window.show)
+    # w.show()
 
     sys.exit(app.exec())
 

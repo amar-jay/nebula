@@ -18,6 +18,8 @@ endef
 RUNWAY:=delivery_runway
 MODEL_NAME:=iris_with_stationary_gimbal
 CAMERA_LINK:=tilt_link
+PORT:=14550
+INSTANCE:=0
 
 app:
 	@python -m src.gcs.app
@@ -29,7 +31,17 @@ gz:
 	gz sim -v4 -r ${RUNWAY}.sdf
 
 sitl:
-	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --custom-location=40.9588862,29.1357976,15,0 --console --instance=0 --out=udp:127.0.0.1:14550
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --console --out=udp:127.0.0.1:${PORT} --instance=${INSTANCE}
+
+sitl_cengavir:
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --console --custom-location=40.7334799,30.1016727,15,0 --out=udp:127.0.0.1:16550 --instance=0
+
+sitl_tank:
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --console --custom-location=40.9589359,29.1358066,15,0 --out=udp:127.0.0.1:14570 --instance=2
+
+sitl_kamikaze:
+	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter --console --custom-location=40.7335231,30.1011537,15,0 --out=udp:127.0.0.1:14560 --instance=1
+
 # --instance=1 
 # ${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL_NAME} --model JSON --map --console
 

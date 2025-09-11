@@ -513,7 +513,7 @@ class KamikazeWorker(QObject):
         try:
             if self.drone_client.kamikaze_connection:
                 self.drone_client.kamikaze_connection.repeat_relay(count=4, delay=5)
-                time.sleep(5)  # Wait for payload activation
+                time.sleep(15)  # Wait for payload activation
                 return True
             return False
         except Exception as e:

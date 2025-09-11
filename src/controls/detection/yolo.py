@@ -2,7 +2,6 @@
 import csv
 import logging
 import math
-from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -17,7 +16,7 @@ EARTH_RADIUS_M = 6378137.0
 
 
 # Suppress ultralytics logging
-logging.getLogger("ultralytics").setLevel(logging.WARNING)
+#logging.getLogger("ultralytics").setLevel(logging.WARNING)
 logger = logging.getLogger("yolo_tracker")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

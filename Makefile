@@ -112,7 +112,7 @@ server_zmq:
 	@python -m src.mq.zmq_server
 
 local_server_zmq:
-	@python -m src.mq.local_server --config-path config/default.yaml
+	@python -m src.mq.local_server2 --config-path config/default.yaml
 
 local_sim_server_zmq:
 	@python -m src.mq.local_server --config-path config/simulation.yaml

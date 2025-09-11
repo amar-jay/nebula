@@ -1016,13 +1016,13 @@ class DroneControlApp(QMainWindow):
     def _on_kamikaze_clicked(self):
         lat = self.goto_lat_input.value()
         lon = self.goto_lon_input.value()
-        showKamikazeConfirmation_new(
-            self,
-            self.drone_client,
-            self.kamikaze_worker_manager,
-            fallback_coordinates=(lat, lon),
-        )
-        # showKamikazeConfirmation(self, self.drone_client, fallback_coordinates=(lat, lon))
+        #   showKamikazeConfirmation_new(
+        #       self,
+        #       self.drone_client,
+        #       self.kamikaze_worker_manager,
+        #       fallback_coordinates=(lat, lon),
+        #   )
+        showKamikazeConfirmation(self, self.drone_client, fallback_coordinates=(lat, lon))
 
     def _is_valid_ip(self, ip):
         pattern = re.compile(
@@ -1429,13 +1429,15 @@ class DroneControlApp(QMainWindow):
         self.safety_btn.setEnabled(self.drone_client.connected)
         self.arm_btn.setEnabled(not is_armemd)
         self.disarm_btn.setEnabled(is_armemd)
-        self.takeoff_btn.setEnabled(is_armemd)
-        self.goto_btn.setEnabled(is_armemd)
+        # self.disarm_btn.setEnabled(True)
+        self.takeoff_btn.setEnabled(True)
+        # self.takeoff_btn.setEnabled(is_armemd)
+        self.goto_btn.setEnabled(True)
 
         # Update flight status
         is_flying = status.get("flying", False)
-        self.land_btn.setEnabled(is_armemd and is_flying)
-        self.rtl_btn.setEnabled(is_armemd and is_flying)
+        self.land_btn.setEnabled(is_armemd)
+        self.rtl_btn.setEnabled(is_armemd)
         self.flight_status_label.setText("Flying" if is_flying else "Not Flying")
 
         # Update position

@@ -451,7 +451,7 @@ class ArdupilotConnection:
             self.log("MAVLink Error getting attitude", "error")
             return None
 
-    def get_status(self):
+    def get_status(self, timeout=None):
         # Try receiving a few messages quickly
         try:
             for _ in range(20):
@@ -459,20 +459,35 @@ class ArdupilotConnection:
                     self.log("❌ Master connection lost", "error")
                     return self.status
 
-                msg = self.master.recv_match(
-                    type=[
-                        "HEARTBEAT",
-                        "HOME_POSITION",
-                        "GLOBAL_POSITION_INT",
-                        "ATTITUDE",
-                        "MISSION_CURRENT",
-                        "BATTERY_STATUS",
-                        "VFR_HUD",
-                        "SCALED_PRESSURE",
-                    ],
-                    blocking=False,
-                    timeout=0.1,  # Short timeout to prevent hanging
-                )
+                if timeout is None:
+                  msg = self.master.recv_match(
+                      type=[
+                          "HEARTBEAT",
+                          "HOME_POSITION",
+                          "GLOBAL_POSITION_INT",
+                          "ATTITUDE",
+                          "MISSION_CURRENT",
+                          "BATTERY_STATUS",
+                          "VFR_HUD",
+                          "SCALED_PRESSURE",
+                      ],
+                      blocking=False,
+                  )
+                else:
+                  msg = self.master.recv_match(
+                      type=[
+                          "HEARTBEAT",
+                          "HOME_POSITION",
+                          "GLOBAL_POSITION_INT",
+                          "ATTITUDE",
+                          "MISSION_CURRENT",
+                          "BATTERY_STATUS",
+                          "VFR_HUD",
+                          "SCALED_PRESSURE",
+                      ],
+                      blocking=False,
+                      timeout=timeout,
+                  )
 
                 if not msg:
                     continue

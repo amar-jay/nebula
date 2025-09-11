@@ -268,7 +268,7 @@ def showKamikazeConfirmation_new(parent, drone_client: DroneClient, kamikaze_wor
     )
 
     if w.exec():
-        success = kamikaze_worker_manager.start_kamikaze(tank_gps, takeoff_altitude=10.0)
+        success = kamikaze_worker_manager.start_kamikaze(tank_gps, takeoff_altitude=5.0)
         if success:
             msg = MessageBox(
                 "Kamikaze",
@@ -364,6 +364,12 @@ class DroneControlApp(QMainWindow):
         self.kamikaze_worker_manager.progress_update.connect(self._on_kamikaze_progress)
         self.kamikaze_worker_manager.sequence_completed.connect(self._on_kamikaze_completed)
         self.kamikaze_worker_manager.sequence_failed.connect(self._on_kamikaze_failed)
+
+        # Initialize auto-resume timer
+        self.auto_resume_timer = QTimer()
+        self.auto_resume_timer.setSingleShot(True)
+        self.auto_resume_timer.timeout.connect(self._on_auto_resume_timeout)
+        self.resume_button_was_enabled = False
 
         self.drone_client.connection_status.connect(self._on_connection_status_changed)
         self.drone_client.drone_status_update.connect(self._on_drone_status_update)
@@ -564,14 +570,14 @@ class DroneControlApp(QMainWindow):
         # pick load
         self.pick_load_btn = QPushButton("Pick Load")
         self.pick_load_btn.clicked.connect(self.drone_client.pick_load)
-        self.manual_drop_load_btn = QPushButton("Manual Aşagı")
+        self.manual_drop_load_btn = QPushButton("M A")
         self.manual_drop_load_btn.clicked.connect(self.drone_client.manuel_asagi)
-        self.manual_pick_load_btn = QPushButton("Manual Yukarı")
+        self.manual_pick_load_btn = QPushButton("M Y")
         self.manual_pick_load_btn.clicked.connect(self.drone_client.manuel_yukari)
         self.controller_stop_btn = _PrimaryPushButton("Stop")
         self.controller_stop_btn.clicked.connect(self.drone_client.controller_stop)
         # resume mission
-        self.resume_mission_btn = QPushButton("Resume Mission")
+        self.resume_mission_btn = QPushButton("Resume")
         self.resume_mission_btn.clicked.connect(self._on_resume_mission_clicked)
         self.resume_mission_btn.setEnabled(False)
         # drop hook
@@ -1170,7 +1176,17 @@ class DroneControlApp(QMainWindow):
 
     def _on_resume_mission_clicked(self):
         """Handle resume mission button click with sequential load operations."""
+        # Stop the auto-resume timer since user manually clicked
+        self.auto_resume_timer.stop()
+        self.console.append_message("Mission resumed manually", "info")
         self.drone_client.resume_mission()
+
+    def _on_auto_resume_timeout(self):
+        """Handle automatic resume after 130 seconds timeout."""
+        if self.resume_mission_btn.isEnabled():
+            self.console.append_message("Auto-resuming mission after 130 seconds timeout", "warning")
+            self.drone_client.resume_mission()
+        self.auto_resume_timer.stop()
 
     def _on_open_map_clicked(self):
         self.showMaximized()
@@ -1493,9 +1509,27 @@ class DroneControlApp(QMainWindow):
             current_wp = status.get("current_waypoint", -1)
             total_wp = status.get("total_waypoints", 0)
             state_wp = status.get("mission_state", "N/A")
-            if status.get("mode", "Unknown") == "GUIDED":
+            
+            # Handle resume button state and auto-timer
+            should_enable_resume = status.get("mode", "Unknown") == "GUIDED"
+            current_resume_enabled = self.resume_mission_btn.isEnabled()
+            
+            if should_enable_resume and not current_resume_enabled:
+                # Button is being enabled - start the 130-second timer
+                self.resume_mission_btn.setEnabled(True)
+                self.auto_resume_timer.start(130000)  # 130 seconds in milliseconds
+                self.console.append_message("Resume button enabled - auto-resume in 150 seconds", "info")
+                self.resume_button_was_enabled = True
+            elif not should_enable_resume and current_resume_enabled:
+                # Button is being disabled - stop the timer
+                self.resume_mission_btn.setEnabled(False)
+                self.auto_resume_timer.stop()
+                self.resume_button_was_enabled = False
+            elif should_enable_resume:
+                # Button should remain enabled
                 self.resume_mission_btn.setEnabled(True)
             else:
+                # Button should remain disabled
                 self.resume_mission_btn.setEnabled(False)
 
             progress = int(current_wp * 100 / total_wp)
@@ -1511,6 +1545,11 @@ class DroneControlApp(QMainWindow):
             else:
                 self.mission_progress.setValue(0)
                 self.mission_progress.setFormat("Mission Complete")
+        else:
+            # No active mission - ensure timer is stopped and button is disabled
+            self.auto_resume_timer.stop()
+            self.resume_mission_btn.setEnabled(False)
+            self.resume_button_was_enabled = False
 
     def _disable_control_buttons(self):
         """Disable all control buttons."""

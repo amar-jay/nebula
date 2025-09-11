@@ -140,9 +140,9 @@ class ArdupilotConnection:
             self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_REPEAT_RELAY,
             instance,  # relay instance number
-            1,  
+            1,
             count,  # param2: cycle count
-            delay, # param3: delay in seconds
+            delay,  # param3: delay in seconds
             0,
             0,
             0,
@@ -163,12 +163,12 @@ class ArdupilotConnection:
             mavutil.mavlink.MAV_CMD_DO_SET_RELAY,
             instance,  # relay instance number
             state,  # param2: (1=on, 0=off, others possible depending on system hardware)
-            0, 
             0,
             0,
             0,
             0,
-            0,  
+            0,
+            0,
         )
 
     def arm(self):
@@ -314,7 +314,9 @@ class ArdupilotConnection:
                 command=dialect.MAV_CMD_NAV_WAYPOINT,
                 current=(1 if i == 0 else 0),
                 autocontinue=0,
-                param1=int(waypoint.hold),  # 	Hold time. (ignored by fixed wing, time to stay at waypoint for rotary wing)
+                param1=int(
+                    waypoint.hold
+                ),  # 	Hold time. (ignored by fixed wing, time to stay at waypoint for rotary wing)
                 param2=0,  # Acceptance radius (if the sphere with this radius is hit, the waypoint counts as reached)
                 param3=0,  # 	Pass the waypoint to the next waypoint (0 = no, 1 = yes)
                 param4=0,  # Desired yaw angle at waypoint (rotary wing). NaN to use the current system yaw heading mode (e.g. yaw towards next waypoint, yaw to home, etc.).
@@ -456,7 +458,7 @@ class ArdupilotConnection:
                 if not self.master:
                     self.log("❌ Master connection lost", "error")
                     return self.status
-                    
+
                 msg = self.master.recv_match(
                     type=[
                         "HEARTBEAT",
@@ -474,13 +476,13 @@ class ArdupilotConnection:
 
                 if not msg:
                     continue
-                    
+
                 # Process messages without debug prints
                 if msg.get_type() == "HOME_POSITION":
                     self.status["home"] = {
                         "lat": msg.latitude / 1e7,
                         "lon": msg.longitude / 1e7,
-                        "alt": 0, #msg.altitude / 1000.0,
+                        "alt": 0,  # msg.altitude / 1000.0,
                         "amsl": msg.altitude / 1000.0,
                     }
 
@@ -499,7 +501,10 @@ class ArdupilotConnection:
                         "amsl": msg.alt / 1000.0,
                     }
                     if self.status.get("home") and "amsl" in self.status["home"]:
-                        self.status["position"]["alt"] = self.status["position"]["amsl"] - self.status["home"]["amsl"] 
+                        self.status["position"]["alt"] = (
+                            self.status["position"]["amsl"]
+                            - self.status["home"]["amsl"]
+                        )
 
                 elif msg.get_type() == "ATTITUDE":
                     self.status["orientation"] = {
@@ -512,14 +517,16 @@ class ArdupilotConnection:
                         "pitch": msg.pitch,
                         "yaw": msg.yaw,
                     }
-                    
+
                 elif msg.get_type() == "VFR_HUD":
                     self.status["speed"] = msg.groundspeed  # In m/s
 
                 elif msg.get_type() == "MISSION_CURRENT":
                     if hasattr(msg, "seq"):
                         self.status["current_waypoint"] = msg.seq
-                        self.status["mission_active"] = msg.seq > 0  # or some other logic
+                        self.status["mission_active"] = (
+                            msg.seq > 0
+                        )  # or some other logic
                     if hasattr(msg, "total"):
                         self.status["total_waypoints"] = msg.total
 
@@ -528,18 +535,18 @@ class ArdupilotConnection:
                         "remaining": msg.battery_remaining,
                         "voltage": msg.voltages[0] / 1000.0,  # in volts
                     }
-                    if hasattr(msg, 'temperature') and msg.temperature:
+                    if hasattr(msg, "temperature") and msg.temperature:
                         self.status["temperature"] = msg.temperature / 100.0
-                        
+
                 elif msg.get_type() == "SCALED_PRESSURE":
                     self.status["temperature"] = msg.temperature / 100.0
-                    
+
                 # Update mode on every iteration
                 self.status["mode"] = self.master.flightmode
-                
+
         except Exception as e:
             self.log(f"❌ Error in get_status: {e}", "error")
-            
+
         # Always update timestamp
         self.status["timestamp"] = time.time()
         return self.status
@@ -630,8 +637,8 @@ class ArdupilotConnection:
 
     # Send kamikaze GPS coordinate
     def goto_kamikaze(self, lat, lon, alt=1):
-        #self.set_mode("GUIDED")
-        #self.set_speed(15)
+        # self.set_mode("GUIDED")
+        # self.set_speed(15)
         # self.takeoff(10)
         self.goto_waypointv2(lat, lon, alt, speed=15)
 

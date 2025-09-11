@@ -314,7 +314,9 @@ class YoloObjectTracker:
                 if lat is not None and lon is not None:
                     label += f" | ({lat:.6f}, {lon:.6f})"
 
-                (label_w, label_h), _ = cv2.getTextSize(label, font, label_font_scale, label_thickness)
+                (label_w, label_h), _ = cv2.getTextSize(
+                    label, font, label_font_scale, label_thickness
+                )
                 rect_tl = (px + label_offset_x, py - label_h - label_offset_y)
                 rect_br = (px + label_offset_x + rect_extra + label_w, py)
                 cv2.rectangle(overlay, rect_tl, rect_br, accent_color, -1)
@@ -340,8 +342,8 @@ class YoloObjectTracker:
         mode_overlay = overlay.copy()
         cv2.rectangle(
             mode_overlay,
-            (x - mode_rect_padding, y - text_h - mode_rect_padding//2),
-            (x + text_w + mode_rect_padding, y + mode_rect_padding//2),
+            (x - mode_rect_padding, y - text_h - mode_rect_padding // 2),
+            (x + text_w + mode_rect_padding, y + mode_rect_padding // 2),
             (30, 30, 50),
             -1,
         )
@@ -382,8 +384,14 @@ class YoloObjectTracker:
 
         for i, line in enumerate(reversed(gps_text_lines)):
             (tw, th), _ = cv2.getTextSize(line, font, font_scale, font_thickness)
-            rect_tl = (start_x - gps_rect_padding_x, start_y - th - gps_rect_padding_y - i * int(1.5 * th))
-            rect_br = (start_x + tw + gps_rect_padding_x, start_y + gps_rect_padding_y//2 - i * int(1.5 * th))
+            rect_tl = (
+                start_x - gps_rect_padding_x,
+                start_y - th - gps_rect_padding_y - i * int(1.5 * th),
+            )
+            rect_br = (
+                start_x + tw + gps_rect_padding_x,
+                start_y + gps_rect_padding_y // 2 - i * int(1.5 * th),
+            )
 
             cv2.rectangle(overlay, rect_tl, rect_br, (50, 30, 30), -1)
             cv2.putText(
@@ -726,15 +734,15 @@ def main():
                         2,
                     )
                 else:
-                  annotated_frame = estimator.write_on_frame(
-                      annotated_frame,
-                      curr_gps=(0, 0, 1),  # Replace with actual GPS
-                      gps_coords=gps_dict,
-                      pixel_coords=pixel_dict,
-                      mode="GUIDED",
-                      object_classes=object_classes,
-                      fps=cap.get(cv2.CAP_PROP_FPS),
-                  )
+                    annotated_frame = estimator.write_on_frame(
+                        annotated_frame,
+                        curr_gps=(0, 0, 1),  # Replace with actual GPS
+                        gps_coords=gps_dict,
+                        pixel_coords=pixel_dict,
+                        mode="GUIDED",
+                        object_classes=object_classes,
+                        fps=cap.get(cv2.CAP_PROP_FPS),
+                    )
 
                 # out.write(annotated_frame)
                 cv2.imshow("Frame", annotated_frame)

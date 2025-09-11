@@ -114,7 +114,7 @@ class LocalZMQServer:
                 model_path=model_path,
             )
             # if self.dataset_path:
-                # self.dataset = self.tracker.dataset_writer(self.dataset_path)
+            # self.dataset = self.tracker.dataset_writer(self.dataset_path)
             logger.success("Object tracker initialized successfully")
 
         except Exception as e:
@@ -191,7 +191,7 @@ class LocalZMQServer:
         logger.success("GPS data fetch loop started")
         consecutive_failures = 0
         max_consecutive_failures = 10
-        
+
         while self.running:
             try:
                 # Run get_status in a thread to prevent blocking the async loop
@@ -199,24 +199,30 @@ class LocalZMQServer:
                 status = await loop.run_in_executor(
                     None, lambda: self.drone_client.get_status()
                 )
-                
+
                 if not status:
                     consecutive_failures += 1
-                    logger.warning(f"No status data received (failure {consecutive_failures}/{max_consecutive_failures})")
+                    logger.warning(
+                        f"No status data received (failure {consecutive_failures}/{max_consecutive_failures})"
+                    )
                     if consecutive_failures >= max_consecutive_failures:
-                        logger.error("Too many consecutive GPS fetch failures, attempting to reconnect...")
+                        logger.error(
+                            "Too many consecutive GPS fetch failures, attempting to reconnect..."
+                        )
                         # Could implement reconnection logic here if needed
                         consecutive_failures = 0
                     await asyncio.sleep(1)
                     continue
-                
+
                 if (
                     status.get("position") is None
                     or not status.get("position", {}).get("lat", None)
                     or not status.get("orientation_rad", {}).get("yaw", None)
                 ):
                     consecutive_failures += 1
-                    logger.warning(f"Incomplete GPS telemetry data (failure {consecutive_failures}/{max_consecutive_failures})")
+                    logger.warning(
+                        f"Incomplete GPS telemetry data (failure {consecutive_failures}/{max_consecutive_failures})"
+                    )
                     if consecutive_failures >= max_consecutive_failures:
                         logger.error("MAVLink connection appears degraded")
                         consecutive_failures = 0
@@ -225,14 +231,14 @@ class LocalZMQServer:
 
                 # Reset failure counter on successful data fetch
                 consecutive_failures = 0
-                
+
                 pos = status["position"]
                 att = status["orientation_rad"]
                 if pos is None or att is None:
                     logger.warning("Incomplete GPS or attitude data")
                     await asyncio.sleep(1)
                     continue
-                    
+
                 lat = pos["lat"]
                 lon = pos["lon"]
                 relative_alt = pos["alt"]  # meters
@@ -242,7 +248,7 @@ class LocalZMQServer:
                 yaw = att["yaw"]
                 if yaw < 0:
                     yaw += 2 * np.pi
-                    
+
                 self.frame_data = mission_types.FrameData(
                     frame=None,
                     mode=status.get("mode", "UNKNOWN"),
@@ -253,12 +259,16 @@ class LocalZMQServer:
                 self.gps_last_update = time.time()  # Update health tracking
                 logger.debug("GPS data updated successfully")
                 await asyncio.sleep(0.05)
-                
+
             except Exception as e:
                 consecutive_failures += 1
-                logger.error(f"GPS fetch error (failure {consecutive_failures}/{max_consecutive_failures}): {e}")
+                logger.error(
+                    f"GPS fetch error (failure {consecutive_failures}/{max_consecutive_failures}): {e}"
+                )
                 if consecutive_failures >= max_consecutive_failures:
-                    logger.error("Critical GPS fetch failure, may need manual intervention")
+                    logger.error(
+                        "Critical GPS fetch failure, may need manual intervention"
+                    )
                     consecutive_failures = 0
                 await asyncio.sleep(1)
 
@@ -327,7 +337,7 @@ class LocalZMQServer:
             try:
                 # Check connection health periodically
                 self._check_connection_health()
-                
+
                 if self.frame is None:
                     logger.warning("Failed to get frame")
                     await asyncio.sleep(1)
@@ -343,11 +353,13 @@ class LocalZMQServer:
                         drone_position=(0.004, 0.003, 1),
                         timestamp=time.time(),
                         frame=None,
-                        mode="NO_GPS"
+                        mode="NO_GPS",
                     )
                     logger.debug("Using fallback GPS data - no telemetry available")
                 else:
-                    logger.debug(f"2. Got GPS data at {str((time.time() - now) * 1000)} ms")
+                    logger.debug(
+                        f"2. Got GPS data at {str((time.time() - now) * 1000)} ms"
+                    )
 
                 # Skip duplicate frames
                 current_hash = hash(frame.tobytes())
@@ -358,11 +370,10 @@ class LocalZMQServer:
                 prev_frame_hash = current_hash
 
                 now = time.time()
-                if (
-                    gps_data.timestamp and 
-                    (now - gps_data.timestamp > 5 or 
-                     now - self.frame_timestamp > 5 or 
-                     abs(self.frame_timestamp - gps_data.timestamp) > 5)
+                if gps_data.timestamp and (
+                    now - gps_data.timestamp > 5
+                    or now - self.frame_timestamp > 5
+                    or abs(self.frame_timestamp - gps_data.timestamp) > 5
                 ):  # Increased tolerance for data staleness
                     logger.warning(
                         f"Frame and GPS data are stale: GPS age={int(now - gps_data.timestamp)}s, "

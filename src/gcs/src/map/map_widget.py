@@ -89,7 +89,7 @@ class WebEnginePage(QWebEnginePage):
             print("JavaScript Console Message(Error):", msg)
         else:
             print("JavaScript Console Message(Error):", msg)
-            #print("JavaScript Console Message(Error):", msg, level, line, sourceID)
+            # print("JavaScript Console Message(Error):", msg, level, line, sourceID)
 
 
 class MapWidget(QtWebEngineWidgets.QWebEngineView):

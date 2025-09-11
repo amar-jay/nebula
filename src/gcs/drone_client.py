@@ -168,13 +168,13 @@ class DroneClient(QObject):
         return self.kamikaze_connection.get_relative_gps_location()
 
     def get_tank_gps(self):
-      if self._tank_gps is not None:
-        return self._tank_gps
-      elif self.tank_connection is not None:
-        return self.tank_connection.get_relative_gps_location()
-      else:
-        print("Tank GPS not available")
-        return None
+        if self._tank_gps is not None:
+            return self._tank_gps
+        elif self.tank_connection is not None:
+            return self.tank_connection.get_relative_gps_location()
+        else:
+            print("Tank GPS not available")
+            return None
 
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
@@ -491,7 +491,6 @@ class DroneClient(QObject):
             self._status["mission_active"] = False
             self.master_connection.set_mode("GUIDED")
             self.cancel_mission()
-
 
     def _update_status(self):
         """Update and emit drone status information."""

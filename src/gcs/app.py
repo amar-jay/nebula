@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QSpinBox
 )
 from qfluentwidgets import (
     Action,
@@ -50,7 +51,6 @@ from qfluentwidgets import (
 from qfluentwidgets import PrimaryPushButton as _PrimaryPushButton
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
-from qfluentwidgets import SpinBox as QSpinBox
 from qfluentwidgets import (
     SubtitleLabel,
 )
@@ -218,7 +218,7 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordin
     # w.longitude = drone_client.helipad_gps[1]
     if w.exec():
         drone_client.kamikaze_connection.arm()
-        time.sleep(2)
+        drone_client.kamikaze_connection.master.motors_armed_wait()
         drone_client.kamikaze_connection.takeoff(5)
         # message box to tell to wait
         m = MessageBox(
@@ -227,8 +227,8 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordin
             parent,
         )
 
-        time.sleep(5)
-        drone_client.kamikaze_connection.goto_kamikaze(40.9588559, 29.1357784)
+        # time.sleep(5)
+        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1], 0.5)
         if m.exec():
             m = MessageBox(
                 "Kamikaze",
@@ -1016,7 +1016,7 @@ class DroneControlApp(QMainWindow):
     def _on_kamikaze_clicked(self):
         lat = self.goto_lat_input.value()
         lon = self.goto_lon_input.value()
-        #   showKamikazeConfirmation_new(
+        # showKamikazeConfirmation_new(
         #       self,
         #       self.drone_client,
         #       self.kamikaze_worker_manager,
@@ -1521,9 +1521,9 @@ class DroneControlApp(QMainWindow):
             current_resume_enabled = self.resume_mission_btn.isEnabled()
 
             if should_enable_resume and not current_resume_enabled:
-                # Button is being enabled - start the 130-second timer
+                # Button is being enabled - start the 50-second timer
                 self.resume_mission_btn.setEnabled(True)
-                self.auto_resume_timer.start(130000)  # 130 seconds in milliseconds
+                self.auto_resume_timer.start(50000)  # 130 seconds in milliseconds
                 self.console.append_message(
                     "Resume button enabled - auto-resume in 150 seconds", "info"
                 )

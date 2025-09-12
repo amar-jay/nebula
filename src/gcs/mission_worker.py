@@ -489,6 +489,7 @@ class KamikazeWorker(QObject):
         """Takeoff to specified altitude"""
         try:
             if self.drone_client.kamikaze_connection:
+                print("Taking off")
                 self.drone_client.kamikaze_connection.takeoff(altitude)
                 # Wait for takeoff to complete (could add more sophisticated monitoring)
                 time.sleep(5)
@@ -501,7 +502,9 @@ class KamikazeWorker(QObject):
     def _execute_kamikaze(self, target_coordinates: Tuple[float, float]) -> bool:
         """Execute the kamikaze strike"""
         try:
-            result = self.drone_client.kamikaze()
+            result = self.drone_client.kamikaze_connection.goto_waypointv2(
+                target_coordinates[0], target_coordinates[1], 0, speed=15
+            )
             time.sleep(2)  # Wait for kamikaze to initiate
             return result is not False
         except Exception as e:
@@ -513,7 +516,7 @@ class KamikazeWorker(QObject):
         try:
             if self.drone_client.kamikaze_connection:
                 self.drone_client.kamikaze_connection.repeat_relay(count=4, delay=5)
-                time.sleep(15)  # Wait for payload activation
+                time.sleep(5)  # Wait for payload activation
                 return True
             return False
         except Exception as e:

@@ -181,6 +181,8 @@ class DroneClient(QObject):
         if self.tank_connection is None:
             return False
         try:
+            if self._tank_gps is not None:
+                return True
             tank_gps = self.tank_connection.get_relative_gps_location()
             if tank_gps is not None:
                 self._tank_gps = (tank_gps[0], tank_gps[1])
@@ -475,6 +477,7 @@ class DroneClient(QObject):
             self.log("Kamikaze connection not established")
             return False
         gps = self._tank_gps
+        print(f"Kamikaze GPS: {gps}")
         if gps is None:
             self.log("Target GPS not available", "error")
             return False

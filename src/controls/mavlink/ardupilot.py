@@ -328,7 +328,7 @@ class ArdupilotConnection:
                 self.ack_sync("MISSION_REQUEST")
                 self.log(f"Waypoint {i} uploaded: {waypoint._asdict()}")
 
-        self.ack_sync("MISSION_ACK")
+        self.ack_sync("MISSION_ACK", timeout=2)
         self.log("Mission upload complete.")
 
     def clear_mission(self):

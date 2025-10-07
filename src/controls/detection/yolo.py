@@ -130,8 +130,8 @@ class YoloObjectTracker:
                     # Get track ID if available
                     track_id = None
                     if (
-                        hasattr(tracked_detections, "tracker_id") and
-                        tracked_detections.tracker_id is not None 
+                        hasattr(tracked_detections, "tracker_id")
+                        and tracked_detections.tracker_id is not None
                         and len(tracked_detections.tracker_id) > i
                     ):
                         track_id = tracked_detections.tracker_id[i]

@@ -26,8 +26,8 @@ from qfluentwidgets import (
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 
-from src.mq.zmq_client import ZMQClient
 from src.gcs.drone_client import DroneClient
+from src.mq.zmq_client import ZMQClient
 
 
 class CameraWidget(QWidget):
@@ -262,7 +262,6 @@ class CameraWidget(QWidget):
 
     def disconnect_camera(self):
         """Disconnect from camera"""
-        # self.drone_client.zmq_client.video_thread.stop()
         self._disconnect_camera_signals()
         if self.is_recording:
             self.stop_recording()
@@ -302,11 +301,7 @@ class CameraWidget(QWidget):
             self.camera_label.setPixmap(scaled_pixmap)
 
             # Write frame if recording or not paused
-            if (
-                self.is_recording
-                and self.video_writer
-                and self.pause_btn.text() == "⏸️"
-            ):
+            if self.is_recording and self.video_writer and self.pause_btn.text() == "⏸️":
                 self.video_writer.write(frame)
 
     def toggle_recording(self):

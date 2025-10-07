@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 
-# NOT USED...
+# NOTE: NOT USED..... Mavlink's speed estimation is better
+# but I keep it here incase I want to use it in the future
 
 
 class DetectSpeed:

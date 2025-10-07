@@ -21,7 +21,7 @@ class ArdupilotConnection:
         self.connection_string = connection_string
         self.target_system = 1
         self.target_component = 1
-        self.master  = mavutil.mavlink_connection(connection_string, baudrate=57600)
+        self.master = mavutil.mavlink_connection(connection_string, baudrate=57600)
         self.master.wait_heartbeat(timeout=wait_heartbeat)
         # timeout for heartbeat
         if not self.master:
@@ -66,9 +66,10 @@ class ArdupilotConnection:
                 self.log(f"Received {m.get_type()} instead of {msg}")
             else:
                 continue
+
     def repeat_relay(self, delay=10):
         """
-        DO REPEAT RELAY: NOTE: unstable, unknown, 
+        DO REPEAT RELAY: NOTE: unstable, unknown,
         """
         # Wait for a heartbeat from the vehicle
         self.log("Repeating relay...")
@@ -79,15 +80,14 @@ class ArdupilotConnection:
             self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_REPEAT_RELAY,
             1,  # relay instance number
-            1, # param2: cycle count
-            delay, # param3: delay in seconds
+            1,  # param2: cycle count
+            delay,  # param3: delay in seconds
             0,
             0,
             0,
             0,
             0,  # Arm (1 to arm, 0 to disarm)
         )
-
 
     def arm(self):
         """
@@ -294,6 +294,7 @@ class ArdupilotConnection:
         )  # Convert mm to meters (altitude above ground)
         # Select altitude based on `relative` flag
         return _lat, _lon, _ralt
+
     def get_amsl_gps_location(self, blocking=True, timeout=1.0):
         """
         Get the current GPS location of the drone.
@@ -318,7 +319,7 @@ class ArdupilotConnection:
         _alt = msg.alt / 1000.0  # Convert mm to meters (altitude AMSL)
         return _lat, _lon, _ralt, _alt
 
-    def get_current_attitude(self, blocking=True, timeout=1.):
+    def get_current_attitude(self, blocking=True, timeout=1.0):
         """
         Get the current attitude (roll, pitch, yaw) of the drone in radians.
 
@@ -337,7 +338,7 @@ class ArdupilotConnection:
             # )
 
             # Wait for the attitude message
-            #now = time.time()
+            # now = time.time()
             msg = self.master.recv_match(
                 type="ATTITUDE", blocking=blocking, timeout=timeout
             )
@@ -350,7 +351,7 @@ class ArdupilotConnection:
                 # Normalize yaw to [0, 2π] range if needed
                 if yaw < 0:
                     yaw += 2 * math.pi
-                #print("Time to fetch gps", time.time() - now)
+                # print("Time to fetch gps", time.time() - now)
                 return (roll, pitch, yaw)
             else:
                 if blocking:

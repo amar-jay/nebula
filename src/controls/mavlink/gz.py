@@ -24,7 +24,7 @@ class GazeboVideoCapture:
             "videoconvert ! "
             "appsink drop=1"
         )
-        
+
         pipeline = (
             f"udpsrc port={camera_port} "
             "! application/x-rtp,encoding-name=H264 "

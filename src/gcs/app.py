@@ -1,6 +1,8 @@
+"""Main entry point of for MATEK Nebula Ground Station Application using PySide6 and qfluentwidgets."""
+
 import json
-import sys
 import re
+import sys
 import time
 
 from PySide6.QtCore import Qt
@@ -155,10 +157,10 @@ class MissionWaypointTable(QTableWidget):
 class KamikazeConfirmationBox(MessageBoxBase):
     """Confirmation dialog for kamikaze mode activation"""
 
-    def __init__(self, parent=None):
+    def __init__(self, lat=0.0, lon=0.0, parent=None):
         super().__init__(parent)
-        self.latitude = 0.0
-        self.longitude = 0.0
+        self.latitude = lat
+        self.longitude = lon
 
         # Title
         self.titleLabel = SubtitleLabel("Kamikaze Mode Confirmation")
@@ -196,37 +198,44 @@ class KamikazeConfirmationBox(MessageBoxBase):
         self.widget.setMinimumWidth(400)
 
 
-def showKamikazeConfirmation(parent, drone_client:DroneClient):
+def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordinates):
     """Show kamikaze mode confirmation dialog"""
-    w = KamikazeConfirmationBox(parent=parent)
-    # if drone_client.helipad_gps is None:
-    #   return
-    # w.latitude = drone_client.helipad_gps[0]
-    # w.longitude = drone_client.helipad_gps[1]
-    if w.exec():
-      drone_client.kamikaze_connection.arm()
-      time.sleep(2)
-      drone_client.kamikaze_connection.takeoff(5)
-      # message box to tell to wait
-      m = MessageBox(
-        "Kamikaze",
-        "Kamikaze in Progress. Click OK if ready to LAND",
-        parent,
-      )
-
-      time.sleep(5)
-      drone_client.kamikaze_connection.goto_kamikaze(40.9588559, 29.1357784)
-      if m.exec():
-        m = MessageBox(
-          "Kamikaze",
-          "Landing in Progress",
-          parent,
+    tank_gps = drone_client.get_tank_gps()
+    if not tank_gps:
+        msg = MessageBox(
+            title="Kamikaze",
+            content=f"Please set the tank GPS before proceeding. use marker on map:{fallback_coordinates}",
+            parent=parent,
         )
-        m.exec()
-        drone_client.kamikaze_connection.repeat_relay(10)
-        drone_client.kamikaze_connection.set_mode("LAND")
+        if not msg.exec():
+            return
+        tank_gps = fallback_coordinates
+    w = KamikazeConfirmationBox(lat=tank_gps[0], lon=tank_gps[1], parent=parent)
 
-      return True
+    if w.exec():
+        drone_client.kamikaze_connection.arm()
+        drone_client.kamikaze_connection.master.motors_armed_wait()
+        drone_client.kamikaze_connection.takeoff(5)
+        # message box to tell to wait
+        m = MessageBox(
+            "Kamikaze",
+            "Kamikaze in Progress. Click OK if ready to LAND",
+            parent,
+        )
+
+        # time.sleep(5)
+        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1], 0.5)
+        if m.exec():
+            m = MessageBox(
+                "Kamikaze",
+                "Landing in Progress",
+                parent,
+            )
+            m.exec()
+            drone_client.kamikaze_connection.repeat_relay(10)
+            drone_client.kamikaze_connection.set_mode("LAND")
+
+        return True
     else:
         print("Kamikaze mode cancelled")
         return False
@@ -798,9 +807,7 @@ class DroneControlApp(QMainWindow):
             "Controls",
             basic_control_widget,
         )
-        self._create_tab(
-            "src/gcs/assets/images/camera.png", "Camera", camera_widget
-        )
+        self._create_tab("src/gcs/assets/images/camera.png", "Camera", camera_widget)
         self._create_tab(
             "src/gcs/assets/images/mission.png",
             "Missions",
@@ -905,23 +912,15 @@ class DroneControlApp(QMainWindow):
             )
 
     def _on_kamikaze_clicked(self):
-        # dialog to confirm kamikaze
-        # reply = QMessageBox.question(
-        #     self,
-        #     "Kamikaze Confirmation",
-        #     "Are you sure you want to activate kamikaze mode? This will make the drone fly to the last known GPS coordinates.",
-        #     QMessageBox.Yes | QMessageBox.No,
-        #     QMessageBox.No,
-        # )
-        result = showKamikazeConfirmation(self, self.drone_client)
-        # , self.drone_client.k_current_position["lat"], self.drone_client.k_current_position["lon"])
-        if result == QMessageBox.Yes:
-            self.console.append_message("Activating kamikaze mode...", "warning")
-            # Call kamikaze method on drone client
-            self.drone_client.kamikaze()
+        lat = self.goto_lat_input.value()
+        lon = self.goto_lon_input.value()
+        showKamikazeConfirmation(
+            self, self.drone_client, fallback_coordinates=(lat, lon)
+        )
 
     def _is_valid_ip(self, ip):
-        pattern = re.compile(r'''
+        pattern = re.compile(
+            r"""
             ^
             (?:
                 (?:25[0-5]|      # 250-255
@@ -932,8 +931,10 @@ class DroneControlApp(QMainWindow):
             ){3}
             (?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])
             $
-        ''', re.VERBOSE)
-        
+        """,
+            re.VERBOSE,
+        )
+
         return bool(pattern.match(ip))
 
     def _on_connect_clicked(self, _type="udp"):
@@ -1054,8 +1055,10 @@ class DroneControlApp(QMainWindow):
     def _on_stabilize_clicked(self):
         """Handle return to home button click."""
         if not self.drone_client.helipad_gps:
-          self._show_error("Helipad not detected")
-        if self.drone_client.goto_coordinates(*self.drone_client.helipad_gps, self.takeoff_alt_input.value()):
+            self._show_error("Helipad not detected")
+        if self.drone_client.goto_coordinates(
+            *self.drone_client.helipad_gps, self.takeoff_alt_input.value()
+        ):
             self.console.append_message("Stabilizing on helipad", "success")
         else:
             self.console.append_message("Failed to stabilize", "error")
@@ -1175,10 +1178,6 @@ class DroneControlApp(QMainWindow):
         elif event == "clear_all":
             self.waypoint_table.clear_waypoints()
             self.dock_content.page().runJavaScript("clearAll();")
-        # elif event == "undo_waypoint":
-        #     self.dock_content.page().runJavaScript("undoWaypoint();")
-        # elif event == "choose_field":
-        #     self.dock_content.page().runJavaScript("chooseField();")
         elif event == "sync":
             self.dock_content.page().runJavaScript("setMission('ddd');")
             self.dock_content.page().runJavaScript("setPosition();")
@@ -1339,9 +1338,7 @@ class DroneControlApp(QMainWindow):
             self.altitude_gauge_mini.set_value(alt)
 
             pose = self.drone_client.initial_position
-            # print(f"Updating home marker to new position: {lat}, {lon}")
-            # print(f"Old home marker position: {pose['lat']}, {pose['lon']}")
-            # print(f"Difference: {abs(pose['lat'] - lat)}, {abs(pose['lon'] - lon)}")
+
             if (
                 lat is not None
                 and lon is not None
@@ -1519,14 +1516,14 @@ def main():
 
     from src.gcs.src.login.page import LoginWindow
 
-    # app.setStyle("Fusion")
-    set_theme(app)
     # Apply the palette
+    app.setStyle("Fusion")
+    set_theme(app)
 
-    window = DroneControlApp()
-    #window.show()
-    w = LoginWindow(accept=window.show)
-    w.show()
+    login_window = LoginWindow()
+    main_window = DroneControlApp()
+    login_window.set_on_login_success(main_window.show)
+    login_window.show()
 
     sys.exit(app.exec())
 

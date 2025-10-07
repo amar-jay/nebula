@@ -1,3 +1,5 @@
+"""Script to test camera streaming and object detection using YOLO in a Gazebo simulation."""
+
 import os
 import sys
 

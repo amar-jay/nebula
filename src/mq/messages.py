@@ -1,35 +1,19 @@
 from enum import Enum
 
 
-class Message:
-    pass
-
-
-class GPS_Pose(Message):
-    lat: int
-    long: int
-
-
 class ZMQTopics(Enum):
     """Enum for ZMQ topics"""
 
-    DROP_LOAD = 1
-    PICK_LOAD = 2
-    RAISE_HOOK = 3
-    DROP_HOOK = 4
-    STATUS = 5
-    VIDEO = 6
-    PROCESSED_VIDEO = 7
-    HELIPAD_GPS = 8
-    TANK_GPS = 9
-
-
-class VincFuncs:
-    def drop_load():
-        pass
-
-    def pick_load():
-        pass
-
-    def vinc_drop(self, _):
-        pass
+    DROP_LOAD = "DROP_LOAD"
+    PICK_LOAD = "PICK_LOAD"
+    RAISE_HOOK = "RAISE_HOOK"
+    DROP_HOOK = "DROP_HOOK"
+    STATUS = "STATUS"
+    STOP = "STOP"
+    VIDEO = "VIDEO"
+    PROCESSED_VIDEO = "PROCESSED_VIDEO"
+    HELIPAD_GPS = "HELIPAD_GPS"
+    TANK_GPS = "TANK_GPS"
+    FPS = "FPS"
+    MANUEL_ASAGI = "MANUEL_ASAGI"
+    MANUEL_YUKARI = "MANUEL_YUKARI"

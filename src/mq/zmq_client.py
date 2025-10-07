@@ -1,3 +1,8 @@
+"""
+ZMQ client for PySide6 applications with video streaming and control commands.
+It uses a separate QThread to handle video reception to keep the UI responsive.
+"""
+
 import logging
 import time
 

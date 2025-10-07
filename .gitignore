@@ -61,3 +61,4 @@ venv
 recordings/
 world_files/
 *.mission
+__pycache__

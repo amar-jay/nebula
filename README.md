@@ -82,3 +82,22 @@ An application system consisting of an edge server and a desktop client (built w
 make server
 make app
 ```
+
+
+## FAQs
+
+<details>
+  <summary>Gazebo Video Capture not working (Gazebo GStreamer)</summary>
+  
+  This application uses **GStreamer via OpenCV**. To troubleshoot:
+
+1. Check if your OpenCV build has GStreamer support by running `make test_cv`.
+
+2. If GStreamer is not available, the recommended approach is:
+
+- Install GStreamer via `apt`. Follow the [Gazebo and GStreamer setup guide](https://ardupilot.org/dev/docs/sitl-with-gazebo.html#install-the-ardupilot-gazebo-plugin) 
+
+- Rebuild OpenCV from source to ensure it picks up the GStreamer backend.
+
+3. You can first check if camera is working perfectly first using `make gz_camera_feed`.
+</details>

@@ -1,3 +1,9 @@
+"""
+The on-drone ZMQ server that publishes video, proxies MAVLink, and handles control commands.
+It uses asynchronous frame processing to avoid blocking the main video loop.
+It can run in simulation mode with Gazebo or with a real drone.
+"""
+
 #!/usr/bin/env python3
 import argparse
 import asyncio
@@ -27,12 +33,11 @@ CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(message)s",
-    handlers=[
-        logging.StreamHandler()  # Explicit console handler
-    ]
+    handlers=[logging.StreamHandler()],  # Explicit console handler
 )
 logger = logging.getLogger("zmq-server")
 logger.setLevel(logging.DEBUG)  # Ensure logger level is set
+
 
 @dataclass
 class FrameData:
@@ -120,7 +125,7 @@ class AsyncFrameProcessor:
                             self.results_queue.get_nowait()
                             self.results_queue.put_nowait(result)
                         except queue.Empty:
-                          continue
+                            continue
 
                 except Exception as e:
                     logger.warning("Frame processing failed: %s", e)
@@ -219,21 +224,28 @@ class MAVLinkProxy:
             self.clients.clear()
 
     def get_drone_data(self) -> Any | None:
-        if "drone_position" not in self.drone_data or not self.drone_data["drone_position"]:
-          logger.warning("Drone position not available")
-          return None
-        if "drone_attitude" not in self.drone_data or not self.drone_data["drone_attitude"]:
-          logger.warning("Drone attitude not available")
-          return None
+        if (
+            "drone_position" not in self.drone_data
+            or not self.drone_data["drone_position"]
+        ):
+            logger.warning("Drone position not available")
+            return None
+        if (
+            "drone_attitude" not in self.drone_data
+            or not self.drone_data["drone_attitude"]
+        ):
+            logger.warning("Drone attitude not available")
+            return None
         if "ground_level" not in self.drone_data or not self.drone_data["ground_level"]:
-          logger.warning("Ground level not available")
-          return None
+            logger.warning("Ground level not available")
+            return None
         return (
             self.drone_data["drone_position"],
             self.drone_data["drone_attitude"],
             self.drone_data["ground_level"],
             self.drone_data.get("mode", "UNKNOWN"),
         )
+
     def fetch_drone_data(self, msg):
         """Get current drone position, attitude, and ground level"""
         if not self.connection:
@@ -264,7 +276,6 @@ class MAVLinkProxy:
             self.drone_data["drone_attitude"] = (roll, pitch, yaw)
 
         self.drone_data["mode"] = self.connection.get_mode()
-
 
     def _accept_clients(self):
         while self.running:
@@ -315,7 +326,7 @@ class MAVLinkProxy:
                 if msg is not None:
                     # Fetch drone data for gps estimation
                     self.fetch_drone_data(msg)
-                    
+
                     msg_bytes = msg.get_msgbuf()
 
                     with self.clients_lock:
@@ -378,6 +389,8 @@ class ZMQServer:
 
         # Object classes
         self.object_classes = ["helipad", "tank" if is_simulation else "real_tank"]
+        self._frame_lock = threading.Lock()
+        self._frame = None
 
         if is_simulation:
             camera_intrinsics = gz.get_camera_intrinsics(
@@ -397,7 +410,11 @@ class ZMQServer:
 
         self.tracker = yolo.YoloObjectTracker(
             K=camera_intrinsics,
-            model_path="src/controls/detection/sim.pt" if is_simulation else "src/controls/detection/main.pt",
+            model_path=(
+                "src/controls/detection/sim.pt"
+                if is_simulation
+                else "src/controls/detection/main.pt"
+            ),
         )
 
         # Initialize frame processor
@@ -426,13 +443,48 @@ class ZMQServer:
 
     def _encode_frame(
         self, frame: np.ndarray, topic_prefix: str = ""
-    ) -> Tuple[bytes, bytes]: #TODO: use a more efficient implementation in the future
+    ) -> Tuple[bytes, bytes]:  # TODO: use a more efficient implementation in the future
         """Encode frame to JPEG"""
         topic = f"{topic_prefix}video".encode()
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, IMAGE_QUALITY, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+        encode_params = [
+            cv2.IMWRITE_JPEG_QUALITY,
+            IMAGE_QUALITY,
+            cv2.IMWRITE_JPEG_OPTIMIZE,
+            1,
+        ]
 
         _, jpeg_frame = cv2.imencode(".jpg", frame, encode_params)
         return topic, jpeg_frame.tobytes()
+
+    async def _video_capture_loop(self):
+        loop = asyncio.get_running_loop()
+        while self.running:
+            try:
+                # Wait until capture is initialized
+                if not self.cap:
+                    await asyncio.sleep(0.01)
+                    continue
+
+                # call blocking cap.read() in a thread pool so we don't block the event loop
+                ret, frame = await loop.run_in_executor(None, self.cap.read)
+                if not ret or frame is None:
+                    # brief sleep to avoid tight loop if capture fails momentarily
+                    await asyncio.sleep(0.01)
+                    continue
+
+                # write copy under lock
+                with self._frame_lock:
+                    self._frame = frame.copy()
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.error("Error in video capture loop:\n%s", traceback.format_exc())
+                await asyncio.sleep(0.1)
+
+    def get_frame(self):
+        with self._frame_lock:
+            return self._frame
 
     async def _video_publisher_loop(self, mavlink_proxy: MAVLinkProxy):
         """Main video publishing loop"""
@@ -446,15 +498,17 @@ class ZMQServer:
 
         while self.running:
             try:
-                ret, frame = self.cap.read()
-                if not ret:
+                frame = self.get_frame()
+                if frame is None:
                     logger.warning("Failed to capture frame")
                     await asyncio.sleep(0.1)
                     continue
 
                 # Always send raw frame
                 topic, encoded_frame = self._encode_frame(frame)
-                await self.video_socket.send_multipart([topic, encoded_frame], zmq.NOBLOCK)
+                await self.video_socket.send_multipart(
+                    [topic, encoded_frame], zmq.NOBLOCK
+                )
 
                 # Submit frame for processing (non-blocking)
                 data = mavlink_proxy.get_drone_data()
@@ -495,11 +549,15 @@ class ZMQServer:
                     topic, proccessed_frame = self._encode_frame(
                         result.processed_frame, "processed_"
                     )
-                    await self.video_socket.send_multipart([topic, proccessed_frame], zmq.NOBLOCK)
+                    await self.video_socket.send_multipart(
+                        [topic, proccessed_frame], zmq.NOBLOCK
+                    )
                 else:
-                  logger.debug("No processed result available, sending raw frame")
-                  # If no processed result, just send the original frame
-                  await self.video_socket.send_multipart([topic, encoded_frame], zmq.NOBLOCK)
+                    logger.debug("No processed result available, sending raw frame")
+                    # If no processed result, just send the original frame
+                    await self.video_socket.send_multipart(
+                        [topic, encoded_frame], zmq.NOBLOCK
+                    )
 
                 frame_count += 1
 
@@ -511,7 +569,9 @@ class ZMQServer:
                     fps_timer = time.time()
 
                 # Small sleep to prevent CPU overload
-                await asyncio.sleep(CPU_BURNOUT) # 30fps is sufficient for video publishing
+                await asyncio.sleep(
+                    CPU_BURNOUT
+                )  # 30fps is sufficient for video publishing
 
             except Exception:
                 logger.error("Error in video loop:\n%s", traceback.format_exc())
@@ -534,7 +594,7 @@ class ZMQServer:
                     response = self._handle_command(message)
                     await self.control_socket.send_string(response)
                     if "NACK" not in message:
-                      logger.info(f"Command: {message} -> Response: {response}")
+                        logger.info(f"Command: {message} -> Response: {response}")
 
             except Exception as e:
                 logger.error(f"Error in control receiver: {e}")
@@ -544,6 +604,7 @@ class ZMQServer:
         """Handle control commands"""
         command = command.strip()
 
+        # TODO: implement the crane control logic here. './crane.py'. However, it is implemented in `in_flight` branch.
         if command == ZMQTopics.DROP_LOAD.name:
             return "ACK: Load dropped"
         elif command == ZMQTopics.PICK_LOAD.name:
@@ -564,7 +625,7 @@ class ZMQServer:
             return f"ACK: Hook is {self.hook_state}"
         elif command == ZMQTopics.HELIPAD_GPS.name:
             if self.latest_gps_coordinates and "helipad" in self.latest_gps_coordinates:
-                coords = self.latest_gps_coordinates['helipad']
+                coords = self.latest_gps_coordinates["helipad"]
                 return f"ACK>{coords[0]},{coords[1]}"
             else:
                 return "NACK: No GPS data available"
@@ -600,7 +661,9 @@ class ZMQServer:
 
         # Run both loops concurrently
         await asyncio.gather(
-            self._video_publisher_loop(mavlink_proxy), self._control_receiver_loop()
+            self._video_publisher_loop(mavlink_proxy),
+            self._control_receiver_loop(),
+            self._video_capture_loop(),
         )
 
     def stop(self):

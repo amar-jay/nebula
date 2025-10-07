@@ -1,3 +1,8 @@
+"""
+Script to extract frames from a video at specified intervals,
+center crop them to square, and resize to 640x640 pixels.
+"""
+
 import os
 
 import cv2

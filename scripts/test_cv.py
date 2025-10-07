@@ -1,94 +1,94 @@
-#!/bin/python3
+#!/usr/bin/env python3
 import argparse
+import os
 import platform
 import sys
-import time
+
+# Suppress OpenCV warnings
+os.environ["OPENCV_LOG_LEVEL"] = "SILENT"
 
 import cv2
 import numpy as np
 
 
-def main():
-    print("\n===== OpenCV Test Results =====")
-    # Basic OpenCV information
-    print(f"OpenCV version: {cv2.__version__}")
-    print(f"Python version: {platform.python_version()}")
-    print(f"NumPy version: {np.__version__}")
-
-    # Check available backends
-    print("\n----- Available Backends -----")
-    backends = [
-        cv2.CAP_ANY,  # Auto detect
-        cv2.CAP_V4L,  # V4L/V4L2
-        cv2.CAP_V4L2,  # V4L2
-        cv2.CAP_GSTREAMER,  # GStreamer
-        cv2.CAP_FFMPEG,  # FFMPEG
-    ]
-
-    backend_names = [
-        "AUTO",
-        "V4L",
-        "V4L2",
-        "GSTREAMER",
-        "FFMPEG",
-    ]
-
-    for idx, backend in enumerate(backends):
-        try:
-            # Just testing if we can create a VideoCapture object with this backend
-            temp_cap = cv2.VideoCapture(0, backend)
-            is_available = temp_cap.isOpened()
-            temp_cap.release()
-        except Exception as e:
-            is_available = False
-            error = str(e)
-
-        status = "✅ Available" if is_available else "❌ Not available"
-        print(f"{backend_names[idx]}: {status}")
-
-    # Check if GStreamer is available specifically
-    print("\n----- GStreamer Support -----")
-    try:
-        # Check if GStreamer support is built in
-        if cv2.getBuildInformation().find("GStreamer") != -1:
-            gstreamer_status = "✅ GStreamer support built into OpenCV"
-
-            # Try a simple GStreamer pipeline
-            try:
-                pipeline = "videotestsrc pattern=smpte ! videoconvert ! appsink"
-                cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-                ret, frame = cap.read()
-                if ret:
-                    print("✅ Successfully read a frame from GStreamer test pipeline")
-                    h, w = frame.shape[:2]
-                    print(f"   Frame dimensions: {w}x{h}")
-                else:
-                    print("❌ Failed to read frame from GStreamer test pipeline")
-                cap.release()
-            except Exception as e:
-                print(f"❌ Error testing GStreamer pipeline: {str(e)}")
-        else:
-            gstreamer_status = "❌ No GStreamer support in OpenCV build"
-    except Exception as e:
-        gstreamer_status = f"❌ Error checking GStreamer support: {str(e)}"
-
-    print(gstreamer_status)
-
-    # Print build information
-    # print("\n----- OpenCV Build Information -----")
-    # print(cv2.getBuildInformation())
+# Optional: colored output
+class Colors:
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    RESET = "\033[0m"
 
 
-def test_camera(backend=None, index=0, pipeline=None):
+# Define backend mapping once
+BACKENDS = {
+    "ANY": cv2.CAP_ANY,
+    "V4L": cv2.CAP_V4L,
+    "V4L2": cv2.CAP_V4L2,
+    "GSTREAMER": cv2.CAP_GSTREAMER,
+    "FFMPEG": cv2.CAP_FFMPEG,
+}
+
+
+def print_info():
+    print("\n===== OpenCV & System Info =====")
     print(
-        f"Testing camera index {index} with backend: {backend if backend else 'default'}"
+        f"OpenCV: {cv2.__version__} | Python: {platform.python_version()} | NumPy: {np.__version__}"
     )
+
+
+def check_backends():
+    """Check availability of backends and return results."""
+    print("\n----- Backend Availability -----")
+    results = {}
+    for name, backend in BACKENDS.items():
+        try:
+            cap = cv2.VideoCapture(0, backend)
+            available = cap.isOpened()
+            cap.release()
+        except Exception:
+            available = False
+        results[name] = available
+        status = (
+            f"{Colors.GREEN}✓ Available{Colors.RESET}"
+            if available
+            else f"{Colors.RED}✗ Not available{Colors.RESET}"
+        )
+        print(f"{name:<10}: {status}")
+    return results
+
+
+def test_gstreamer():
+    """Check GStreamer support and test a simple pipeline."""
+    print("\n----- GStreamer Test -----")
+    build_info = cv2.getBuildInformation()
+    if "GStreamer" in build_info:
+        print(f"{Colors.GREEN}✓ GStreamer support in OpenCV{Colors.RESET}")
+        pipeline = "videotestsrc pattern=smpte ! videoconvert ! appsink"
+        try:
+            cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            ret, frame = cap.read()
+            if ret:
+                h, w = frame.shape[:2]
+                print(f"  Frame read successfully: {w}x{h}")
+            else:
+                print(f"{Colors.RED}✗ Failed to read frame{Colors.RESET}")
+            cap.release()
+        except Exception as e:
+            print(f"{Colors.RED}✗ Pipeline error: {e}{Colors.RESET}")
+    else:
+        print(f"{Colors.RED}✗ No GStreamer support in OpenCV{Colors.RESET}")
+
+
+def test_camera(index=0, backend=None, pipeline=None):
+    """Open and test a camera, return True if successful."""
+    backend_name = next(
+        (name for name, b in BACKENDS.items() if b == backend), "default"
+    )
+    print(f"\nTesting camera {index} | Backend: {backend_name}")
 
     if pipeline:
         if not hasattr(cv2, "CAP_GSTREAMER"):
-            print("ERROR: GStreamer support not available in OpenCV")
+            print(f"{Colors.RED}✗ GStreamer not available{Colors.RESET}")
             return False
-        print(f"Using GStreamer pipeline: {pipeline}")
         cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
     elif backend:
         cap = cv2.VideoCapture(index, backend)
@@ -96,25 +96,30 @@ def test_camera(backend=None, index=0, pipeline=None):
         cap = cv2.VideoCapture(index)
 
     if not cap.isOpened():
-        print("ERROR: Could not open camera")
+        print(f"{Colors.RED}✗ Could not open camera{Colors.RESET}")
         return False
 
-    # Get camera properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(
+        cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    )
     fps = cap.get(cv2.CAP_PROP_FPS)
-
-    print(f"\nResolution: {width}x{height}")
-    print(f"FPS: {fps}")
+    print(f"  Resolution: {w}x{h} | FPS: {fps:.2f}")
 
     ret, _ = cap.read()
-    if not ret:
-        print("ERROR: Failed to read frame")
-        return
     cap.release()
+    if not ret:
+        print(f"{Colors.RED}✗ Failed to read frame{Colors.RESET}")
+        return False
 
-    print("Camera opened successfully")
+    print(f"{Colors.GREEN}✓ Camera opened successfully{Colors.RESET}")
     return True
+
+
+def main():
+    print_info()
+    available_backends = check_backends()
+    test_gstreamer()
+    return available_backends
 
 
 if __name__ == "__main__":
@@ -122,24 +127,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["any", "v4l", "v4l2", "gstreamer", "ffmpeg"],
+        choices=[b.lower() for b in BACKENDS],
         help="Camera backend to use",
     )
-
     parser.add_argument("--index", type=int, default=0, help="Camera index")
     parser.add_argument("--pipeline", type=str, help="GStreamer pipeline string")
     args = parser.parse_args()
 
-    main()
-    backend_map = {
-        "any": cv2.CAP_ANY,
-        "v4l": cv2.CAP_V4L,
-        "v4l2": cv2.CAP_V4L2,
-        "gstreamer": cv2.CAP_GSTREAMER,
-        "ffmpeg": cv2.CAP_FFMPEG,
-    }
+    available_backends = main()
 
-    backend = backend_map.get(args.backend) if args.backend else None
-
-    success = test_camera(backend, args.index, args.pipeline)
+    selected_backend = BACKENDS.get(args.backend.upper()) if args.backend else None
+    success = test_camera(
+        index=args.index, backend=selected_backend, pipeline=args.pipeline
+    )
     sys.exit(0 if success else 1)

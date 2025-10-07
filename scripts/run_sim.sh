@@ -24,25 +24,63 @@ while getopts ":vw:" opt; do
   esac
 done
 
-ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.95903888690079,29.135350967589982,0,0 --model JSON --console --instance=0" # --instance=1 --out=udp:127.0.0.1:14550"
-MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris  --custom-location=40.9590514,29.1355062,0,0 --model JSON --console --instance=1"           # --instance=1 --out=udp:127.0.0.1:14550"
-#MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console --instance=1"
-#ARDU_CMD="sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON --console"
+# Validate world file
+if [ -z "$WORLD_FILE" ]; then
+  echo "Error: World file '$WORLD_FILE' not found."
+  usage
+fi
+
+IFS=':' read -ra DIRS <<<"$GZ_SIM_RESOURCE_PATH"
+
+FOUND=0
+
+for dir in "${DIRS[@]}"; do
+  # Look recursively for the world file
+  FILE_PATH=$(find "$dir" -type f -name "$WORLD_FILE" 2>/dev/null | head -n 1)
+
+  if [ -n "$FILE_PATH" ]; then
+    echo "Found world file at: $FILE_PATH"
+    FOUND=1
+    break
+  fi
+done
+
+if [ "$FOUND" -eq 0 ]; then
+  echo "Error: World file '$WORLD_FILE' not found. Check the GZ_SIM_RESOURCE_PATH environment variable."
+  exit 1
+fi
+
+# Check for required commands
+if ! command -v gz >/dev/null 2>&1; then
+  echo "Error: 'gz' command not found. Please install Gazebo."
+  exit 1
+fi
+if [ ! -f "$HOME/ardupilot/Tools/autotest/sim_vehicle.py" ]; then
+  echo "Error: 'sim_vehicle.py' not found at $HOME/ardupilot/Tools/autotest/"
+  exit 1
+fi
+
+# Check /tmp permissions
+if [ "$(stat -c %A /tmp)" != "drwxrwxrwt" ]; then
+  echo "Fixing /tmp permissions..."
+  sudo chmod 1777 /tmp
+fi
+
+ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --custom-location=40.9588862,29.1357976,0,0 --model JSON --console --instance=0"
+MINI_ARDU_CMD="$HOME/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --custom-location=40.9588862,29.1357976,0,0 --model JSON --console --instance=1"
 
 # Name of the tmux session
 SESSION="gz_ardupilot"
 
 # Build the command
-GAZEBO_CMD="gz sim -v4 -r"
-GAZEBO_CMD="$GAZEBO_CMD $WORLD_FILE"
+GAZEBO_CMD="gz sim -v4 -r $WORLD_FILE"
 
 [ "$VERBOSE" -eq 1 ] && echo "scoop de pop scoop le poop de poop"
 
 # Cleanup function
 cleanup() {
   echo "Cleaning up temporary files..."
-  # Add file cleanup commands here, for example:
-  rm mav.tlog* mav.tlog.raw mav.parm eeprom.bin
+  rm -f mav.tlog* mav.tlog.raw mav.parm eeprom.bin
   rm -rf terrain/ logs/
   echo "Cleanup done."
 }
@@ -50,23 +88,34 @@ cleanup() {
 # Set the cleanup function to run on exit
 trap cleanup EXIT
 
+# Clean up stale tmux socket
+rm -f /tmp/tmux-$(id -u)/default
+
 # Kill old session if exists
-tmux has-session -t $SESSION 2>/dev/null
-if [ $? -eq 0 ]; then
-  tmux kill-session -t $SESSION
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Killing existing session: $SESSION"
+  tmux kill-session -t "$SESSION"
+  sleep 1
 fi
 
 # Start session and name the window
-tmux new-session -d -s $SESSION -n gazebo "$GAZEBO_CMD"
-tmux split-window -h -t $SESSION "$ARDU_CMD"
+[ "$VERBOSE" -eq 1 ] && echo "Starting tmux session: $SESSION"
+(
+  tmux new-session -d -s $SESSION -n gazebo
+) || {
+  echo "Failed to create tmux sessions"
+  exit 1
+}
 
-# tmux split-window -v -t $SESSION:.1 "$MINI_ARDU_CMD"
+tmux new-window -t $SESSION:2 -n ardu_mini
+tmux new-window -t $SESSION:3 -n ardu_main
 
-# Rename second pane's window (if ArduPilot tries to rename)
-tmux select-pane -t $SESSION:.1
-tmux select-window -t $SESSION:0
-#tmux rename-window -t $SESSION:0 'Gazebo+ArduPilot'
+tmux send-keys -t $SESSION:1 "$GAZEBO_CMD" C-m
+tmux send-keys -t $SESSION:2 "$MINI_ARDU_CMD" C-m
+tmux send-keys -t $SESSION:3 "$ARDU_CMD" C-m
 
 # Layout and attach
-tmux select-layout -t $SESSION tiled
-tmux attach-session -t $SESSION
+tmux attach -t "$SESSION" || {
+  echo "Failed to attach to tmux session"
+  exit 1
+}

@@ -6,7 +6,7 @@ import yaml
 
 
 class Waypoint:
-    def __init__(self, lat=0, lon=0, alt=0., hold=3, relative_to=None, auto=True):
+    def __init__(self, lat=0, lon=0, alt=0.0, hold=3, relative_to=None, auto=True):
         if relative_to is None:
             self.lat = lat
             self.lon = lon

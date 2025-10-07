@@ -1,18 +1,15 @@
 WORLD=delivery_runway.sdf
-#WORLD=gimbal.sdf
 MODEL=gazebo-iris
-#MODEL=iris_with_gimbal
 
 # Define the variable name and value
 GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
 GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
-#HERE=$(pwd -P) # Absolute path of current directory
 
 RE_SOURCE_FLAG := /tmp/re_source_needed.flag
 define set_env_var_fn
 	@if ! grep -qE "^export $(1)" $(HOME)/.bashrc; then \
-		echo 'export $(1)="$(2)"' >> $(HOME)/.bashrc; \
+		echo "export $(1)=\"$(2)\"" >> $(HOME)/.bashrc; \
 		echo "$(1) added to .bashrc."; \
 		touch $(RE_SOURCE_FLAG); \
 	else \
@@ -20,14 +17,18 @@ define set_env_var_fn
 	fi
 endef
 
+.PHONY: gz app demo_app ardupilot_gz create camera_feed set_env_vars install_tmux \
+        gz_sim cpu_info test_cv test_gst test_torch setup build_app test_fps \
+        sim_server server sim_server2 recv lint telem k_telem
+
+gz:
+	gz sim -v4 -r ${WORLD}
+
 app:
 	@python -m src.gcs.app
 
 demo_app:
 	@python -m src.gcs.src.main.demo
-
-gz:
-	gz sim -v4 -r ${WORLD} 
 
 ardupilot_gz:
 	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL} --model JSON --map --console
@@ -35,9 +36,7 @@ ardupilot_gz:
 create:
 	bash -c 'source ./setup.sh' >> ./.devcontainer/postCreateCommand.log 2>&1
 
-camera_feed:
-	#gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp,encoding-name=H264 ! rtph264depay ! avdec_h264 ! videoconvert ! jpegenc ! multipartmux ! tcpserversink host=0.0.0.0 port=8080
-	#! autovideosink
+gz_camera_feed:
 	gst-launch-1.0 -v udpsrc port=5600 \
 	! application/x-rtp,encoding-name=H264 \
 	! rtph264depay \
@@ -59,7 +58,7 @@ install_tmux: # completely unrelated to the project, but I think its useful to h
 	curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff3f4c721ba43/raw | bash
 
 gz_sim:
-	@./scripts/run_sim.sh ${WORLD}
+	@./scripts/run_sim.sh -w ${WORLD}
 cpu_info:
 	@python ./scripts/cpu_info.py
 
@@ -90,7 +89,7 @@ server:
 	@python -m src.mq.zmq_server
 
 sim_server2:
-	@python -m src.mq.example_zmq_server2 --is-simulation
+	@python -m src.mq.zmq_server-experimental --is-simulation
 
 recv:
 	@python -m src.mq.example_zmq_reciever
@@ -104,3 +103,5 @@ telem:
 
 k_telem:
 	mavproxy.py --master=/dev/ttyUSB0 --baudrate=57600 --console --out=udp:127.0.0.1:14560
+
+

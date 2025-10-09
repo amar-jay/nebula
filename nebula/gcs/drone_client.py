@@ -101,6 +101,7 @@ class DroneClient(QObject):
 
     def get_tank_gps(self):
         return self.tank_gps
+
     def fetch_tank_gps(self) -> bool:
         """Fetch the tank GPS coordinates."""
         if self.master_connection is None:

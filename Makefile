@@ -28,7 +28,7 @@ app:
 	@python -m nebula.gcs.app
 
 demo_app:
-	@python -m nebula.gcs.nebula.main.demo
+	@python -m nebula.gcs.src.main.demo
 
 ardupilot_gz:
 	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL} --model JSON --map --console

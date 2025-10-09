@@ -30,7 +30,6 @@ IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
 
 
-
 # Configure logging
 logger = init_logging(
     level=logging.DEBUG,
@@ -700,9 +699,7 @@ async def main():
     parser.add_argument(
         "--video-source", default=0, help="Video source (device ID or file path)"
     )
-    parser.add_argument(
-        "--debug", action="store_true", help="Enable debug logging"
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
 

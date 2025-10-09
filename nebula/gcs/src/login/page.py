@@ -528,9 +528,7 @@ class LoginWindow(QMainWindow):
             "images",
             "placeholder.png",
         )
-        self.load_image(
-          image_path
-        )
+        self.load_image(image_path)
 
     def load_image(self, url):
         self.image_label.setPixmap(QPixmap(url))

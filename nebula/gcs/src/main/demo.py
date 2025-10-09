@@ -13,7 +13,6 @@ from qfluentwidgets import (
     NavigationItemPosition,
     SubtitleLabel,
     Theme,
-    qrouter,
     setFont,
     setTheme,
 )

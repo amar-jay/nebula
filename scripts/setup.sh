@@ -18,12 +18,12 @@ bash <(curl -s https://gist.githubusercontent.com/amar-jay/ba9e5a475e1f0fe04b6ff
 
 # Clone and set up ArduPilot repository
 if [ -d "$HOME/ardupilot" ]; then
-    echo "ArduPilot directory already exists. Skipping clone."
-    cd $HOME/ardupilot
+  echo "ArduPilot directory already exists. Skipping clone."
+  cd $HOME/ardupilot
 else
-    git clone https://github.com/ArduPilot/ardupilot $HOME/ardupilot
-    cd $HOME/ardupilot
-    git checkout "Copter-4.5"
+  git clone https://github.com/ArduPilot/ardupilot $HOME/ardupilot
+  cd $HOME/ardupilot
+  git checkout "Copter-4.5"
 fi
 git submodule update --init --recursive
 
@@ -42,4 +42,3 @@ cd $MYHOME # go to currrent repo
 make set_env_vars
 
 echo "Setup complete! Gazebo and ArduPilot-Gazebo integration are ready."
-

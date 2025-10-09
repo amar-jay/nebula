@@ -126,7 +126,7 @@ Steps
 7. Output estimated GPS coordinates (latitude, longitude) and optionally estimated horizontal uncertainty derived from altitude and detection pixel uncertainty.
 
 Extra Considerations if Needed
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you want to improve accuracy or handle edge cases, consider the following:
 

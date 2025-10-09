@@ -26,6 +26,12 @@ We trained our model on nearly a thousand images combined from both real-world a
 
 For image annotation, we used the `Roboflow <https://roboflow.com/>`_ platform. After annotating the dataset, we exported it in **YOLO format** and trained the model using **Google Colab**. The overall process is straightforward, though somewhat time-consuming.
 
+.. note::
+   At times pytorch for running this weight might be mismatched. Please ensure you have the correct version of pytorch installed. To verify that run the command:
+	 .. code-block:: bash
+	 		make test_torch
+
+
 
 Camera Calibration
 ------------------

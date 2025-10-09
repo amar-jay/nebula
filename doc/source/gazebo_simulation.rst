@@ -33,6 +33,7 @@ You can also use rosdep if you have ROS installed:
 		rosdep install --from-paths src --ignore-src -y
 
 To ensure that Gazebo can locate the necessary plugins and models, you need to set the following environment variables in your shell configuration file (e.g., ``~/.bashrc`` or ``~/.zshrc``):
+
 .. code-block:: bash
 
 		export GZ_VERSION=harmonic
@@ -54,8 +55,10 @@ Camera Configuration
 ---------------------
 
 The Gazebo simulation includes a downward-facing camera mounted on the drone.
-This camera is configured in the drone's SDF (Simulation Description Format) file, which can be found in the ``ardupilot_gazebo/models/iris`` directory. You can check it out `here <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf>`_.
-You can modify the camera parameters such as resolution, field of view, and update rate in the SDF file to suit your requirements. 
+This camera is configured in the drone's SDF (Simulation Description Format) file, which can be found in the 
+:c:`ardupilot_gazebo/models/iris <https://github.com/amar-jay/gazebo_sitl/blob/main/models/iris_with_gimbal/model.sdf>` directory. 
+You can modify the camera parameters such as resolution, field of view, and update rate in the 
+:c:`ardupilot_gazebo/models/gimbal_small_1d <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf#L112>` directory. 
 There is no need to modify the code anywhere else it will able to pick up the changes automatically and work seamlessly in the Nebula project.
 
 .. warning::
@@ -66,8 +69,8 @@ A quick way to view the camera feed is to use the following command:
 
 .. code-block:: bash
 
-		gst-launch-1.0 -v udpsrc port=5600 \
-    caps='application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264' \
+	gst-launch-1.0 -v udpsrc port=5600 \
+  	caps='application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264' \
     ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false
 
 
@@ -84,7 +87,11 @@ To simulate at high-speed or in real-time, you can adjust the simulation speed u
 .. note::
 
 		At times there are issues with the GStreamer backend of OpenCV. If you encounter problems with the camera feed, you can try rebuilding OpenCV from source with GStreamer support enabled.
-		This is a simple python script to verify if OpenCV has GStreamer support:
+
+		You can verify if OpenCV has GStreamer support by running the command `make test_cv` which shows all the 
+		supported backends that is on your OpenCV build. If GStreamer is listed, then it has support.
+
+		Alternatively, you can use the following Python script to test the GStreamer pipeline with OpenCV:
 
 		.. code-block:: python
 
@@ -125,11 +132,17 @@ Worlds
 
 There are multiple worlds available in the Gazebo simulation for different testing scenarios.
 You can find these worlds in the ``ardupilot_gazebo/worlds`` directory. Some of the available worlds include:
+
 - **delivery_runway (default)**: A runway environment designed for delivery drone simulations with multiple drones, helipads and a tank for detection.
+
 - **iris_runway**: The default world that comes with the ArduPilot Gazebo plugin, featuring a runway for takeoff and landing.
+
 - **our_runway**: Iris runway with an added helipad for landing tests and drone stabilization and especially for GPS estimation testing.
+
 - **farm**: An animal farm environment with various farm animals and structures.
+
 - **orchard**: A world with trees and natural terrain, suitable for testing navigation and obstacle avoidance.
+
 - **gimbal**: An iris runway with a gimbal camera setup for viewing over the horizon.
 
 

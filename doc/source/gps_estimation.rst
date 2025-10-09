@@ -30,25 +30,27 @@ For image annotation, we used the `Roboflow <https://roboflow.com/>`_ platform. 
 Camera Calibration
 ------------------
 
-To estimate GPS coordinates from pixel locations, we first need to know the **camera’s intrinsic parameters**. These include the **focal length**, **principal point**, and **distortion coefficients**.
+To estimate GPS coordinates from pixel locations, we first need to know the camera’s intrinsic parameters. These include the focal length, principal point, and distortion coefficients.
 
-Using these intrinsic parameters, we apply the **pinhole camera model** to map **3D world coordinates** to **2D image coordinates**. This mapping can then be reversed to project 2D image coordinates back into 3D world space — a standard computer vision technique.
+Using these intrinsic parameters, we apply the pinhole camera model to map 3D world coordinates to 2D image coordinates. This mapping can then be reversed to project 2D image coordinates back into 3D world space — a standard computer vision technique.
 
 .. image:: ../assets/img/pinhole_model.webp
    :alt: Pinhole Camera Model
 
 For calibration, we use **OpenCV’s chessboard calibration method**.
-You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, or use our implementation available in the GitHub repository under `src/controls/detection/camera_calibration.py <https://github.com/amar-jay/nebula/tree/main/nebula/controls/camera_calibration>`.
+You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, 
+
+or use our implementation available at ``controls/detection/camera_calibration.py`` `within the repository <https://github.com/amar-jay/nebula/blob/main/nebula/controls/detection/camera_calibration.py>`_.
 
 While some pinhole cameras introduce significant distortion, primarily **radial** and **tangential** distortion, our setup uses a high-quality camera with a wide-angle lens that produces minimal distortion. Therefore, we can safely ignore distortion coefficients in our calculations.
 
-In practice, we primarily use the **focal length** and **principal point** for GPS estimation. However, it is generally more accurate to use the complete **camera intrinsic matrix (K matrix)** obtained from the calibration process.
+In practice, we primarily use the focal length and principal point for GPS estimation. However, it is generally more accurate to use the complete camera intrinsic matrix (K matrix) obtained from the calibration process.
 
 
 GPS Coordinate Estimation
 -------------------------
 
-Once we have the **pixel coordinates** of the object of interest from our image recognition model and the **camera’s intrinsic parameters** from the calibration process, we can proceed to estimate its **GPS coordinates**.
+Once we have the pixel coordinates of the object of interest from our image recognition model and the camera’s intrinsic parameters from the calibration process, we can proceed to estimate its GPS coordinates.
 
 The GPS estimation process involves several ordered steps, summarized below. We assume a **nadir-mounted camera** (with the optical axis approximately aligned downward) and **negligible lens distortion** — either ignored or compensated for during preprocessing.
 
@@ -123,15 +125,15 @@ Steps
 
 7. Output estimated GPS coordinates (latitude, longitude) and optionally estimated horizontal uncertainty derived from altitude and detection pixel uncertainty.
 
-Notes and Edge cases
+Extra Considerations if Needed
 ~~~~~~~~~~~~~~~~~~~~~
 
-- **Distortion:** If distortion is not negligible, **undistort the pixel coordinates** before performing back-projection using the distortion coefficients obtained during calibration.  
+If you want to improve accuracy or handle edge cases, consider the following:
+
+- **Distortion:** If distortion is not negligible, undistort the pixel coordinates before performing back-projection using the distortion coefficients obtained during calibration.  
 - **Altitude reference:** Ensure that the altitude values used for the **camera origin** and **ground plane** (\(z_g\)) share the same **vertical datum** (e.g., above ellipsoid, above mean sea level, or above ground level). Mismatched altitude references can introduce significant bias in the estimated GPS coordinates.  
 - **Attitude accuracy:** Even small errors in **pitch** or **roll** can lead to large horizontal errors, especially at higher altitudes. Quantify and account for these uncertainties accordingly.  
 - **Near-parallel rays:** When the back-projected ray is nearly parallel to the ground (\(r_{e,z} \approx 0\)), the ground intersection becomes numerically unstable. In such cases, either **reject the estimate** or use a **Digital Elevation Model (DEM)** or **optical flow-based scale estimation** to improve stability.  
-
-
 
 .. admonition:: Recommended Reading
    :class: tip

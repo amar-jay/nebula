@@ -28,7 +28,7 @@ Nebula consists of several core components:
 
 .. note::
 
-   This project is no longer under development, since the competition is over.
+   This project is no longer maintained, since the competition is over.
 
 Refer to the :doc:`usage` section for detailed usage instructions and  
 see :ref:`installation` for setup guidance.

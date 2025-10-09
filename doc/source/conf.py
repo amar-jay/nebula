@@ -34,11 +34,20 @@ html_theme = 'sphinx_rtd_theme'
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
 
-from docutils import nodes, utils
-from docutils.parsers.rst import roles
 
-def code_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    node = nodes.literal(text, text)
+from docutils import nodes
+from docutils.parsers.rst import roles
+import re
+
+def code_link_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    # Match text of the form "code <url>"
+    match = re.match(r'(.+?)\s*<(.+?)>$', text)
+    if match:
+        label, url = match.groups()
+        node = nodes.reference('', '', nodes.literal(label, label), refuri=url)
+    else:
+        # fallback: just render code if no URL provided
+        node = nodes.literal(text, text)
     return [node], []
 
-roles.register_local_role('c', code_role)
+roles.register_local_role('c', code_link_role)

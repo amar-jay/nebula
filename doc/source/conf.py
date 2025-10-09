@@ -33,3 +33,12 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+from docutils import nodes, utils
+from docutils.parsers.rst import roles
+
+def code_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    node = nodes.literal(text, text)
+    return [node], []
+
+roles.register_local_role('c', code_role)

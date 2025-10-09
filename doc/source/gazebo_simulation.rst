@@ -56,9 +56,9 @@ Camera Configuration
 
 The Gazebo simulation includes a downward-facing camera mounted on the drone.
 This camera is configured in the drone's SDF (Simulation Description Format) file, which can be found in the 
-:ref:`ardupilot_gazebo/models/iris <https://github.com/amar-jay/gazebo_sitl/blob/main/models/iris_with_gimbal/model.sdf>` directory. 
+:c:`ardupilot_gazebo/models/iris <https://github.com/amar-jay/gazebo_sitl/blob/main/models/iris_with_gimbal/model.sdf>` directory. 
 You can modify the camera parameters such as resolution, field of view, and update rate in the 
-:ref:`ardupilot_gazebo/models/gimbal_small_1d <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf#L112>` directory. 
+:c:`ardupilot_gazebo/models/gimbal_small_1d <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf#L112>` directory. 
 There is no need to modify the code anywhere else it will able to pick up the changes automatically and work seamlessly in the Nebula project.
 
 .. warning::
@@ -71,7 +71,7 @@ A quick way to view the camera feed is to use the following command:
 
 	gst-launch-1.0 -v udpsrc port=5600 \
   	caps='application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264' \
-    ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false
+    	! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false
 
 
 In viewing the camera feed, you might notice a slight delay (latency) due to the video streaming process. This is normal and expected in most simulation environments.

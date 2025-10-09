@@ -28,15 +28,15 @@ def icon_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode()
 
 
-uav_icon_base64 = icon_to_base64("src/gcs/assets/images/drone.png")
-mobileuser_marker_base64 = icon_to_base64("src/gcs/assets/images/mobileuser.png")
-target_marker_base64 = icon_to_base64("src/gcs/assets/images/target.png")
-home_icon_base64 = icon_to_base64("src/gcs/assets/images/home.png")
-kamikaze_icon_base64 = icon_to_base64("src/gcs/assets/images/kamikaze.png")
+uav_icon_base64 = icon_to_base64("nebula/gcs/assets/images/drone.png")
+mobileuser_marker_base64 = icon_to_base64("nebula/gcs/assets/images/mobileuser.png")
+target_marker_base64 = icon_to_base64("nebula/gcs/assets/images/target.png")
+home_icon_base64 = icon_to_base64("nebula/gcs/assets/images/home.png")
+kamikaze_icon_base64 = icon_to_base64("nebula/gcs/assets/images/kamikaze.png")
 
 
 def custom_code(location, map_variable_name):
-    with open("src/gcs/src/map/map_script.js", "r", encoding="utf-8") as f:
+    with open("nebula/gcs/src/map/map_script.js", "r", encoding="utf-8") as f:
         script_file = f.read()
     return script_file % (
         map_variable_name,

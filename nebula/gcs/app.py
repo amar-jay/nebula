@@ -224,7 +224,7 @@ def showKamikazeConfirmation(parent, drone_client: DroneClient, fallback_coordin
         )
 
         # time.sleep(5)
-        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1], 0.5)
+        drone_client.kamikaze_connection.goto_kamikaze(tank_gps[0], tank_gps[1])
         if m.exec():
             m = MessageBox(
                 "Kamikaze",
@@ -803,25 +803,25 @@ class DroneControlApp(QMainWindow):
 
         # Add tabs to the tab widget
         self._create_tab(
-            "src/gcs/assets/images/controls.png",
+            "nebula/gcs/assets/images/controls.png",
             "Controls",
             basic_control_widget,
         )
-        self._create_tab("src/gcs/assets/images/camera.png", "Camera", camera_widget)
+        self._create_tab("nebula/gcs/assets/images/camera.png", "Camera", camera_widget)
         self._create_tab(
-            "src/gcs/assets/images/mission.png",
+            "nebula/gcs/assets/images/mission.png",
             "Missions",
             mission_widget,
         )
         self._create_tab(
-            "src/gcs/assets/images/telemetry.png",
+            "nebula/gcs/assets/images/telemetry.png",
             "Telemetry",
             telemetry_widget,
         )
 
         # self.tab_widget.addTab(mission_widget, "Mission Planning")
         self._create_tab(
-            "src/gcs/assets/images/console.png",
+            "nebula/gcs/assets/images/console.png",
             "‍Console",
             console_widget,
         )

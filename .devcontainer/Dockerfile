@@ -84,8 +84,8 @@ RUN bash -c "${HOME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.
 
 # Set environment variables
 ENV GZ_VERSION="harmonic"
-ENV GZ_SIM_SYSTEM_PLUGIN_PATH=${HOME}/src/ardupilot_gazebo/build
-ENV GZ_SIM_RESOURCE_PATH=${HOME}/src/ardupilot_gazebo/models:${HOME}/src/ardupilot_gazebo/worlds
+ENV GZ_SIM_SYSTEM_PLUGIN_PATH=${HOME}/nebula/ardupilot_gazebo/build
+ENV GZ_SIM_RESOURCE_PATH=${HOME}/nebula/ardupilot_gazebo/models:${HOME}/nebula/ardupilot_gazebo/worlds
 
 WORKDIR ${HOME}
 ENTRYPOINT ["${HOME}/scripts/entrypoint.sh"]

@@ -23,7 +23,10 @@ from nebula.gcs.src.map.map_widget import MapWidget
 
 def get_asset(path: str) -> str:
     """Get the asset path"""
-    basePath = "/home/amarjay/Desktop/code/matek/src/gcs/assets"
+    basePath = os.path.dirname(os.path.abspath(__file__))
+    basePath = os.path.dirname(basePath)
+    basePath = os.path.dirname(basePath)
+    basePath = os.path.join(basePath, "assets")
     return os.path.join(basePath, path)
 
 

@@ -30,7 +30,7 @@ logging:
   level: DEBUG
 ml:
   confidence_threshold: 0.6
-  production_model_path: src/controls/detection/main.pt
-  simulation_model_path: src/controls/detection/sim.pt
+  production_model_path: nebula/controls/detection/main.pt
+  simulation_model_path: nebula/controls/detection/sim.pt
   workers: 2
 simulation: true

@@ -8,8 +8,8 @@ include = '\.pyi?$'
 extend-exclude = '''
 (
     ^/mission_planner/
-  | ^/src/gcs/libs/
-  | ^/src/controls/__pycache__/
+  | ^/nebula/gcs/libs/
+  | ^/nebula/controls/__pycache__/
   | ^/_build/
   | ^/build/
   | ^\.venv/

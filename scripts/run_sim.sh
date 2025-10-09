@@ -10,6 +10,10 @@ usage() {
   exit 1
 }
 
+error() {
+  echo -e "\033[31m$1\033[0m"
+}
+
 # Default: no verbose flag
 VERBOSE=0
 # world file is the first argument
@@ -26,7 +30,7 @@ done
 
 # Validate world file
 if [ -z "$WORLD_FILE" ]; then
-  echo "Error: World file '$WORLD_FILE' not found."
+  error "Error: World file '$WORLD_FILE' not found."
   usage
 fi
 
@@ -46,17 +50,18 @@ for dir in "${DIRS[@]}"; do
 done
 
 if [ "$FOUND" -eq 0 ]; then
-  echo "Error: World file '$WORLD_FILE' not found. Check the GZ_SIM_RESOURCE_PATH environment variable."
+  error "Error: World file '$WORLD_FILE' not found. Check the GZ_SIM_RESOURCE_PATH environment variable."
+  error "You can set it using \`make set_env_var\`, but please make sure previous variables are removed first."
   exit 1
 fi
 
 # Check for required commands
 if ! command -v gz >/dev/null 2>&1; then
-  echo "Error: 'gz' command not found. Please install Gazebo."
+  error "Error: 'gz' command not found. Please install Gazebo."
   exit 1
 fi
 if [ ! -f "$HOME/ardupilot/Tools/autotest/sim_vehicle.py" ]; then
-  echo "Error: 'sim_vehicle.py' not found at $HOME/ardupilot/Tools/autotest/"
+  error "Error: 'sim_vehicle.py' not found at $HOME/ardupilot/Tools/autotest/"
   exit 1
 fi
 

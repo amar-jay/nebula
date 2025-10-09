@@ -52,7 +52,7 @@ height, width = 640, 640
 # cap = camera.get_capture()
 
 estimator = yolo.YoloObjectTracker(
-    model_path="src/controls/detection/sim.pt",
+    model_path="nebula/controls/detection/sim.pt",
     K=np.ones((3, 3)),
 )
 

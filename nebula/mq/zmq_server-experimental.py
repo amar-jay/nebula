@@ -254,7 +254,7 @@ class ZMQServer:
         control_port: int = 5556,
         video_source: int = 0,
         is_simulation: bool = False,
-        weights_path: str = "src/controls/detection/best.pt",
+        weights_path: str = "nebula/controls/detection/best.pt",
     ):
         self.is_simulation = is_simulation
         self.context = zmq.Context()

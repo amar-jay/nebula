@@ -1,6 +1,6 @@
-[submodule "src/ardupilot_gazebo"]
-	path = src/ardupilot_gazebo
+[submodule "nebula/ardupilot_gazebo"]
+	path = nebula/ardupilot_gazebo
 	url = https://github.com/amar-jay/gazebo_sitl
-[submodule "src/gcs/libs/PySide6-Fluent-Widgets-plguin"]
-  path = src/gcs/libs/PySide6-Fluent-Widgets-plguin
+[submodule "nebula/gcs/libs/PySide6-Fluent-Widgets-plguin"]
+  path = nebula/gcs/libs/PySide6-Fluent-Widgets-plguin
 	url = https://github.com/amar-jay/PySide6-Fluent-Widgets-plugin

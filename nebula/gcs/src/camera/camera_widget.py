@@ -180,7 +180,7 @@ class CameraWidget(QWidget):
     def show_placeholder(self):
         """Show placeholder when camera is not connected"""
         placeholder = QPixmap(
-            "src/gcs/assets/images/logo.png_"
+            "nebula/gcs/assets/images/logo.png_"
         )  # Path to your image asset
 
         if placeholder.isNull():

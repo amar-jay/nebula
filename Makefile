@@ -2,8 +2,8 @@ WORLD=delivery_runway.sdf
 MODEL=gazebo-iris
 
 # Define the variable name and value
-GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/src/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
-GZ_SIM_RESOURCE_PATH := $(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
+GZ_SIM_SYSTEM_PLUGIN_PATH := $(CURDIR)/nebula/ardupilot_gazebo/build:$$GZ_SIM_SYSTEM_PLUGIN_PATH
+GZ_SIM_RESOURCE_PATH := $(CURDIR)/nebula/ardupilot_gazebo/models:$(CURDIR)/nebula/ardupilot_gazebo/worlds:$$GZ_SIM_RESOURCE_PATH
 
 
 RE_SOURCE_FLAG := /tmp/re_source_needed.flag
@@ -89,7 +89,7 @@ server:
 	@python -m nebula.mq.zmq_server
 
 sim_server2:
-	@python -m nebula.mq.zmq_server-experimental --is-simulation
+	@python -m nebula.mq.zmq_server-experimentalv2 --is-simulation
 
 recv:
 	@python -m nebula.mq.example_zmq_reciever

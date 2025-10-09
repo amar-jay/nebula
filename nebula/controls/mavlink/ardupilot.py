@@ -456,9 +456,7 @@ class ArdupilotConnection:
 
     # Send kamikaze GPS coordinate
     def goto_kamikaze(self, lat, lon):
-        self.set_mode("GUIDED")
-        self.takeoff(20)
-        self.goto_waypointv2(lat, lon, 3, speed=15)
+        self.goto_waypointv2(lat, lon, 0.5, speed=15)
 
     def check_reposition_reached(self, _lat, _lon, _alt):
         location = self.get_relative_gps_location()

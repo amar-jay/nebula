@@ -61,8 +61,8 @@ DEFAULT_CONFIG = {
     "logging": {"level": "DEBUG"},
     "ml": {
         "confidence_threshold": 0.6,
-        "production_model_path": "src/controls/detection/main.pt",
-        "simulation_model_path": "src/controls/detection/sim.pt",
+        "production_model_path": "nebula/controls/detection/main.pt",
+        "simulation_model_path": "nebula/controls/detection/sim.pt",
         "workers": 2,
     },
     "simulation": True,
@@ -519,9 +519,17 @@ class LoginWindow(QMainWindow):
         main_layout.addWidget(right_widget)
 
         # Load image from URL
-        # image_url = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "images", "placeholder2.png")
+        # /home/amarjay/Desktop/code/nebula/nebula/gcs/src/login/page.py
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "assets",
+            "images",
+            "placeholder.png",
+        )
         self.load_image(
-            "/home/amarjay/Desktop/code/matek/src/gcs/assets/images/placeholder.png"
+          image_path
         )
 
     def load_image(self, url):

@@ -228,6 +228,15 @@ class CraneControls:
         except Exception as e:
             return f"NACK: Error handling command: {str(e)}"
 
+    def gather_status(self):
+        """Gather current status of the crane"""
+        return (
+            "Hook is "
+            + self.hook_state
+            + ", manual override: "
+            + str(self.manual_override)
+        )
+
 
 class ExampleController:
     """

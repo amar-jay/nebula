@@ -30,13 +30,12 @@ IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed
 
 
+
 # Configure logging
-logging.basicConfig(
-    format="%(asctime)s - %(message)s",
-    handlers=[logging.StreamHandler()],  # Explicit console handler
+logger = init_logging(
+    level=logging.DEBUG,
+    log_file=os.path.join(os.path.expanduser("~"), "nebula-zmq-server.log"),
 )
-logger = logging.getLogger("zmq-server")
-logger.setLevel(logging.DEBUG)  # Ensure logger level is set
 
 
 @dataclass
@@ -411,9 +410,9 @@ class ZMQServer:
         self.tracker = yolo.YoloObjectTracker(
             K=camera_intrinsics,
             model_path=(
-                "src/controls/detection/sim.pt"
+                "nebula/controls/detection/sim.pt"
                 if is_simulation
-                else "src/controls/detection/main.pt"
+                else "nebula/controls/detection/main.pt"
             ),
         )
 
@@ -701,8 +700,15 @@ async def main():
     parser.add_argument(
         "--video-source", default=0, help="Video source (device ID or file path)"
     )
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable debug logging"
+    )
 
     args = parser.parse_args()
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
 
     # Convert video_source to int if it's a number
     try:

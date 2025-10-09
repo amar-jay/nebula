@@ -32,7 +32,7 @@ $HOME/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
 
 # Build the ArduPilot-Gazebo plugin
 export GZ_VERSION="harmonic"
-cd $MYHOME/src/ardupilot_gazebo
+cd $MYHOME/nebula/ardupilot_gazebo
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make -j4

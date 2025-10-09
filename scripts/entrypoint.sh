@@ -17,7 +17,7 @@ make set_env_vars
 #   echo "DISPLAY not set, skipping OpenGL check"
 # fi
 
-cd ${HOME}/src/ardupilot_gazebo && \
+cd ${HOME}/nebula/ardupilot_gazebo && \
 	mkdir -p build && \
 	cd build && \
 	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo

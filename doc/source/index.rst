@@ -31,4 +31,5 @@ Contents
 .. toctree::
 
    usage
+   messaging
    api

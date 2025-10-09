@@ -1,12 +1,13 @@
 Messaging
-==========================
+==========
 
 History
-------------
+-------
 
 Designing a reliable communication channel between the drone (equipped with an onboard edge computer - Orin Nano) and the ground control station proved to be one of the most critical—and initially frustrating—challenges in the development.
 
-## Why Not ROS?
+Why Not ROS?
+------------
 
 At first glance, the natural choice for robotics communication might seem to be ROS_ or ROS2_, especially considering their ecosystem of message passing, visualization, tools, and standardized messaging protocols. But we made a deliberate decision not to use either.
 
@@ -14,28 +15,32 @@ The main issue stems from ROS being heavily integrated into its own walled ecosy
 
 ROS2, while more modern, introduced additional complexity. It no longer uses TCP or UDP sockets directly but instead builds on **DDS** (Data Distribution Service)—a much heavier, enterprise-level transport layer that we had no intention of debugging or optimizing. Given our tight development cycles and the embedded nature of our project, we needed something leaner, faster to implement, and easier to reason about.
 
-## Our Alternative: ZeroMQ
+Our Alternative: ZeroMQ
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Instead of relying on ROS, we developed our own message-passing architecture, building it from the ground up in **Python**, using ZeroMQ (ZMQ)_ as our communication backbone.
+Instead of relying on ROS, we used ZeroMQ (ZMQ)_ instead. ZMQ is known for its simplicity, speed, and flexibility. Its socket-like API made it easy to integrate into our application while adopting the libraries that we are already familiar with, such as OpenCV and PySide, without the overhead of a full robotics middleware. 
 
-ZMQ proved to be a perfect fit: lightweight, flexible, and highly intuitive once you understand its socket types. It abstracts away the messiness of raw sockets and provides robust patterns for distributed systems: **Push/Pull**, **Request/Reply**, and the one we eventually settled on—**Publisher/Subscriber**.
+ZMQ is just a perfect fit: lightweight, flexible, and highly intuitive once you understand its socket types. It abstracts away the messiness of raw sockets and provides robust patterns for distributed systems: **Push/Pull**, **Request/Reply**, and the one we eventually settled on—**Publisher/Subscriber**.
 
 Our first experiment used the Push-Pull pattern, which worked in theory given the single-producer/single-consumer relationship between ground station and drone. But in practice, it was brittle. The pull side could block or desynchronize if messages came too fast or if one side rebooted. We switched to the **Pub-Sub** model, which offered better decoupling, built-in topic filtering, and resilience to restarts. Inspired by the canonical examples in `The ZeroMQ Guide`_, we implemented our own topic-based channels for video frames, command messages, and telemetry.
 
-.. image:: ./assets/img/comms-zmq-flow.svg
+.. image:: ../assets/img/comms-zmq-flow.svg
    :alt: Pub-Sub Architecture
 
-## Message Format
+Message Format
+~~~~~~~~~~~~~~
 
 We kept things simple. No protobufs. No custom serializers. All messages are passed as UTF-8 encoded strings. On the subscriber end, we parse them using Python's built-in split on delimiters where appropriate. This gave us the flexibility to iterate quickly without locking ourselves into a rigid schema.
 
-## Server Concurrency Evolution
+Server Concurrency Evolution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 On the edge server (onboard the drone), the earliest version of our system used traditional Python threads for concurrency—handling each message channel or sensor stream in a separate thread. While this worked, it quickly became hard to manage and prone to subtle bugs, especially during shutdowns or when certain sockets dropped out.
 
 Eventually, after diving deeper into **asyncio**, we ported the server to an asynchronous model. Surprisingly, we didn't get massive performance gains—but what we did get was **clarity**. The code became dramatically easier to read and maintain. With coroutines managing message queues and periodic loops, we had much finer control over CPU scheduling and state transitions. This new structure also made it easy to isolate CPU-heavy tasks like image processing into a ``ThreadPoolExecutor``, preventing the event loop from being blocked—an issue that previously caused frequent stutters.
 
-## Client-Side: PySide and QThreads
+Client-Side: PySide and QThreads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 On the client side (i.e., ground station), the application is built with **PySide** (Qt for Python), which introduces its own threading model. Initially, we used plain Python threads to receive and decode video streams, but this clashed with the Qt event loop and caused UI freezes or race conditions.
 
@@ -65,9 +70,10 @@ Below is an excerpt from the actual implementation within the ``ZMQClient``:
 
 This architecture has been reliable during flights, supporting both control commands and high-bandwidth video streaming without dropped frames or lockups.
 
-## Summary
+Summary
+~~~~~~~
 
-- **Transport Layer**: ZeroMQ_, **Pub-Sub** model
+- **Transport Layer**: ZeroMQ, **Pub-Sub** model
 - **Server (Edge Computer)**: ``asyncio`` for all concurrency; uses ``ThreadPoolExecutor`` for image processing
 - **Client (Ground Station)**: ``QThread`` for ZMQ socket handling, connected to GUI via PySide signals
 - **Message Format**: Strings and JSON
@@ -77,11 +83,11 @@ General Communication Architecture
 
 The following diagram illustrates the high-level structure of the Nebula Drone's communication system. It emphasizes how concurrency and asynchronicity are handled on both the drone's edge server and the GUI client.
 
-.. image:: ./assets/img/comms_.svg
+.. image:: ../assets/img/comms_.svg
    :alt: Communication Architecture
 
 Asynchronous Frame Processing
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Our ``AsyncFrameProcessor`` ensures that object detection never interrupts the live video stream. When we call ``start()``, it spins up a daemon worker thread that watches a small input queue. Each incoming ``FrameData`` is submitted to a ``ThreadPoolExecutor`` (we default to 2 threads/workers), and must complete within 500 ms to maintain responsiveness. Once processed, results enter a second queue; if that fills, we discard the oldest result so only fresh frames propagate.
 
@@ -93,7 +99,7 @@ Within ``_process_frame``, we:
 Our ``submit_frame()`` method drops frames when the input queue is full, avoiding unbounded memory growth. Meanwhile, ``get_result()`` lets the video loop fetch the latest ``ProcessedResult`` without blocking.
 
 MAVLink Proxy—Bridging Serial and TCP
--------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``MAVLinkProxy`` class hides the complexity of talking MAVLink over serial or UDP while sharing that stream with multiple TCP clients. Upon ``start()``, we:
 
@@ -106,11 +112,12 @@ Our ``get_drone_data()`` method packages GPS, attitude, ground level, and flight
 When we call ``stop()``, we cleanly shut down the server socket, all client sockets, and the underlying MAVLink connection, ensuring no stray threads or sockets linger.
 
 ZMQ Server—Publishing Video and Command Handling
--------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Our ``ZMQServer`` orchestrates two concurrent loops over ZeroMQ: one publishing raw and processed video frames on a PUB socket, the other replying to control commands on a REP socket.
 
-## Initialization & Tracker Setup
+Initialization & Tracker Setup
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the constructor, we record ports, video source, and whether we're in simulation. We immediately call ``_initialize_tracker()`` where we:
 
@@ -120,13 +127,15 @@ In the constructor, we record ports, video source, and whether we're in simulati
 
 If any of these steps fail, we raise an exception to avoid running with a broken tracker.
 
-## Video Capture & Encoding
+Video Capture & Encoding
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Before streaming, ``_initialize_video_capture()`` attempts to open either the Gazebo feed or a live camera device. Failure yields a logged error and aborts the loop.
 
 In ``_encode_frame()``, we compress each frame to JPEG using OpenCV. While we acknowledge it's not the most efficient codec, JPEG integrates directly with ``QImage`` on the client side and was the right trade‑off under our time constraints.
 
-## The Publisher Loop
+The Publisher Loop
+~~~~~~~~~~~~~~~~~~
 
 Our ``async`` ``_video_publisher_loop`` performs the following each iteration:
 
@@ -140,7 +149,8 @@ Our ``async`` ``_video_publisher_loop`` performs the following each iteration:
 
 If the capture device ever fails, we log and retry after a short pause. On exit, we release the capture and log that publishing has stopped.
 
-## The Control Loop
+The Control Loop
+~~~~~~~~~~~~~~~~
 
 Concurrently, ``_control_receiver_loop`` listens for command strings on our REP socket. When a message arrives, we strip and compare against known topics:
 
@@ -150,13 +160,14 @@ Concurrently, ``_control_receiver_loop`` listens for command strings on our REP 
 
 Each successful command is logged; unknown commands elicit a "NACK: Unknown command."
 
-## Lifecycle Management
+Lifecycle Management
+--------------------
 
 When ``start()`` is called, we bind our PUB and REP sockets, start the frame processor, set ``running = True``, and launch both loops via ``asyncio.gather``. A subsequent ``stop()`` clears the flag, halts the processor, closes sockets, and terminates the ZeroMQ context.
 
 This is the complete lifecycle management of this server, ensuring it can be cleanly started and stopped without leaving dangling threads or sockets.
 
-.. image:: ./assets/img/comms-async-flow.svg
+.. image:: ../assets/img/comms-async-flow.svg
    :alt: Lifecycle Management
 
 .. _ROS: https://www.ros.org/

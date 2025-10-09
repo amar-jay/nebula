@@ -68,9 +68,9 @@ The procedure is presented in a clear, step-by-step manner, followed by the key 
 Steps
 ~~~~~
 
-1. Get drone reference: obtain the drone's current GPS coordinates (latitude phi_0, longitude lambda_0) and altitude h above the ellipsoid (or above ground if available). For higher accuracy use RTK-corrected GPS instead of raw GNSS data.
+1. Get drone reference: obtain the drone's current GPS coordinates (latitude :math:`\phi_0`, longitude :math:`\lambda_0`) and altitude :math:`h` above the ellipsoid (or above ground if available). For higher accuracy use RTK-corrected GPS instead of raw GNSS data.
 
-2. Get camera pose: obtain the camera extrinsics relative to the drone body and the drone attitude (rotation/roll/pitch/yaw). From these we build the rotation R_cb (camera-to-body) and R_be (body-to-ENU/world) matrices. Combined camera-to-ENU rotation is R_ce = R_be * R_cb.
+2. Get camera pose: obtain the camera extrinsics relative to the drone body and the drone attitude (rotation/roll/pitch/yaw). From these we build the rotation :math:`R_{cb}` (camera-to-body) and :math:`R_{be}` (body-to-ENU/world) matrices. Combined camera-to-ENU rotation is :math:`R_{ce} = R_{be} \; R_{cb}`.
 
 3. Convert pixel to normalized camera coordinates (back-projection): using the intrinsic matrix K, map pixel (u, v) to a ray in camera coordinates.
 
@@ -82,23 +82,23 @@ Steps
         0 & 0 & 1
       \end{bmatrix}
 
-   Given pixel coordinates \( (u, v) \) and homogeneous form \( \tilde{p} = [u, v, 1]^T \), the normalized camera ray (direction) is
+   Given pixel coordinates :math:`(u, v)` and homogeneous form :math:`\tilde{p} = [u, v, 1]^T`, the normalized camera ray (direction) is
 
    .. math::
 
       r_c = K^{-1} \tilde{p} = \begin{bmatrix} x_c \\ y_c \\ 1 \end{bmatrix} ,
 
-   where \(x_c = (u - c_x)/f_x\) and \(y_c = (v - c_y)/f_y\) for a pinhole model with no skew.
+   where :math:`x_c = (u - c_x)/f_x` and :math:`y_c = (v - c_y)/f_y` for a pinhole model with no skew.
 
-4. Rotate ray into ENU/world frame: using the camera-to-ENU rotation \(R_{ce}\), obtain the ray in ENU coordinates
+4. Rotate ray into ENU/world frame: using the camera-to-ENU rotation :math:`R_{ce}`, obtain the ray in ENU coordinates
 
    .. math::
 
       r_e = R_{ce} \; r_c
 
-   The camera origin in ENU coordinates is the drone position at altitude \(h\): \(p_e = [0, 0, h]^T\) if we place ENU origin at the drone's ground-projected location, or use the true ENU coordinates computed from \(\phi_0, \lambda_0, h_0\).
+   The camera origin in ENU coordinates is the drone position at altitude :math:`h`: :math:`p_e = [0, 0, h]^T` if we place ENU origin at the drone's ground-projected location, or use the true ENU coordinates computed from :math:`\phi_0, \lambda_0, h_0`.
 
-5. Intersect ray with ground plane (approximate flat Earth locally): assume ground is at altitude \(z = 0\) in ENU frame (or at known ground elevation). Parametric ray from camera origin:
+5. Intersect ray with ground plane (approximate flat Earth locally): assume ground is at altitude :math:`z = 0` in ENU frame (or at known ground elevation). Parametric ray from camera origin:
 
    .. math::
 
@@ -116,16 +116,16 @@ Steps
 
       P_{enu} = p_{cam} + t^* \; r_e
 
-   Note: if \(r_{e,z} \approx 0\) (ray nearly parallel to ground) the intersection is unstable; handle this edge case by rejecting or using a different method (e.g., local DEM).
+   Note: if :math:`r_{e,z} \approx 0` (ray nearly parallel to ground) the intersection is unstable; handle this edge case by rejecting or using a different method (e.g., local DEM).
 
-6. Convert ENU coordinates to geodetic coordinates (latitude, longitude): given ENU offset \(\Delta E = [e, n, u]^T\) from reference geodetic point \((\phi_0, \lambda_0, h_0)\), convert back to latitude/longitude. For small distances you can use the local flat-earth approximation:
+6. Convert ENU coordinates to geodetic coordinates (latitude, longitude): given ENU offset :math:`\Delta E = [e, n, u]^T` from reference geodetic point :math:`(\phi_0, \lambda_0, h_0)`, convert back to latitude/longitude. For small distances you can use the local flat-earth approximation:
 
    .. math::
 
       \Delta \phi \approx \frac{n}{R_N + h_0}, \qquad
       \Delta \lambda \approx \frac{e}{(R_E + h_0) \cos\phi_0}
 
-   where \(R_N\) and \(R_E\) are radii of curvature (or simply use Earth's mean radius R \approx 6371000 m for small offsets). Then
+   where :math:`R_N` and :math:`R_E` are radii of curvature (or simply use Earth's mean radius R \approx 6371000 m for small offsets). Then
 
    .. math::
 
@@ -139,9 +139,9 @@ Extra Considerations if Needed
 If you want to improve accuracy or handle edge cases, consider the following:
 
 - **Distortion:** If distortion is not negligible, undistort the pixel coordinates before performing back-projection using the distortion coefficients obtained during calibration.  
-- **Altitude reference:** Ensure that the altitude values used for the **camera origin** and **ground plane** (\(z_g\)) share the same **vertical datum** (e.g., above ellipsoid, above mean sea level, or above ground level). Mismatched altitude references can introduce significant bias in the estimated GPS coordinates.  
+- **Altitude reference:** Ensure that the altitude values used for the **camera origin** and **ground plane** (:math:`z_g`) share the same **vertical datum** (e.g., above ellipsoid, above mean sea level, or above ground level). Mismatched altitude references can introduce significant bias in the estimated GPS coordinates.  
 - **Attitude accuracy:** Even small errors in **pitch** or **roll** can lead to large horizontal errors, especially at higher altitudes. Quantify and account for these uncertainties accordingly.  
-- **Near-parallel rays:** When the back-projected ray is nearly parallel to the ground (\(r_{e,z} \approx 0\)), the ground intersection becomes numerically unstable. In such cases, either **reject the estimate** or use a **Digital Elevation Model (DEM)** or **optical flow-based scale estimation** to improve stability.  
+- **Near-parallel rays:** When the back-projected ray is nearly parallel to the ground (:math:`r_{e,z} \approx 0`), the ground intersection becomes numerically unstable. In such cases, either **reject the estimate** or use a **Digital Elevation Model (DEM)** or **optical flow-based scale estimation** to improve stability.  
 
 .. admonition:: Recommended Reading
    :class: tip

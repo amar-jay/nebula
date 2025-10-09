@@ -3,7 +3,7 @@ GPS Estimation
 
 .. _gps:
 
-One major component of the **Nebula** project is its **GPS Estimation** module. In our GitHub repository, it is located under the ``src/controls/detection`` directory.
+One major component of the **Nebula** project is its **GPS Estimation** module. In our GitHub repository, it is located under the :c:`src/controls/detection <https://github.com/amar-jay/nebula/blob/main/nebula/controls/detection/yolo.py>` directory.
 This module is responsible for estimating the GPS coordinates of a single pixel within a camera frame captured by a nadir (downward-facing) mounted camera.
 
 The GPS Estimation module is designed for a **monocular camera setup**, meaning it uses a single camera to capture images and estimate GPS coordinates. This contrasts with stereo camera setups, which use two cameras to obtain depth information. Our implementation is based on the **pinhole camera model**.
@@ -28,7 +28,9 @@ For image annotation, we used the `Roboflow <https://roboflow.com/>`_ platform. 
 
 .. note::
    At times pytorch for running this weight might be mismatched. Please ensure you have the correct version of pytorch installed. To verify that run the command:
+
 	 .. code-block:: bash
+
 	 		make test_torch
 
 
@@ -46,7 +48,7 @@ Using these intrinsic parameters, we apply the pinhole camera model to map 3D wo
 For calibration, we use **OpenCV’s chessboard calibration method**.
 You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, 
 
-or use our implementation available at ``controls/detection/camera_calibration.py`` `within the repository <https://github.com/amar-jay/nebula/blob/main/nebula/controls/detection/camera_calibration.py>`_.
+or use our implementation available at :c:`controls/detection/camera_calibration.py <https://github.com/amar-jay/nebula/blob/main/nebula/controls/detection/camera_calibration.py>` within the repository.
 
 While some pinhole cameras introduce significant distortion, primarily **radial** and **tangential** distortion, our setup uses a high-quality camera with a wide-angle lens that produces minimal distortion. Therefore, we can safely ignore distortion coefficients in our calculations.
 

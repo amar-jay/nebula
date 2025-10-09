@@ -34,12 +34,16 @@ To estimate GPS coordinates from pixel locations, we first need to know the **ca
 
 Using these intrinsic parameters, we apply the **pinhole camera model** to map **3D world coordinates** to **2D image coordinates**. This mapping can then be reversed to project 2D image coordinates back into 3D world space — a standard computer vision technique.
 
+.. image:: ../assets/img/pinhole_model.webp
+   :alt: Pinhole Camera Model
+
 For calibration, we use **OpenCV’s chessboard calibration method**.
 You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, or use our implementation available in the GitHub repository under `src/controls/detection/camera_calibration.py <https://github.com/amar-jay/nebula/tree/main/nebula/controls/camera_calibration>`.
 
 While some pinhole cameras introduce significant distortion, primarily **radial** and **tangential** distortion, our setup uses a high-quality camera with a wide-angle lens that produces minimal distortion. Therefore, we can safely ignore distortion coefficients in our calculations.
 
 In practice, we primarily use the **focal length** and **principal point** for GPS estimation. However, it is generally more accurate to use the complete **camera intrinsic matrix (K matrix)** obtained from the calibration process.
+
 
 GPS Coordinate Estimation
 -------------------------
@@ -116,8 +120,6 @@ Steps
    .. math::
 
       \phi = \phi_0 + \Delta \phi, \qquad \lambda = \lambda_0 + \Delta \lambda
-
-   For more accurate conversion use a proper ENU <-> ECEF <-> geodetic pipeline (eg. pyproj or GeographicLib) - which we didn't. We kept it simple within the nebula project.
 
 7. Output estimated GPS coordinates (latitude, longitude) and optionally estimated horizontal uncertainty derived from altitude and detection pixel uncertainty.
 

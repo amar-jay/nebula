@@ -35,7 +35,7 @@ To estimate GPS coordinates from pixel locations, we first need to know the **ca
 Using these intrinsic parameters, we apply the **pinhole camera model** to map **3D world coordinates** to **2D image coordinates**. This mapping can then be reversed to project 2D image coordinates back into 3D world space — a standard computer vision technique.
 
 For calibration, we use **OpenCV’s chessboard calibration method**.
-You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, or use our implementation available in the GitHub repository under `src/controls/detection/camera_calibration.py`.
+You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, or use our implementation available in the GitHub repository under `src/controls/detection/camera_calibration.py <https://github.com/amar-jay/nebula/tree/main/nebula/controls/camera_calibration>`.
 
 While some pinhole cameras introduce significant distortion, primarily **radial** and **tangential** distortion, our setup uses a high-quality camera with a wide-angle lens that produces minimal distortion. Therefore, we can safely ignore distortion coefficients in our calculations.
 

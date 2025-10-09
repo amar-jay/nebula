@@ -56,9 +56,9 @@ Camera Configuration
 
 The Gazebo simulation includes a downward-facing camera mounted on the drone.
 This camera is configured in the drone's SDF (Simulation Description Format) file, which can be found in the 
-:c:`ardupilot_gazebo/models/iris <https://github.com/amar-jay/gazebo_sitl/blob/main/models/iris_with_gimbal/model.sdf>` directory. 
+:ref:`ardupilot_gazebo/models/iris <https://github.com/amar-jay/gazebo_sitl/blob/main/models/iris_with_gimbal/model.sdf>` directory. 
 You can modify the camera parameters such as resolution, field of view, and update rate in the 
-:c:`ardupilot_gazebo/models/gimbal_small_1d <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf#L112>` directory. 
+:ref:`ardupilot_gazebo/models/gimbal_small_1d <https://github.com/amar-jay/gazebo_sitl/blob/main/models/gimbal_small_1d/model.sdf#L112>` directory. 
 There is no need to modify the code anywhere else it will able to pick up the changes automatically and work seamlessly in the Nebula project.
 
 .. warning::

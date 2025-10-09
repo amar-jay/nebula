@@ -12,9 +12,9 @@ import numpy as np
 import zmq
 from pymavlink import mavutil
 
-from src.controls.detection import yolo  # Assuming this is your YOLO module
-from src.controls.mavlink import gz
-from src.mq.messages import ZMQTopics
+from nebula.controls.detection import yolo  # Assuming this is your YOLO module
+from nebula.controls.mavlink import gz
+from nebula.mq.messages import ZMQTopics
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

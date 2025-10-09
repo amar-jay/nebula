@@ -4,7 +4,7 @@ import time
 import pymavlink.dialects.v20.all as dialect
 from pymavlink import mavutil
 
-from src.controls.mavlink.mission_types import Waypoint
+from nebula.controls.mavlink.mission_types import Waypoint
 
 # ========== ========= ========= =========
 # ========== Global Variables ==========

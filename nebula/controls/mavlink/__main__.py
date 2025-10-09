@@ -2,8 +2,8 @@ import time
 
 import cv2
 
-from src.controls.mavlink.ardupilot import ArdupilotConnection, Waypoint
-from src.controls.mavlink.gz import (
+from nebula.controls.mavlink.ardupilot import ArdupilotConnection, Waypoint
+from nebula.controls.mavlink.gz import (
     GazeboVideoCapture,
     enable_streaming,
     point_gimbal_downward,

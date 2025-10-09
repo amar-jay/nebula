@@ -18,7 +18,7 @@ from qfluentwidgets import (
     setTheme,
 )
 
-from src.gcs.src.map.map_widget import MapWidget
+from nebula.gcs.src.map.map_widget import MapWidget
 
 
 def get_asset(path: str) -> str:

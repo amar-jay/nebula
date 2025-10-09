@@ -26,8 +26,8 @@ from qfluentwidgets import (
 from qfluentwidgets import PushButton as QPushButton
 from qfluentwidgets import RoundMenu as QMenu
 
-from src.gcs.drone_client import DroneClient
-from src.mq.zmq_client import ZMQClient
+from nebula.gcs.drone_client import DroneClient
+from nebula.mq.zmq_client import ZMQClient
 
 
 class CameraWidget(QWidget):

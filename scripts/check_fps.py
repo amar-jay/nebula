@@ -3,7 +3,7 @@ import time
 import cv2
 import numpy as np
 
-from src.controls.mavlink import gz
+from nebula.controls.mavlink import gz
 
 is_sim = input("Is it a simulation test (y/N)?")
 

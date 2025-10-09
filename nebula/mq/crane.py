@@ -9,7 +9,7 @@ import time
 import serial
 import serial.tools.list_ports
 
-from src.mq.messages import ZMQTopics
+from nebula.mq.messages import ZMQTopics
 
 
 class CraneControls:

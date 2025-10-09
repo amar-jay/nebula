@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from pymavlink import mavutil
 
-from src.controls.mavlink.ardupilot import ArdupilotConnection
+from nebula.controls.mavlink.ardupilot import ArdupilotConnection
 
 
 class GazeboVideoCapture:

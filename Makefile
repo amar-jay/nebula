@@ -25,10 +25,10 @@ gz:
 	gz sim -v4 -r ${WORLD}
 
 app:
-	@python -m src.gcs.app
+	@python -m nebula.gcs.app
 
 demo_app:
-	@python -m src.gcs.src.main.demo
+	@python -m nebula.gcs.nebula.main.demo
 
 ardupilot_gz:
 	${HOME}/ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f ${MODEL} --model JSON --map --console
@@ -75,7 +75,7 @@ setup:
 	@./scripts/setup.sh
 
 build_app:
-	printf "from src.gcs.app import main\nif __name__ == '__main__':\n    main()\n" > app.py
+	printf "from nebula.gcs.app import main\nif __name__ == '__main__':\n    main()\n" > app.py
 	pyinstaller app.spec
 	rm app.py
 
@@ -83,16 +83,16 @@ test_fps:
 	python -m scripts.check_fps
 
 sim_server:
-	@python -m src.mq.zmq_server --is-simulation
+	@python -m nebula.mq.zmq_server --is-simulation
 
 server:
-	@python -m src.mq.zmq_server
+	@python -m nebula.mq.zmq_server
 
 sim_server2:
-	@python -m src.mq.zmq_server-experimental --is-simulation
+	@python -m nebula.mq.zmq_server-experimental --is-simulation
 
 recv:
-	@python -m src.mq.example_zmq_reciever
+	@python -m nebula.mq.example_zmq_reciever
 
 lint:
 	@isort .

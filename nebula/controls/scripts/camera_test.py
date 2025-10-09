@@ -12,7 +12,7 @@ import cv2
 import detection.yolo as yolo
 import numpy as np
 
-import src.controls.mavlink.gz as gz
+import nebula.controls.mavlink.gz as gz
 
 logging.getLogger("ultralytics").setLevel(logging.WARNING)
 

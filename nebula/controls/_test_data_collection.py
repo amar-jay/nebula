@@ -8,10 +8,10 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from src.controls.detection import yolo
-from src.controls.mavlink import ardupilot
-from src.controls.mavlink.ardupilot import Waypoint
-from src.controls.mavlink.gz import GazeboVideoCapture, enable_streaming
+from nebula.controls.detection import yolo
+from nebula.controls.mavlink import ardupilot
+from nebula.controls.mavlink.ardupilot import Waypoint
+from nebula.controls.mavlink.gz import GazeboVideoCapture, enable_streaming
 
 # Mission constants
 HELIPAD_CLASS = "helipad"

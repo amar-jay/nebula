@@ -3,9 +3,9 @@ import time
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from src.controls.mavlink import ardupilot
-from src.mq.messages import ZMQTopics
-from src.mq.zmq_client import ZMQClient
+from nebula.controls.mavlink import ardupilot
+from nebula.mq.messages import ZMQTopics
+from nebula.mq.zmq_client import ZMQClient
 
 
 class WaypointHoldState(enum.Enum):

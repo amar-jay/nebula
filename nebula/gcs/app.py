@@ -65,17 +65,17 @@ from qfluentwidgets import (
     setThemeColor,
 )
 
-from src.controls.mavlink.mission_types import Waypoint
-from src.gcs.drone_client import DroneClient
-from src.gcs.src.camera.camera_widget import CameraWidget
-from src.gcs.src.horizon.attitude_widget import AttitudeIndicator
-from src.gcs.src.horizon.compass_widget import CompassWidget
-from src.gcs.src.horizon.guage_widget import (
+from nebula.controls.mavlink.mission_types import Waypoint
+from nebula.gcs.drone_client import DroneClient
+from nebula.gcs.src.camera.camera_widget import CameraWidget
+from nebula.gcs.src.horizon.attitude_widget import AttitudeIndicator
+from nebula.gcs.src.horizon.compass_widget import CompassWidget
+from nebula.gcs.src.horizon.guage_widget import (
     AltitudeGauge,
     BatteryGauge,
     SpeedGauge,
 )
-from src.gcs.src.map.map_widget import MapWidget
+from nebula.gcs.src.map.map_widget import MapWidget
 
 
 def PrimaryPushButton(text):
@@ -1514,7 +1514,7 @@ def main():
     """Run the drone control application."""
     app = QApplication(sys.argv)
 
-    from src.gcs.src.login.page import LoginWindow
+    from nebula.gcs.src.login.page import LoginWindow
 
     # Apply the palette
     app.setStyle("Fusion")

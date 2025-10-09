@@ -22,9 +22,9 @@ import numpy as np
 import zmq
 import zmq.asyncio
 
-from src.controls.detection import yolo
-from src.controls.mavlink import ardupilot, gz, mission_types
-from src.mq.messages import ZMQTopics
+from nebula.controls.detection import yolo
+from nebula.controls.mavlink import ardupilot, gz, mission_types
+from nebula.mq.messages import ZMQTopics
 
 IMAGE_QUALITY = 50  # JPEG quality for video frames
 CPU_BURNOUT = 0.03  # CPU burn rate for async tasks, adjust as needed

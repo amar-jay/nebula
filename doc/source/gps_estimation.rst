@@ -3,52 +3,53 @@ GPS Estimation
 
 .. _gps:
 
-One major part of the Nebula project is its GPS Estimation module. In our github its located under ``src/controls/detection`` directory.
-It is responsible for estimating the GPS coordinates of a single pixel within a camera frame from a nadir (facing downward) mounted camera.
-Now, the GPS Estimation module is designed to work with a monocular camera setup, meaning it uses a single camera to capture images and estimate GPS coordinates.
-This is in contrast to stereo camera setups that use two cameras to capture depth information. We use a pinhole camera model for our camera setup.
+One major component of the **Nebula** project is its **GPS Estimation** module. In our GitHub repository, it is located under the ``src/controls/detection`` directory.
+This module is responsible for estimating the GPS coordinates of a single pixel within a camera frame captured by a nadir (downward-facing) mounted camera.
 
-Basically, our GPS Estimation module consists of two major parts. 
-One is estimating the exact pixel location of the object of interest (helipad or tank) within the camera frame using our image recognition model.
-The second part is estimating the GPS coordinates of that pixel using the camera's intrinsic and extrinsic parameters along with the drone's GPS coordinates and altitude provided by MAVLink.
+The GPS Estimation module is designed for a **monocular camera setup**, meaning it uses a single camera to capture images and estimate GPS coordinates. This contrasts with stereo camera setups, which use two cameras to obtain depth information. Our implementation is based on the **pinhole camera model**.
+
+In essence, the GPS Estimation module consists of two main parts:
+
+1. **Object localization** - estimating the exact pixel location of the target object (e.g., helipad or tank) within the camera frame using our image recognition model.
+
+2. **Coordinate estimation** - computing the GPS coordinates of that pixel using the camera’s intrinsic and extrinsic parameters, along with the drone’s GPS position and altitude provided via MAVLink.
 
 
 Image Recognition
 -----------------
 
-Our Image Recognition model is a custom-trained YoloV8 model. It is trained to detect 4 classes of objects: helipad, tanks, sim_tank, and sim_helipad. That is two sets of real and simulated objects, that is the tank and helipad.
+Our **Image Recognition** model is a custom-trained **YOLOv8** model. It is trained to detect four classes of objects: **helipad**, **tank**, **sim_helipad**, and **sim_tank** — representing two sets of real and simulated objects (helipad and tank).
 
-the sim_helipad is a subset of helipad tagged images that is only taken from the simulated environment. Similarly, sim_tank is a subset of tank tagged images taken from the simulated environment.
+The **sim_helipad** class is a subset of helipad-tagged images collected exclusively from the simulated environment. Similarly, **sim_tank** is a subset of tank-tagged images captured from simulations.
 
-We trained our model on nearly a thousand images combined from real-world and simulated environments. The model is trained to detect these objects from a nadir (facing downward) mounted camera as well as from various oblique angles.
+We trained our model on nearly a thousand images combined from both real-world and simulated environments. The model is designed to detect these objects not only from a **nadir (downward-facing)** camera view but also from various **oblique angles**.
 
-For image annotation, we used the `Roboflow <https://roboflow.com/>`_ platform. After annotating the images, we exported them in YOLO format and used Google Colab to train the model. It is a very straightforward process but time-consuming.
+For image annotation, we used the `Roboflow <https://roboflow.com/>`_ platform. After annotating the dataset, we exported it in **YOLO format** and trained the model using **Google Colab**. The overall process is straightforward, though somewhat time-consuming.
 
 
 Camera Calibration
 ------------------
 
-To be able to estimate GPS coordinates from pixel locations, we need to know the camera's intrinsic parameters. These parameters include focal length, principal point, and distortion coefficients.
+To estimate GPS coordinates from pixel locations, we first need to know the **camera’s intrinsic parameters**. These include the **focal length**, **principal point**, and **distortion coefficients**.
 
-Using the camera intrinsics, we can adopt the pinhole camera model to map 3D world coordinates to 2D image coordinates and from that we can reverse the process to map 2D image coordinates back to 3D world coordinates.
+Using these intrinsic parameters, we apply the **pinhole camera model** to map **3D world coordinates** to **2D image coordinates**. This mapping can then be reversed to project 2D image coordinates back into 3D world space — a standard computer vision technique.
 
-This is a standard computer vision technique. For calibration we use the OpenCV's chessboard calibration method. `Here is a good tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ on how to do camera calibration using OpenCV.
-Or you can use the one from our GitHub repo located at ``src/controls/detection/camera_calibration.py``. 
+For calibration, we use **OpenCV’s chessboard calibration method**.
+You can follow `this tutorial <https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html>`_ for a detailed guide on camera calibration using OpenCV, or use our implementation available in the GitHub repository under `src/controls/detection/camera_calibration.py`.
 
-Some pinhole cameras introduce significant distortion to images. Two major kinds of distortion are radial distortion and tangential distortion.
-However in our case, we are using a high-quality camera with a wide-angle lens that introduces minimal distortion. So we can safely ignore distortion coefficients in our calculations.
-So we only need the focal length and principal point for our GPS estimation calculations. but its best to just get the **K matrix** from the calibration process, that has proven to be more accurate.
+While some pinhole cameras introduce significant distortion, primarily **radial** and **tangential** distortion, our setup uses a high-quality camera with a wide-angle lens that produces minimal distortion. Therefore, we can safely ignore distortion coefficients in our calculations.
+
+In practice, we primarily use the **focal length** and **principal point** for GPS estimation. However, it is generally more accurate to use the complete **camera intrinsic matrix (K matrix)** obtained from the calibration process.
 
 GPS Coordinate Estimation
 -------------------------
 
-Once we have the pixel coordinates of the object of interest from our image recognition model and the camera's intrinsic parameters from the calibration process, we can proceed to estimate the GPS coordinates.
+Once we have the **pixel coordinates** of the object of interest from our image recognition model and the **camera’s intrinsic parameters** from the calibration process, we can proceed to estimate its **GPS coordinates**.
 
-The GPS estimation process involves several steps:
+The GPS estimation process involves several ordered steps, summarized below. We assume a **nadir-mounted camera** (with the optical axis approximately aligned downward) and **negligible lens distortion** — either ignored or compensated for during preprocessing.
 
-Once we have the pixel coordinates of the object of interest from our image recognition model and the camera's intrinsic parameters from the calibration process, we can proceed to estimate the GPS coordinates.
+The procedure is presented in a clear, step-by-step manner, followed by the key mathematical formulas used in the computation.
 
-The GPS estimation process below is presented in a clear, sorted order followed by the key formulas used. We assume a nadir-mounted camera (optical axis approximately aligned with the down direction) and negligible lens distortion (distortion coefficients ignored or already compensated in preprocessing).
 
 Steps
 ~~~~~

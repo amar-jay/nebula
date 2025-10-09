@@ -1,6 +1,18 @@
 Welcome to Nebula's documentation!
 ===================================
 
+.. raw:: html
+
+   <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; width: 100%;">
+       <iframe src="https://www.youtube.com/embed/ZF_N-Vu7Tik"
+               title="Nebula System Demo"
+               frameborder="0"
+               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+               allowfullscreen
+               style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+       </iframe>
+   </div>
+
 `Nebula <https://github.com/amar-jay/nebula>`_ is a software system for drone control and automation.  
 It was developed by the **Nebula MATEK Team** for the `Teknofest 2025 <https://teknofest.org/en/>`_ competition,  
 sponsored by the **Çemberlitaş Gençlik Merkezi** *(pronounced /chem-ber-lee-tash gench-lik mer-ke-zi/)*.
@@ -21,17 +33,6 @@ Nebula consists of several core components:
 Refer to the :doc:`usage` section for detailed usage instructions and  
 see :ref:`installation` for setup guidance.
 
-.. raw:: html
-
-   <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; width: 100%;">
-       <iframe src="https://www.youtube.com/embed/ZF_N-Vu7Tik"
-               title="Nebula System Demo"
-               frameborder="0"
-               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-               allowfullscreen
-               style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-       </iframe>
-   </div>
 
 
 Contents
@@ -41,4 +42,8 @@ Contents
 
    usage
    messaging
+   herelink
+   gps_estimation
+   gazebo_simulation
+   ground_control_station
    api

@@ -1,29 +1,38 @@
 Welcome to Nebula's documentation!
 ===================================
 
-`Nebula <https://github.com/amar-jay/nebula>`_ is a software project for drone control and automation. It was primarily made as part of the **Nebula MATEK Team** for the [Teknofest 2025](https://teknofest.org/en/) competition, which was 
-sponsored by the Çemberlitaş Gençlik Merkezi (/chem-ber-lee-tash gench-lik mer-ke-zi/).
+`Nebula <https://github.com/amar-jay/nebula>`_ is a software system for drone control and automation.  
+It was developed by the **Nebula MATEK Team** for the `Teknofest 2025 <https://teknofest.org/en/>`_ competition,  
+sponsored by the **Çemberlitaş Gençlik Merkezi** *(pronounced /chem-ber-lee-tash gench-lik mer-ke-zi/)*.
 
-Nebula has a number of components:
+Nebula consists of several core components:
 
-1. A ground control station application for remotely monitoring and controlling the drone.
+1. **Ground Control Station (GCS):** A desktop application for remotely monitoring and controlling the drone.
 
-2. A remote server running on an edge device (NVIDIA Jetson Orin NX) for processing data and interfacing with the drone, as well as giving serial commands to the crane of the drone.
+2. **Edge Server:** Runs on an NVIDIA Jetson Orin NX for data processing, drone interfacing,  
+   and sending serial commands to the crane subsystem.
 
-3. Both are interfacing with each other via ZeroMQ as a messaging protocol.
-
-Check out the :doc:`usage` section for further information, including
-how to :ref:`installation` the project.
-
-.. image:: https://img.youtube.com/vi/ZF_N-Vu7Tik/maxresdefault.jpg
-   :width: 25%
-   :height: auto
-   :target: https://www.youtube.com/watch?v=ZF_N-Vu7Tik
-   :alt: System Demo
+3. **ZeroMQ Communication:** Provides a lightweight and fast messaging layer between the GCS and the edge server.
 
 .. note::
 
    This project is no longer under development, since the competition is over.
+
+Refer to the :doc:`usage` section for detailed usage instructions and  
+see :ref:`installation` for setup guidance.
+
+.. raw:: html
+
+   <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; width: 100%;">
+       <iframe src="https://www.youtube.com/embed/ZF_N-Vu7Tik"
+               title="Nebula System Demo"
+               frameborder="0"
+               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+               allowfullscreen
+               style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+       </iframe>
+   </div>
+
 
 Contents
 --------

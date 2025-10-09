@@ -121,10 +121,10 @@ Steps
 7. Output estimated GPS coordinates (latitude, longitude) and optionally estimated horizontal uncertainty derived from altitude and detection pixel uncertainty.
 
 Notes and Edge cases
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 - Distortion: if distortion is not negligible, undistort the pixel coordinates before back-projection using the distortion coefficients from calibration.
-- Altitude reference: ensure the altitude used for camera origin and ground plane (z_g) are in the same vertical datum (above ellipsoid vs above mean sea level vs above ground). Mismatched vertical references produce biases.
+- Altitude reference: ensure the altitude used for camera origin and ground plane (\(z_g\)) are in the same vertical datum (above ellipsoid vs above mean sea level vs above ground). Mismatched vertical references produce biases.
 - Attitude accuracy: small errors in pitch/roll cause horizontal errors that increase with altitude; quantify uncertainty accordingly.
 - Near-parallel rays: if the ray is parallel to the ground (\(r_{e,z} \approx 0\)), the intersection is unstable — handle by rejecting or using a DEM or optical flow to estimate scale.
 
@@ -132,12 +132,5 @@ Notes and Edge cases
 .. admonition:: Recommended Reading
    :class: tip
 
-   Please refer to the `Nebula GitHub README <https://github.com/amar-jay/nebula>`_ for
-   the most up-to-date setup, usage instructions, and system overview.
-
-
-.. admonition:: Recommended Reading
-   :class: tip
-
-   Please refer to the `Nebula GitHub README <https://github.com/amar-jay/nebula>`_ for
-   the most up-to-date setup, usage instructions, and system overview.
+   Check out how we implemented it in the `Nebula GitHub Repository in the (nebula/controls/yolo.py) <https://github.com/amar-jay/nebula/blob/main/nebula/controls/detection/yolo.py>`_ for
+   a more practical understanding of the implementation.

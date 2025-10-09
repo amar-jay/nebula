@@ -1,0 +1,12 @@
+.md-meta__item > .twemoji svg {
+    fill: currentColor;
+    max-height: 100%;
+    width: 1.125em;
+    vertical-align: text-top;
+}
+
+hr {
+    border-bottom: .05rem solid var(--md-default-fg-color--lightest);
+    display: flow-root;
+    margin: 1.5em 0;
+}

@@ -2,12 +2,12 @@
 
 # -- Project information
 
-project = 'Lumache'
-copyright = '2021, Graziella'
-author = 'Graziella'
+project = 'MATEK Nebula'
+copyright = '2025, Apache'
+author = 'amar-jay'
 
 release = '0.1'
-version = '0.1.0'
+version = '1.0.0'
 
 # -- General configuration
 

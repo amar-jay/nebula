@@ -46,4 +46,3 @@ Contents
    gps_estimation
    gazebo_simulation
    ground_control_station
-   api

@@ -117,17 +117,18 @@ Steps
 
       \phi = \phi_0 + \Delta \phi, \qquad \lambda = \lambda_0 + \Delta \lambda
 
-   For more accurate conversion use a proper ENU <-> ECEF <-> geodetic pipeline (eg. pyproj or GeographicLib).
+   For more accurate conversion use a proper ENU <-> ECEF <-> geodetic pipeline (eg. pyproj or GeographicLib) - which we didn't. We kept it simple within the nebula project.
 
 7. Output estimated GPS coordinates (latitude, longitude) and optionally estimated horizontal uncertainty derived from altitude and detection pixel uncertainty.
 
 Notes and Edge cases
 ~~~~~~~~~~~~~~~~~~~~~
 
-- Distortion: if distortion is not negligible, undistort the pixel coordinates before back-projection using the distortion coefficients from calibration.
-- Altitude reference: ensure the altitude used for camera origin and ground plane (\(z_g\)) are in the same vertical datum (above ellipsoid vs above mean sea level vs above ground). Mismatched vertical references produce biases.
-- Attitude accuracy: small errors in pitch/roll cause horizontal errors that increase with altitude; quantify uncertainty accordingly.
-- Near-parallel rays: if the ray is parallel to the ground (\(r_{e,z} \approx 0\)), the intersection is unstable — handle by rejecting or using a DEM or optical flow to estimate scale.
+- **Distortion:** If distortion is not negligible, **undistort the pixel coordinates** before performing back-projection using the distortion coefficients obtained during calibration.  
+- **Altitude reference:** Ensure that the altitude values used for the **camera origin** and **ground plane** (\(z_g\)) share the same **vertical datum** (e.g., above ellipsoid, above mean sea level, or above ground level). Mismatched altitude references can introduce significant bias in the estimated GPS coordinates.  
+- **Attitude accuracy:** Even small errors in **pitch** or **roll** can lead to large horizontal errors, especially at higher altitudes. Quantify and account for these uncertainties accordingly.  
+- **Near-parallel rays:** When the back-projected ray is nearly parallel to the ground (\(r_{e,z} \approx 0\)), the ground intersection becomes numerically unstable. In such cases, either **reject the estimate** or use a **Digital Elevation Model (DEM)** or **optical flow-based scale estimation** to improve stability.  
+
 
 
 .. admonition:: Recommended Reading

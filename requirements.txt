@@ -24,6 +24,6 @@ PyYAML==6.0.2
 pyzmq==27.0.0
 Requests==2.32.4
 supervision==0.26.0rc7
-torch==2.7.1
+torch==2.13.0
 trackers==2.0.1
 ultralytics==8.2.103
